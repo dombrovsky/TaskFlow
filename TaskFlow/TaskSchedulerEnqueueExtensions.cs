@@ -2,7 +2,7 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Threading.Tasks.Flow.Annotations;
 
-    public static class TaskFlowExtensions
+    public static class TaskSchedulerEnqueueExtensions
     {
         public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
         {
