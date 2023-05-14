@@ -1,5 +1,7 @@
 namespace System.Threading.Tasks.Flow
 {
+    using System.ComponentModel;
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
 
     public static class TaskSchedulerEnqueueExtensions
@@ -45,7 +47,7 @@ namespace System.Threading.Tasks.Flow
             return taskScheduler.Enqueue(_ => taskFunc(), CancellationToken.None);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> taskFunc, CancellationToken cancellationToken)
+        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
@@ -53,37 +55,37 @@ namespace System.Threading.Tasks.Flow
 
             async ValueTask<Unit> TaskFunc(CancellationToken token)
             {
-                await taskFunc(token).ConfigureAwait(false);
+                await valueTaskFunc(token).ConfigureAwait(false);
                 return default;
             }
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> taskFunc)
+        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
-            await taskScheduler.Enqueue(taskFunc, CancellationToken.None).ConfigureAwait(false);
+            await taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None).ConfigureAwait(false);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> taskFunc)
+        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
-            return taskScheduler.Enqueue(taskFunc, CancellationToken.None);
+            return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> taskFunc)
+        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
-            return taskScheduler.Enqueue(_ => taskFunc(), CancellationToken.None);
+            return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None);
         }
 
-        public static ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> taskFunc)
+        public static ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
-            return taskScheduler.Enqueue(_ => taskFunc(), CancellationToken.None);
+            return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None, _);
         }
 
         public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
@@ -154,6 +156,17 @@ namespace System.Threading.Tasks.Flow
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(token => new ValueTask<T>(func(token)), cancellationToken);
+        }
+
+        /// <summary>
+        /// A class with no possible value other than null. Used to mark an optional parameter which should never be set.
+        /// Taken from <see href="https://github.com/dotnet/csharplang/discussions/4360#discussioncomment-312520"/>.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [SuppressMessage("Design", "CA1034:Nested types should not be visible", Justification = "Not intended to use")]
+        public sealed class DummyParameter
+        {
+            private DummyParameter() { }
         }
     }
 }
