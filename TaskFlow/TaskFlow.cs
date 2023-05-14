@@ -19,6 +19,8 @@ namespace System.Threading.Tasks.Flow
 
         public TaskFlow(TaskScheduler taskScheduler)
         {
+            Argument.NotNull(taskScheduler);
+
             _taskScheduler = taskScheduler;
             _disposeCancellationTokenSource = new CancellationTokenSource();
             _lockObject = new object();
@@ -64,7 +66,12 @@ namespace System.Threading.Tasks.Flow
 
         public void Dispose()
         {
-            DisposeAsync().AsTask().Await(DisposeTimeout);
+            Dispose(DisposeTimeout);
+        }
+
+        public bool Dispose(TimeSpan timeout)
+        {
+            return DisposeAsync().AsTask().Await(timeout);
         }
 
         public ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
