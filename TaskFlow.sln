@@ -9,6 +9,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Tests", "TaskFlow.
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "TaskFlow.Annotations", "TaskFlow.Annotations\TaskFlow.Annotations.shproj", "{B9A7FA49-0771-408D-82CF-42EA7EBE0F31}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Extensions.Microsoft.DependencyInjection", "TaskFlow.Extensions.Microsoft.DependencyInjection\TaskFlow.Extensions.Microsoft.DependencyInjection.csproj", "{38B4A885-E50E-4339-91F6-B07976DCE941}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -23,6 +25,10 @@ Global
 		{2CD0B616-38CC-456D-9C7E-A992C6FEB63F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2CD0B616-38CC-456D-9C7E-A992C6FEB63F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2CD0B616-38CC-456D-9C7E-A992C6FEB63F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{38B4A885-E50E-4339-91F6-B07976DCE941}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{38B4A885-E50E-4339-91F6-B07976DCE941}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{38B4A885-E50E-4339-91F6-B07976DCE941}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{38B4A885-E50E-4339-91F6-B07976DCE941}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -31,6 +37,7 @@ Global
 		SolutionGuid = {B9CE264A-0BED-43B2-BD56-DBCB5C842691}
 	EndGlobalSection
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{38b4a885-e50e-4339-91f6-b07976dce941}*SharedItemsImports = 5
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{7b846a17-1146-4bf1-9e01-81aafb097a02}*SharedItemsImports = 5
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{b9a7fa49-0771-408d-82cf-42ea7ebe0f31}*SharedItemsImports = 13
 	EndGlobalSection
