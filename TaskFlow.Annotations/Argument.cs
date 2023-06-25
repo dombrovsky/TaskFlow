@@ -5,7 +5,8 @@ namespace System.Threading.Tasks.Flow.Annotations
 
     internal static class Argument
     {
-        public static void NotNull([NotNull] object? argument, [CallerArgumentExpression("argument")] string? parameterName = null)
+        public static void NotNull<T>([NotNull] T? argument, [CallerArgumentExpression("argument")] string? parameterName = null)
+            where T : class
         {
 #if NET6_0
             ArgumentNullException.ThrowIfNull(argument, parameterName);

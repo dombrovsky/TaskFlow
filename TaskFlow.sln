@@ -5,7 +5,9 @@ VisualStudioVersion = 17.3.32901.215
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow", "TaskFlow\TaskFlow.csproj", "{7B846A17-1146-4BF1-9E01-81AAFB097A02}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskFlow.Tests", "TaskFlow.Tests\TaskFlow.Tests.csproj", "{2CD0B616-38CC-456D-9C7E-A992C6FEB63F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Tests", "TaskFlow.Tests\TaskFlow.Tests.csproj", "{2CD0B616-38CC-456D-9C7E-A992C6FEB63F}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "TaskFlow.Annotations", "TaskFlow.Annotations\TaskFlow.Annotations.shproj", "{B9A7FA49-0771-408D-82CF-42EA7EBE0F31}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,5 +29,9 @@ Global
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {B9CE264A-0BED-43B2-BD56-DBCB5C842691}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{7b846a17-1146-4bf1-9e01-81aafb097a02}*SharedItemsImports = 5
+		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{b9a7fa49-0771-408d-82cf-42ea7ebe0f31}*SharedItemsImports = 13
 	EndGlobalSection
 EndGlobal
