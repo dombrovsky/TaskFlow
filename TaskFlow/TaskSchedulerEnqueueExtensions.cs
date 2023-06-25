@@ -96,7 +96,7 @@ namespace System.Threading.Tasks.Flow
                     token =>
                     {
                         action(token);
-                        return new ValueTask();
+                        return new ValueTask(Task.CompletedTask);
                     },
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -110,7 +110,7 @@ namespace System.Threading.Tasks.Flow
                     token =>
                     {
                         action(token);
-                        return new ValueTask();
+                        return new ValueTask(Task.CompletedTask);
                     },
                     CancellationToken.None)
                 .ConfigureAwait(false);
@@ -124,7 +124,7 @@ namespace System.Threading.Tasks.Flow
                     _ =>
                     {
                         action();
-                        return new ValueTask();
+                        return new ValueTask(Task.CompletedTask);
                     },
                     CancellationToken.None)
                 .ConfigureAwait(false);
@@ -138,7 +138,7 @@ namespace System.Threading.Tasks.Flow
                     _ =>
                     {
                         action();
-                        return new ValueTask();
+                        return new ValueTask(Task.CompletedTask);
                     },
                     cancellationToken)
                 .ConfigureAwait(false);

@@ -1,6 +1,7 @@
 namespace TaskFlow.Tests
 {
     using NUnit.Framework;
+    using System.Threading.Tasks;
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
@@ -19,9 +20,9 @@ namespace TaskFlow.Tests
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             await sut.DisposeAsync().ConfigureAwait(false);
-            Assert.That(task1.IsCanceled, Is.True);
-            Assert.That(task2.IsCanceled, Is.True);
-            Assert.That(task3.IsCanceled, Is.True);
+            Assert.That(task1.IsCanceled, Is.True, task1.Status.ToString);
+            Assert.That(task2.IsCanceled, Is.True, task2.Status.ToString);
+            Assert.That(task3.IsCanceled, Is.True, task3.Status.ToString);
         }
 
         [Test]
@@ -37,9 +38,9 @@ namespace TaskFlow.Tests
 
             await sut.DisposeAsync().ConfigureAwait(false);
 
-            Assert.That(task1.IsCompleted, Is.True);
-            Assert.That(task2.IsCompleted, Is.True);
-            Assert.That(task3.IsCompleted, Is.True);
+            Assert.That(task1.IsCompleted, Is.True, task1.Status.ToString);
+            Assert.That(task2.IsCompleted, Is.True, task2.Status.ToString);
+            Assert.That(task3.IsCompleted, Is.True, task3.Status.ToString);
         }
 
         [Test]
@@ -55,9 +56,9 @@ namespace TaskFlow.Tests
 
             sut.Dispose();
 
-            Assert.That(task1.IsCompleted, Is.True);
-            Assert.That(task2.IsCompleted, Is.True);
-            Assert.That(task3.IsCompleted, Is.True);
+            Assert.That(task1.IsCompleted, Is.True, task1.Status.ToString);
+            Assert.That(task2.IsCompleted, Is.True, task2.Status.ToString);
+            Assert.That(task3.IsCompleted, Is.True, task3.Status.ToString);
         }
 
         [Test]
@@ -152,7 +153,7 @@ namespace TaskFlow.Tests
             var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
 
             Assert.That(sut.Dispose, Throws.Nothing);
-            Assert.That(failedTask.IsFaulted, Is.True);
+            Assert.That(failedTask.IsFaulted, Is.True, failedTask.Status.ToString);
         }
 
         [Test]
@@ -163,7 +164,7 @@ namespace TaskFlow.Tests
             var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
 
             Assert.That(sut.DisposeAsync, Throws.Nothing);
-            Assert.That(failedTask.IsFaulted, Is.True);
+            Assert.That(failedTask.IsFaulted, Is.True, failedTask.Status.ToString);
         }
     }
 }

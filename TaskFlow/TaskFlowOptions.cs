@@ -13,6 +13,6 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// Does not affect asynchronous <see cref="ITaskFlow.DisposeAsync"/> call.
         /// </remarks>
-        public TimeSpan DisposeTimeout { get; init; } = Timeout.InfiniteTimeSpan;
+        public TimeSpan SynchronousDisposeTimeout { get; init; } = Timeout.InfiniteTimeSpan;
     }
 }

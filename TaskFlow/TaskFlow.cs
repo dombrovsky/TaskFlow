@@ -3,14 +3,9 @@ namespace System.Threading.Tasks.Flow
     using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
 
-    public sealed partial class TaskFlow : ITaskFlow
+    public sealed partial class TaskFlow : TaskFlowBase
     {
-        private readonly TaskFlowOptions _options;
-        private readonly CancellationTokenSource _disposeCancellationTokenSource;
-        private readonly object _lockObject;
-
         private Task _task;
-        private State _state;
 
         public TaskFlow()
          : this(TaskFlowOptions.Default)
@@ -18,67 +13,17 @@ namespace System.Threading.Tasks.Flow
         }
 
         public TaskFlow(TaskFlowOptions options)
+            : base(options)
         {
-            Argument.NotNull(options);
-
-            _options = options;
-            _disposeCancellationTokenSource = new CancellationTokenSource();
-            _lockObject = new object();
             _task = Task.CompletedTask;
-            _state = State.Running;
+            Ready();
         }
 
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Previous task exception should be observed on a task returned from Enqueue method")]
-        public async ValueTask DisposeAsync()
-        {
-            Task task;
-            lock (_lockObject)
-            {
-                if (_state == State.Disposed)
-                {
-                    return;
-                }
-
-                _state = State.Disposing;
-                task = _task;
-            }
-
-            _disposeCancellationTokenSource.Cancel();
-
-            try
-            {
-                await task.ConfigureAwait(false);
-            }
-            catch
-            {
-                // suppress
-            }
-            finally
-            {
-                _disposeCancellationTokenSource.Dispose();
-
-                lock (_lockObject)
-                {
-                    _state = State.Disposed;
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(_options.DisposeTimeout);
-        }
-
-        public bool Dispose(TimeSpan timeout)
-        {
-            return DisposeAsync().AsTask().Await(timeout);
-        }
-
-        public ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
-            lock (_lockObject)
+            lock (ThisLock)
             {
                 CheckDisposed();
 
@@ -87,10 +32,20 @@ namespace System.Threading.Tasks.Flow
                     () => RunAfterPrevious(taskFunc, previousTask, cancellationToken),
                     cancellationToken,
                     TaskCreationOptions.PreferFairness,
-                    _options.TaskScheduler).Unwrap();
+                    Options.TaskScheduler).Unwrap();
                 _task = task;
                 return new ValueTask<T>(task);
             }
+        }
+
+        protected override Task GetInitializationTask()
+        {
+            return Task.CompletedTask;
+        }
+
+        protected override Task GetCompletionTask()
+        {
+            return _task;
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Previous task exception should be observed on a task returned from Enqueue method")]
@@ -102,28 +57,11 @@ namespace System.Threading.Tasks.Flow
             }
             catch
             {
-                // suppress
+                // suppressed
             }
 
-            using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposeCancellationTokenSource.Token);
+            using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
             return await taskFunc(linkedToken.Token).ConfigureAwait(false);
-        }
-
-        private void CheckDisposed()
-        {
-            if (_state != State.Running)
-            {
-                throw new ObjectDisposedException(nameof(TaskFlow));
-            }
-        }
-
-        private enum State
-        {
-            Running = 0,
-
-            Disposing,
-
-            Disposed,
         }
     }
 }
