@@ -5,7 +5,7 @@ namespace System.Threading.Tasks.Flow
 
     public sealed partial class TaskFlow : ITaskFlow
     {
-        private readonly TaskScheduler _taskScheduler;
+        private readonly TaskFlowOptions _options;
         private readonly CancellationTokenSource _disposeCancellationTokenSource;
         private readonly object _lockObject;
 
@@ -13,15 +13,15 @@ namespace System.Threading.Tasks.Flow
         private State _state;
 
         public TaskFlow()
-         : this(TaskScheduler)
+         : this(TaskFlowOptions.Default)
         {
         }
 
-        public TaskFlow(TaskScheduler taskScheduler)
+        public TaskFlow(TaskFlowOptions options)
         {
-            Argument.NotNull(taskScheduler);
+            Argument.NotNull(options);
 
-            _taskScheduler = taskScheduler;
+            _options = options;
             _disposeCancellationTokenSource = new CancellationTokenSource();
             _lockObject = new object();
             _task = Task.CompletedTask;
@@ -66,7 +66,7 @@ namespace System.Threading.Tasks.Flow
 
         public void Dispose()
         {
-            Dispose(DisposeTimeout);
+            Dispose(_options.DisposeTimeout);
         }
 
         public bool Dispose(TimeSpan timeout)
@@ -87,7 +87,7 @@ namespace System.Threading.Tasks.Flow
                     () => RunAfterPrevious(taskFunc, previousTask, cancellationToken),
                     cancellationToken,
                     TaskCreationOptions.PreferFairness,
-                    _taskScheduler).Unwrap();
+                    _options.TaskScheduler).Unwrap();
                 _task = task;
                 return new ValueTask<T>(task);
             }
