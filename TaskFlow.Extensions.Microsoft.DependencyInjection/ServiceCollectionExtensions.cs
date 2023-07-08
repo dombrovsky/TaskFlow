@@ -56,8 +56,9 @@ namespace System.Threading.Tasks.Flow
                 services.AddSingleton<INamedConfigureTaskFlowChain>(provider => new DelegateNamedConfigureTaskFlowChain(provider, name, configureSchedulerChain));
             }
 
-            services.TryAddScoped<ITaskFlow>(provider => provider.GetRequiredService<ITaskFlowFactory>().CreateTaskFlow(name));
-            services.TryAddScoped<ITaskScheduler>(provider => provider.GetRequiredService<ITaskFlow>());
+            services.TryAddScoped<TaskFlowWrapper>(provider => new TaskFlowWrapper(provider.GetRequiredService<ITaskFlowFactory>().CreateTaskFlow(name)));
+            services.TryAddScoped<ITaskScheduler>(provider => provider.GetRequiredService<TaskFlowWrapper>());
+            services.TryAddScoped<ITaskFlowInfo>(provider => provider.GetRequiredService<TaskFlowWrapper>());
 
             return services;
         }

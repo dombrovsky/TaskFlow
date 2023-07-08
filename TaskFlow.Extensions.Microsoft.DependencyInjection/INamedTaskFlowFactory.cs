@@ -1,7 +1,9 @@
-﻿namespace System.Threading.Tasks.Flow
+namespace System.Threading.Tasks.Flow
 {
-    public interface INamedTaskFlowFactory : IHaveName
+    public interface INamedTaskFlowFactory
     {
+        string Name { get; }
+
         ITaskFlow Create(TaskFlowOptions options);
     }
 }

@@ -52,8 +52,17 @@ namespace System.Threading.Tasks.Flow
             return new TaskFlowOwnershipWrapper(baseTaskFlow, chainedTaskScheduler);
         }
 
-        private static IEnumerable<T> GetByName<T>(IEnumerable<T> items, string name)
-            where T : IHaveName
+        private static IEnumerable<INamedTaskFlowFactory> GetByName(IEnumerable<INamedTaskFlowFactory> items, string name)
+        {
+            return items.Where(item => item.Name == name);
+        }
+
+        private static IEnumerable<INamedConfigureTaskFlowChain> GetByName(IEnumerable<INamedConfigureTaskFlowChain> items, string name)
+        {
+            return items.Where(item => item.Name == name);
+        }
+
+        private static IEnumerable<INamedConfigureTaskFlowOptions> GetByName(IEnumerable<INamedConfigureTaskFlowOptions> items, string name)
         {
             return items.Where(item => item.Name == name);
         }

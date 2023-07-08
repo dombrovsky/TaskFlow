@@ -1,9 +1,7 @@
 namespace System.Threading.Tasks.Flow
 {
-    public interface ITaskFlow : ITaskScheduler, IAsyncDisposable, IDisposable
+    public interface ITaskFlow : ITaskScheduler, ITaskFlowInfo, IAsyncDisposable, IDisposable
     {
-        TaskFlowOptions Options { get; }
-
         bool Dispose(TimeSpan timeout);
     }
 }
