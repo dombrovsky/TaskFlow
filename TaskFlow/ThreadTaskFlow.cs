@@ -2,6 +2,7 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Collections.Concurrent;
     using System.Diagnostics.CodeAnalysis;
+    using System.Threading.Tasks.Flow.Annotations;
 
     public abstract class ThreadTaskFlow : TaskFlowBase
     {
@@ -24,6 +25,8 @@ namespace System.Threading.Tasks.Flow
         
         public override async ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
+            Argument.NotNull(taskFunc);
+
             lock (ThisLock)
             {
                 CheckDisposed();

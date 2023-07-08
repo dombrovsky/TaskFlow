@@ -20,11 +20,15 @@ namespace System.Threading.Tasks.Flow
 
         public override void Send(SendOrPostCallback d, object? state)
         {
+            Argument.NotNull(d);
+
             _taskScheduler.Enqueue(() => d(state)).AsTask().Await();
         }
 
         public override void Post(SendOrPostCallback d, object? state)
         {
+            Argument.NotNull(d);
+
             _taskScheduler.Enqueue(() => d(state)).AsTask();
         }
     }

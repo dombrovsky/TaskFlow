@@ -1,5 +1,7 @@
 namespace System.Threading.Tasks.Flow.Internal
 {
+    using System.Threading.Tasks.Flow.Annotations;
+
     internal sealed class TaskFlowOwnershipWrapper : ITaskFlow
     {
         private readonly ITaskFlow _rootTaskFlow;
@@ -7,6 +9,9 @@ namespace System.Threading.Tasks.Flow.Internal
 
         public TaskFlowOwnershipWrapper(ITaskFlow rootTaskFlow, ITaskScheduler taskScheduler)
         {
+            Argument.NotNull(rootTaskFlow);
+            Argument.NotNull(taskScheduler);
+
             _rootTaskFlow = rootTaskFlow;
             _taskScheduler = taskScheduler;
         }

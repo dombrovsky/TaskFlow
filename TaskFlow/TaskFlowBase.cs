@@ -1,6 +1,7 @@
 namespace System.Threading.Tasks.Flow
 {
     using System.Diagnostics.CodeAnalysis;
+    using System.Threading.Tasks.Flow.Annotations;
 
     public abstract class TaskFlowBase : ITaskFlow
     {
@@ -13,6 +14,8 @@ namespace System.Threading.Tasks.Flow
 
         protected TaskFlowBase(TaskFlowOptions options)
         {
+            Argument.NotNull(options);
+
             _options = options;
             _disposeCancellationTokenSource = new CancellationTokenSource();
             _lockObject = new object();
