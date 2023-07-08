@@ -18,6 +18,7 @@ namespace System.Threading.Tasks.Flow
 
         public void Run()
         {
+            Starting();
             _managedThreadId = Environment.CurrentManagedThreadId;
             ThreadStart(null);
         }

@@ -68,13 +68,11 @@ namespace System.Threading.Tasks.Flow
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Should be observed on a tasks returned from Enqueue method")]
         protected virtual async ValueTask DisposeAsyncCore()
         {
+            Task initializationTask;
             Task completionTask;
             lock (_lockObject)
             {
-                if (_state == TaskFlowState.NotStarted)
-                {
-                    throw new InvalidOperationException("Was not started");
-                }
+                initializationTask = _state != TaskFlowState.NotStarted ? GetInitializationTask() : Task.CompletedTask;
 
                 if (_state == TaskFlowState.Disposed)
                 {
@@ -85,7 +83,7 @@ namespace System.Threading.Tasks.Flow
                 completionTask = GetCompletionTask();
             }
 
-            await GetInitializationTask().ConfigureAwait(false);
+            await initializationTask.ConfigureAwait(false);
 
             _disposeCancellationTokenSource.Cancel();
 

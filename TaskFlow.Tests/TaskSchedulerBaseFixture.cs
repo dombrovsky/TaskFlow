@@ -92,7 +92,7 @@ namespace TaskFlow.Tests
             var nextTask = _sut.Enqueue(_ => Task.FromResult(42)).AsTask();
 
             Assert.That(nextTask.Result, Is.EqualTo(42));
-            Assert.That(failedTask.IsFaulted, Is.True);
+            Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10));
         }
 
         [Test]

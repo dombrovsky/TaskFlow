@@ -6,10 +6,31 @@ namespace TaskFlow.Tests
     [TestFixture]
     public sealed class CurrentThreadTaskFlowFixture : TaskFlowBaseFixture<CurrentThreadTaskFlow>
     {
+        private readonly List<CurrentThreadTaskFlow> _suts = new();
+
+        [SetUp]
+        public void CurrentThreadTaskFlowFixtureInitialize()
+        {
+            _suts.Clear();
+        }
+
+        [TearDown]
+        public async Task DisposeCurrentThreadTaskFlow()
+        {
+            await Task.WhenAll(_suts.Select(flow => flow.DisposeAsync().AsTask()));
+        }
+
         protected override CurrentThreadTaskFlow CreateSut()
         {
+            var taskFlow = CreateSutNotStarted();
+            new Thread(taskFlow.Run) { IsBackground = true }.Start();
+            return taskFlow;
+        }
+
+        private CurrentThreadTaskFlow CreateSutNotStarted()
+        {
             var taskFlow = new CurrentThreadTaskFlow();
-            new Thread(taskFlow.Run).Start();
+            _suts.Add(taskFlow);
             return taskFlow;
         }
     }

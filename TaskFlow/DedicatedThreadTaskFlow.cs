@@ -18,8 +18,8 @@ namespace System.Threading.Tasks.Flow
                 IsBackground = true,
             };
 
+            Starting();
             _thread.Start(null);
-            Ready();
         }
 
         public override int ThreadId => _thread.ManagedThreadId;

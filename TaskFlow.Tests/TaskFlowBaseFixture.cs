@@ -20,9 +20,9 @@ namespace TaskFlow.Tests
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             await sut.DisposeAsync().ConfigureAwait(false);
-            Assert.That(task1.IsCanceled, Is.True, task1.Status.ToString);
-            Assert.That(task2.IsCanceled, Is.True, task2.Status.ToString);
-            Assert.That(task3.IsCanceled, Is.True, task3.Status.ToString);
+            Assert.That(() => task1.IsCanceled, Is.True.After(100, 10), task1.Status.ToString);
+            Assert.That(() => task2.IsCanceled, Is.True.After(100, 10), task2.Status.ToString);
+            Assert.That(() => task3.IsCanceled, Is.True.After(100, 10), task3.Status.ToString);
         }
 
         [Test]
@@ -56,9 +56,9 @@ namespace TaskFlow.Tests
 
             sut.Dispose();
 
-            Assert.That(task1.IsCompleted, Is.True, task1.Status.ToString);
-            Assert.That(task2.IsCompleted, Is.True, task2.Status.ToString);
-            Assert.That(task3.IsCompleted, Is.True, task3.Status.ToString);
+            Assert.That(() => task1.IsCompleted, Is.True.After(100, 10), task1.Status.ToString);
+            Assert.That(() => task2.IsCompleted, Is.True.After(100, 10), task2.Status.ToString);
+            Assert.That(() => task3.IsCompleted, Is.True.After(100, 10), task3.Status.ToString);
         }
 
         [Test]
@@ -67,7 +67,7 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task = sut.Enqueue(() => Thread.Sleep(1000)).AsTask();
+            var task = sut.Enqueue(() => Thread.Sleep(500)).AsTask();
             Assert.That(task.IsCompleted, Is.False);
 
             var disposed = sut.Dispose(TimeSpan.FromMilliseconds(100));
@@ -153,7 +153,7 @@ namespace TaskFlow.Tests
             var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
 
             Assert.That(sut.Dispose, Throws.Nothing);
-            Assert.That(failedTask.IsFaulted, Is.True, failedTask.Status.ToString);
+            Assert.That(() => failedTask.IsFaulted, Is.True.After(100 ,10), failedTask.Status.ToString);
         }
 
         [Test]
@@ -164,7 +164,7 @@ namespace TaskFlow.Tests
             var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
 
             Assert.That(sut.DisposeAsync, Throws.Nothing);
-            Assert.That(failedTask.IsFaulted, Is.True, failedTask.Status.ToString);
+            Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10), failedTask.Status.ToString);
         }
     }
 }

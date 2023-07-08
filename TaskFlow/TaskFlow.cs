@@ -45,7 +45,10 @@ namespace System.Threading.Tasks.Flow
 
         protected override Task GetCompletionTask()
         {
-            return _task;
+            lock (ThisLock)
+            {
+                return _task;
+            }
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Previous task exception should be observed on a task returned from Enqueue method")]
