@@ -16,6 +16,8 @@ namespace System.Threading.Tasks.Flow.Internal
             _taskScheduler = taskScheduler;
         }
 
+        public TaskFlowOptions Options => _rootTaskFlow.Options;
+
         public ValueTask DisposeAsync()
         {
             return _rootTaskFlow.DisposeAsync();

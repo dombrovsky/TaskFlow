@@ -4,7 +4,6 @@ namespace System.Threading.Tasks.Flow
     using Microsoft.Extensions.DependencyInjection.Extensions;
     using System.Threading.Tasks.Flow.Annotations;
     using System.Threading.Tasks.Flow.Internal;
-    using System.Xml.Linq;
 
     public static class ServiceCollectionExtensions
     {

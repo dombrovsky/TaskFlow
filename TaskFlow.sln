@@ -11,6 +11,8 @@ Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "TaskFlow.Annotations", "Tas
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Extensions.Microsoft.DependencyInjection", "TaskFlow.Extensions.Microsoft.DependencyInjection\TaskFlow.Extensions.Microsoft.DependencyInjection.csproj", "{38B4A885-E50E-4339-91F6-B07976DCE941}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow.Extensions.Microsoft.DependencyInjection.Tests", "TaskFlow.Extensions.Microsoft.DependencyInjection.Tests\TaskFlow.Extensions.Microsoft.DependencyInjection.Tests.csproj", "{7B2D44B2-52A7-4029-BE51-B0781949F766}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,10 @@ Global
 		{38B4A885-E50E-4339-91F6-B07976DCE941}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{38B4A885-E50E-4339-91F6-B07976DCE941}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{38B4A885-E50E-4339-91F6-B07976DCE941}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B2D44B2-52A7-4029-BE51-B0781949F766}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B2D44B2-52A7-4029-BE51-B0781949F766}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B2D44B2-52A7-4029-BE51-B0781949F766}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B2D44B2-52A7-4029-BE51-B0781949F766}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

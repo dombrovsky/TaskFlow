@@ -22,7 +22,7 @@ namespace System.Threading.Tasks.Flow
             _state = TaskFlowState.NotStarted;
         }
 
-        protected TaskFlowOptions Options => _options;
+        public TaskFlowOptions Options => _options;
 
         protected CancellationToken CompletionToken => _disposeCancellationTokenSource.Token;
 
