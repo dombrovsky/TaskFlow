@@ -10,7 +10,7 @@
 
 	<PropertyGroup>
 		<PackageId>TaskFlow.Microsoft.Extensions.DependencyInjection</PackageId>
-		<Version>1.0.0-rc1</Version>
+		<Version>1.0.0-rc2</Version>
 		<Authors>Volodymyr Dombrovskyi</Authors>
 		<Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
 		<PackageTags>TODO</PackageTags>
