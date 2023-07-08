@@ -10,7 +10,7 @@
 
 	<PropertyGroup>
 		<PackageId>TaskFlow</PackageId>
-		<Version>1.0.0</Version>
+		<Version>1.0.0-rc1</Version>
 		<Authors>Volodymyr Dombrovskyi</Authors>
 		<Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
 		<PackageTags>TODO</PackageTags>
