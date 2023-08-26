@@ -33,7 +33,7 @@ namespace System.Threading.Tasks.Flow
                     cancellationToken,
                     TaskCreationOptions.PreferFairness,
                     Options.TaskScheduler).Unwrap();
-                _task = task;
+                _task = task.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, Options.TaskScheduler);
                 return new ValueTask<T>(task);
             }
         }

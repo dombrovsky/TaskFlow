@@ -71,8 +71,9 @@ namespace System.Threading.Tasks.Flow
             var cancellationToken = CompletionToken;
             try
             {
-                foreach (var executionItem in _blockingCollection.GetConsumingEnumerable(cancellationToken))
+                while (!cancellationToken.IsCancellationRequested)
                 {
+                    var executionItem = _blockingCollection.Take(cancellationToken);
                     SynchronizationContext.SetSynchronizationContext(_synchronizationContext);
                     executionItem.Execute(cancellationToken);
                 }
