@@ -13,7 +13,7 @@ namespace System.Threading.Tasks.Flow
             _taskScheduler = taskScheduler;
         }
 
-        public async ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 

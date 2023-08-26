@@ -22,14 +22,14 @@ namespace System.Threading.Tasks.Flow
         {
             Argument.NotNull(d);
 
-            _taskScheduler.Enqueue(() => d(state)).AsTask().Await();
+            _taskScheduler.Enqueue(() => d(state)).Await();
         }
 
         public override void Post(SendOrPostCallback d, object? state)
         {
             Argument.NotNull(d);
 
-            _taskScheduler.Enqueue(() => d(state)).AsTask();
+            _ = _taskScheduler.Enqueue(() => d(state));
         }
     }
 }

@@ -79,9 +79,9 @@ namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests
             var scope = container.GetRequiredService<IServiceScopeFactory>().CreateScope();
             var taskScheduler = scope.ServiceProvider.GetRequiredService<ITaskScheduler>();
 
-            var task1 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task2 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task3 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
+            var task1 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
+            var task2 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
+            var task3 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             scope.Dispose();
@@ -100,9 +100,9 @@ namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests
             var scope = container.GetRequiredService<IServiceScopeFactory>().CreateAsyncScope();
             var taskScheduler = scope.ServiceProvider.GetRequiredService<ITaskScheduler>();
 
-            var task1 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task2 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task3 = taskScheduler.Enqueue(token => Task.Delay(1000, token)).AsTask();
+            var task1 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
+            var task2 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
+            var task3 = taskScheduler.Enqueue(token => Task.Delay(1000, token));
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             await scope.DisposeAsync();

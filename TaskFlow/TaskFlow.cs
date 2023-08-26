@@ -19,7 +19,7 @@ namespace System.Threading.Tasks.Flow
             Ready();
         }
 
-        public override ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
@@ -33,8 +33,12 @@ namespace System.Threading.Tasks.Flow
                     cancellationToken,
                     TaskCreationOptions.PreferFairness,
                     Options.TaskScheduler).Unwrap();
-                _task = task.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, Options.TaskScheduler);
-                return new ValueTask<T>(task);
+                _task = task.ContinueWith(EmptyContinuationAction, CancellationToken.None, TaskContinuationOptions.None, Options.TaskScheduler);
+                return task;
+            }
+
+            static void EmptyContinuationAction(Task obj)
+            {
             }
         }
 

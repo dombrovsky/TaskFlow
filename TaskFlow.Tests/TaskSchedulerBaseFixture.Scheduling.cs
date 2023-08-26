@@ -10,7 +10,7 @@ namespace TaskFlow.Tests
         {
             var counter = 0;
             var tasks = Enumerable.Range(0, 10)
-                .Select(i => _sut.Enqueue(() => Interlocked.Increment(ref counter) == i + 1).AsTask()).ToArray();
+                .Select(i => _sut.Enqueue(() => Interlocked.Increment(ref counter) == i + 1)).ToArray();
 
             for (var i = 0; i < tasks.Length; i++)
             {
@@ -33,7 +33,7 @@ namespace TaskFlow.Tests
                 {
                     Thread.Sleep(100);
                     completedEvent.Set();
-                }).AsTask();
+                });
 
             Assert.That(completedEvent.Wait(0), Is.False);
             Assert.That(task.Wait(200), Is.True);
@@ -43,7 +43,7 @@ namespace TaskFlow.Tests
         [Test]
         public void Enqueue_ReturnedTaskShouldBeFailedWhenTaskFuncFailed()
         {
-            var task = _sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
+            var task = _sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure")));
 
             Assert.That(async () => await task.ConfigureAwait(false),
                 Throws.InvalidOperationException.With.Message.EqualTo("Failure"));
@@ -54,7 +54,7 @@ namespace TaskFlow.Tests
         public void Enqueue_ReturnedTaskShouldBeCanceledWhenTaskFuncCanceled()
         {
             using var cts = new CancellationTokenSource();
-            var task = _sut.Enqueue(token => Task.Delay(1000, token), cts.Token).AsTask();
+            var task = _sut.Enqueue(token => Task.Delay(1000, token), cts.Token);
 
             cts.Cancel();
 
@@ -66,7 +66,7 @@ namespace TaskFlow.Tests
         public void Enqueue_CanExecuteNextOperationIfPreviousFailed()
         {
             var failedTask = _sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure")));
-            var nextTask = _sut.Enqueue(_ => Task.FromResult(42)).AsTask();
+            var nextTask = _sut.Enqueue(_ => Task.FromResult(42));
 
             Assert.That(nextTask.Result, Is.EqualTo(42));
             Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10));
@@ -78,7 +78,7 @@ namespace TaskFlow.Tests
             using var cts = new CancellationTokenSource();
             cts.Cancel();
             var canceledTask = _sut.Enqueue(Task.FromCanceled, cts.Token);
-            var nextTask = _sut.Enqueue(_ => Task.FromResult(42)).AsTask();
+            var nextTask = _sut.Enqueue(_ => Task.FromResult(42));
 
             Assert.That(nextTask.Result, Is.EqualTo(42));
             Assert.That(canceledTask.IsCanceled, Is.True);

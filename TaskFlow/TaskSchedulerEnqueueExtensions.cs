@@ -6,7 +6,7 @@ namespace System.Threading.Tasks.Flow
 
     public static class TaskSchedulerEnqueueExtensions
     {
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskScheduler);
 
@@ -19,35 +19,35 @@ namespace System.Threading.Tasks.Flow
             }
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
         {
             Argument.NotNull(taskScheduler);
 
             await taskScheduler.Enqueue(taskFunc, CancellationToken.None).ConfigureAwait(false);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(token => new ValueTask<T>(taskFunc(token)), CancellationToken.None);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<Task<T>> taskFunc)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<Task<T>> taskFunc)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(_ => new ValueTask<T>(taskFunc()), CancellationToken.None);
         }
 
-        public static ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<Task> taskFunc)
+        public static Task Enqueue(this ITaskScheduler taskScheduler, Func<Task> taskFunc)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(_ => taskFunc(), CancellationToken.None);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
@@ -60,35 +60,35 @@ namespace System.Threading.Tasks.Flow
             }
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
             await taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None).ConfigureAwait(false);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None);
         }
 
-        public static ValueTask Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> valueTaskFunc, DummyParameter? _ = null)
+        public static Task Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None, _);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskScheduler);
 
@@ -102,7 +102,7 @@ namespace System.Threading.Tasks.Flow
                 .ConfigureAwait(false);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
         {
             Argument.NotNull(taskScheduler);
 
@@ -116,7 +116,7 @@ namespace System.Threading.Tasks.Flow
                 .ConfigureAwait(false);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Action action)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action)
         {
             Argument.NotNull(taskScheduler);
 
@@ -130,7 +130,7 @@ namespace System.Threading.Tasks.Flow
                 .ConfigureAwait(false);
         }
 
-        public static async ValueTask Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
+        public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskScheduler);
 
@@ -144,14 +144,14 @@ namespace System.Threading.Tasks.Flow
                 .ConfigureAwait(false);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<T> func)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<T> func)
         {
             Argument.NotNull(taskScheduler);
 
             return taskScheduler.Enqueue(_ => new ValueTask<T>(func()), CancellationToken.None);
         }
 
-        public static ValueTask<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, T> func, CancellationToken cancellationToken)
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, T> func, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskScheduler);
 

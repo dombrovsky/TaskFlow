@@ -51,7 +51,7 @@ namespace System.Threading.Tasks.Flow
             return result;
         }
 
-        public abstract ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken);
+        public abstract Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken);
 
         protected virtual void Dispose(bool disposing)
         {

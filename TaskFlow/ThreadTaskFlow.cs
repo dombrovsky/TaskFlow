@@ -23,7 +23,7 @@ namespace System.Threading.Tasks.Flow
 
         public abstract int ThreadId { get; }
         
-        public override async ValueTask<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 

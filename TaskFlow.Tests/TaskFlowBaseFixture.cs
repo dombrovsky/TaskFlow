@@ -14,9 +14,9 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task1 = sut.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task2 = sut.Enqueue(token => Task.Delay(1000, token)).AsTask();
-            var task3 = sut.Enqueue(token => Task.Delay(1000, token)).AsTask();
+            var task1 = sut.Enqueue(token => Task.Delay(1000, token));
+            var task2 = sut.Enqueue(token => Task.Delay(1000, token));
+            var task3 = sut.Enqueue(token => Task.Delay(1000, token));
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             await sut.DisposeAsync().ConfigureAwait(false);
@@ -31,9 +31,9 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task1 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
-            var task2 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
-            var task3 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            var task1 = sut.Enqueue(() => Thread.Sleep(50));
+            var task2 = sut.Enqueue(() => Thread.Sleep(50));
+            var task3 = sut.Enqueue(() => Thread.Sleep(50));
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             await sut.DisposeAsync().ConfigureAwait(false);
@@ -49,9 +49,9 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task1 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
-            var task2 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
-            var task3 = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            var task1 = sut.Enqueue(() => Thread.Sleep(50));
+            var task2 = sut.Enqueue(() => Thread.Sleep(50));
+            var task3 = sut.Enqueue(() => Thread.Sleep(50));
             Assert.That(task1.IsCompleted && task2.IsCompleted && task3.IsCompleted, Is.False);
 
             sut.Dispose();
@@ -67,7 +67,7 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task = sut.Enqueue(() => Thread.Sleep(500)).AsTask();
+            var task = sut.Enqueue(() => Thread.Sleep(500));
             Assert.That(task.IsCompleted, Is.False);
 
             var disposed = sut.Dispose(TimeSpan.FromMilliseconds(100));
@@ -81,7 +81,7 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var task = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            var task = sut.Enqueue(() => Thread.Sleep(50));
             Assert.That(task.IsCompleted, Is.False);
 
             var disposed = sut.Dispose(TimeSpan.FromMilliseconds(100));
@@ -94,7 +94,7 @@ namespace TaskFlow.Tests
         public void Dispose_CanCallMultipleTimes()
         {
             var sut = CreateSut();
-            sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            _ = sut.Enqueue(() => Thread.Sleep(50));
 
             sut.Dispose();
 
@@ -107,7 +107,7 @@ namespace TaskFlow.Tests
         public async Task DisposeAsync_CanCallMultipleTimes()
         {
             var sut = CreateSut();
-            _ = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            _ = sut.Enqueue(() => Thread.Sleep(50));
 
             await sut.DisposeAsync().ConfigureAwait(false);
 
@@ -120,7 +120,7 @@ namespace TaskFlow.Tests
         public async Task Dispose_CanCallAfterDisposeAsync()
         {
             var sut = CreateSut();
-            _ = sut.Enqueue(() => Thread.Sleep(50)).AsTask();
+            _ = sut.Enqueue(() => Thread.Sleep(50));
 
             await sut.DisposeAsync().ConfigureAwait(false);
 
@@ -150,7 +150,7 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
+            var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure")));
 
             Assert.That(sut.Dispose, Throws.Nothing);
             Assert.That(() => failedTask.IsFaulted, Is.True.After(100 ,10), failedTask.Status.ToString);
@@ -161,7 +161,7 @@ namespace TaskFlow.Tests
         {
             var sut = CreateSut();
 
-            var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure"))).AsTask();
+            var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure")));
 
             Assert.That(sut.DisposeAsync, Throws.Nothing);
             Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10), failedTask.Status.ToString);
