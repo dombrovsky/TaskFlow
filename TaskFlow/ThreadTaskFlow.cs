@@ -33,7 +33,7 @@ namespace System.Threading.Tasks.Flow
             }
 
             var executionItem = new ExecutionItem(TaskFunc, cancellationToken);
-            _blockingCollection.Add(executionItem, cancellationToken);
+            _blockingCollection.Add(executionItem, CancellationToken.None);
             return await executionItem.GetTypedTask<T>().ConfigureAwait(false);
 
             async Task<object?> TaskFunc(CancellationToken token)

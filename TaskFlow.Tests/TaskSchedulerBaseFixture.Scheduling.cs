@@ -1,6 +1,7 @@
 namespace TaskFlow.Tests
 {
     using NUnit.Framework;
+    using System.Threading.Tasks;
     using System.Threading.Tasks.Flow;
 
     public abstract partial class TaskSchedulerBaseFixture<T>
@@ -81,7 +82,48 @@ namespace TaskFlow.Tests
             var nextTask = _sut.Enqueue(_ => Task.FromResult(42));
 
             Assert.That(nextTask.Result, Is.EqualTo(42));
-            Assert.That(canceledTask.IsCanceled, Is.True);
+            Assert.That(() => canceledTask.IsCanceled, Is.True.After(100, 10));
+        }
+
+        [Test]
+        public void Enqueue_WhenInitiallyCanceled_ShouldExecuteOperation()
+        {
+            using var completedEvent = new ManualResetEventSlim();
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            var task = _sut.Enqueue(() => completedEvent.Set(), cts.Token);
+
+            Assert.That(task.Wait(200), Is.True);
+            Assert.That(completedEvent.Wait(0), Is.True);
+        }
+
+        [Test]
+        public async Task Enqueue_ExecuteInOrderIfIntermediateCanceled()
+        {
+            using var taskACompletionEvent = new ManualResetEventSlim();
+
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            var counter = 0;
+            var taskA = _sut.Enqueue(() =>
+            {
+                taskACompletionEvent.Wait();
+                return Interlocked.Increment(ref counter) == 1;
+            });
+            var taskB = _sut.Enqueue(Task.FromCanceled, cts.Token);
+            var taskC = _sut.Enqueue(() => Interlocked.Increment(ref counter) == 2);
+
+            await Task.Delay(100);
+            taskACompletionEvent.Set();
+
+            Assert.That(() => taskA.IsCompletedSuccessfully, Is.True.After(100, 10));
+            Assert.That(taskA.Result, Is.True);
+
+            Assert.That(() => taskB.IsCanceled, Is.True.After(100, 10));
+
+            Assert.That(() => taskC.IsCompletedSuccessfully, Is.True.After(100, 10));
+            Assert.That(taskC.Result, Is.True);
         }
     }
 }

@@ -30,7 +30,7 @@ namespace System.Threading.Tasks.Flow
                 var previousTask = _task;
                 var task = Task.Factory.StartNew(
                     () => RunAfterPrevious(taskFunc, previousTask, cancellationToken),
-                    cancellationToken,
+                    CancellationToken.None,
                     TaskCreationOptions.PreferFairness,
                     Options.TaskScheduler).Unwrap();
                 _task = task.ContinueWith(EmptyContinuationAction, CancellationToken.None, TaskContinuationOptions.None, Options.TaskScheduler);
