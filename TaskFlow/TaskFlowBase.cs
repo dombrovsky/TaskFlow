@@ -85,7 +85,11 @@ namespace System.Threading.Tasks.Flow
 
             await initializationTask.ConfigureAwait(false);
 
+#if NET8_0_OR_GREATER
+            await _disposeCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+#else
             _disposeCancellationTokenSource.Cancel();
+#endif
 
             try
             {
@@ -126,10 +130,14 @@ namespace System.Threading.Tasks.Flow
 
         protected void CheckDisposed()
         {
+#if NET7_0_OR_GREATER
+            ObjectDisposedException.ThrowIf(_state is TaskFlowState.Disposing or TaskFlowState.Disposed, nameof(TaskFlow));
+#else
             if (_state is TaskFlowState.Disposing or TaskFlowState.Disposed)
             {
                 throw new ObjectDisposedException(nameof(TaskFlow));
             }
+#endif
         }
 
         protected abstract Task GetInitializationTask();

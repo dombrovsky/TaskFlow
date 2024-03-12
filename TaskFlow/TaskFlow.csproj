@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<LangVersion>10</LangVersion>
-		<TargetFrameworks>netstandard2.0;net6.0;net7.0</TargetFrameworks>
+		<TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
 		<Nullable>enable</Nullable>
 		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
 		<Deterministic>true</Deterministic>
@@ -10,7 +10,7 @@
 
 	<PropertyGroup>
 		<PackageId>TaskFlow</PackageId>
-		<Version>1.0.0-rc2</Version>
+		<Version>1.0.0-rc3</Version>
 		<Authors>Volodymyr Dombrovskyi</Authors>
 		<Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
 		<PackageTags>TODO</PackageTags>
@@ -29,7 +29,7 @@
 	</PropertyGroup>
 	
 	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-  		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<PropertyGroup>
@@ -60,7 +60,7 @@
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       </PackageReference>
-      <PackageReference Include="JetBrains.Annotations" Version="2022.3.1" />
+      <PackageReference Include="JetBrains.Annotations" Version="2022.3.1" PrivateAssets="All" />
       <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
 	</ItemGroup>
 
