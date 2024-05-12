@@ -1,6 +1,8 @@
 namespace System.Threading.Tasks.Flow.Internal
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
     using System.Runtime.ExceptionServices;
     using System.Threading;
     using System.Threading.Tasks;
@@ -45,6 +47,43 @@ namespace System.Threading.Tasks.Flow.Internal
 
                 ExceptionDispatchInfo.Capture(aggregateException.InnerException).Throw();
                 throw;
+            }
+        }
+
+        public static async Task<TResult> WhenAnyCancelRest<TResult>(this IEnumerable<Func<CancellationToken, Task<TResult>>> taskFactories, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskFactories);
+
+            using var cts = new CancellationTokenSource();
+            using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+
+            try
+            {
+                var tasks = taskFactories.Select(func => func(linkedCancellationTokenSource.Token)).ToArray();
+                var firstFinishedTask = await Task.WhenAny(tasks).ConfigureAwait(false);
+
+                foreach (var task in tasks.Where(task => task != firstFinishedTask))
+                {
+                    HandleException(task);
+                }
+
+                return await firstFinishedTask.ConfigureAwait(false);
+            }
+            finally
+            {
+#if NET8_0_OR_GREATER
+                await cts.CancelAsync().ConfigureAwait(false);
+#else
+                cts.Cancel();
+#endif
+            }
+
+            static void HandleException(Task<TResult> task)
+            {
+                task.ContinueWith(t => t.Exception!,
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
         }
     }
