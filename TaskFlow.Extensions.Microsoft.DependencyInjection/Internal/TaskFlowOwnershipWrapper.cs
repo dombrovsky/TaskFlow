@@ -33,9 +33,9 @@ namespace System.Threading.Tasks.Flow.Internal
             return _rootTaskFlow.Dispose(timeout);
         }
 
-        public Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
-            return _taskScheduler.Enqueue(taskFunc, cancellationToken);
+            return _taskScheduler.Enqueue(taskFunc, state, cancellationToken);
         }
     }
 }

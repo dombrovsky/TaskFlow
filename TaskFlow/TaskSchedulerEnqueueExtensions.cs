@@ -7,6 +7,79 @@ namespace System.Threading.Tasks.Flow
 
     public static class TaskSchedulerEnqueueExtensions
     {
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
+
+            ValueTask<T> TaskFunc(object? state, CancellationToken token)
+            {
+                return taskFunc(token);
+            }
+        }
+
+        public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
+
+            ValueTask<T> TaskFunc(object? state, CancellationToken token)
+            {
+                return new ValueTask<T>(taskFunc(token));
+            }
+        }
+
+        public static Task<T> Enqueue<T, TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, ValueTask<T>> taskFunc, TState state, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
+
+            ValueTask<T> TaskFunc(object? s, CancellationToken token)
+            {
+                return taskFunc((TState)s!, token);
+            }
+        }
+
+        public static Task Enqueue<TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
+
+            async ValueTask<Unit> TaskFunc(object? s, CancellationToken token)
+            {
+                await taskFunc((TState)s!, token).ConfigureAwait(false);
+                return default;
+            }
+        }
+
+        public static Task<T> Enqueue<T, TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, Task<T>> taskFunc, TState state, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
+
+            ValueTask<T> TaskFunc(object? s, CancellationToken token)
+            {
+                return new ValueTask<T>(taskFunc((TState)s!, token));
+            }
+        }
+
+        public static Task Enqueue<TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, Task> taskFunc, TState state, CancellationToken cancellationToken)
+        {
+            Argument.NotNull(taskScheduler);
+
+            return taskScheduler.Enqueue(TaskFunc, (object?)state, cancellationToken);
+
+            ValueTask TaskFunc(object? s, CancellationToken token)
+            {
+                return new ValueTask(taskFunc((TState)s!, token));
+            }
+        }
+
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskScheduler);

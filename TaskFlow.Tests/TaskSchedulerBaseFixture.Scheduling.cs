@@ -125,5 +125,15 @@ namespace TaskFlow.Tests
             Assert.That(() => taskC.IsCompletedSuccessfully, Is.True.After(100, 10));
             Assert.That(taskC.Result, Is.True);
         }
+
+        [Test]
+        public void Enqueue_PropagatesStateToTaskFunc()
+        {
+            var task1 = _sut.Enqueue((state, _) => Task.FromResult(state), 42, CancellationToken.None);
+            var task2 = _sut.Enqueue((state, _) => Task.FromResult(state), 24, CancellationToken.None);
+
+            Assert.That(task1.Result, Is.EqualTo(42));
+            Assert.That(task2.Result, Is.EqualTo(24));
+        }
     }
 }

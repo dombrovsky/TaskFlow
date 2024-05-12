@@ -24,7 +24,7 @@ namespace System.Threading.Tasks.Flow
 
         public abstract int ThreadId { get; }
         
-        public override async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
@@ -33,13 +33,13 @@ namespace System.Threading.Tasks.Flow
                 CheckDisposed();
             }
 
-            var executionItem = new ExecutionItem(TaskFunc, cancellationToken);
+            var executionItem = new ExecutionItem(TaskFunc, state, cancellationToken);
             _blockingCollection.Add(executionItem, CancellationToken.None);
             return await executionItem.GetTypedTask<T>().ConfigureAwait(false);
 
-            async Task<object?> TaskFunc(CancellationToken token)
+            async Task<object?> TaskFunc(object? stateObject, CancellationToken token)
             {
-                var result = await taskFunc(token).ConfigureAwait(false);
+                var result = await taskFunc(stateObject, token).ConfigureAwait(false);
                 return result;
             }
         }
@@ -100,13 +100,15 @@ namespace System.Threading.Tasks.Flow
 
         private sealed class ExecutionItem
         {
-            private readonly Func<CancellationToken, Task<object?>> _taskFunc;
+            private readonly Func<object?, CancellationToken, Task<object?>> _taskFunc;
+            private readonly object? _state;
             private readonly CancellationToken _cancellationToken;
             private readonly TaskCompletionSource<object?> _taskCompletionSource;
 
-            public ExecutionItem(Func<CancellationToken, Task<object?>> taskFunc, CancellationToken cancellationToken)
+            public ExecutionItem(Func<object?, CancellationToken, Task<object?>> taskFunc, object? state, CancellationToken cancellationToken)
             {
                 _taskFunc = taskFunc;
+                _state = state;
                 _cancellationToken = cancellationToken;
                 _taskCompletionSource = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
@@ -123,7 +125,7 @@ namespace System.Threading.Tasks.Flow
                 var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
                 try
                 {
-                    var result = _taskFunc(linkedCts.Token).GetAwaiter().GetResult();
+                    var result = _taskFunc(_state, linkedCts.Token).GetAwaiter().GetResult();
                     _taskCompletionSource.TrySetResult(result);
                 }
                 catch (OperationCanceledException exception)

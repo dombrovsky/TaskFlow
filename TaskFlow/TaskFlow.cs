@@ -19,7 +19,7 @@ namespace System.Threading.Tasks.Flow
             Ready();
         }
 
-        public override Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
@@ -29,7 +29,7 @@ namespace System.Threading.Tasks.Flow
 
                 var previousTask = _task;
                 var task = Task.Factory.StartNew(
-                    () => RunAfterPrevious(taskFunc, previousTask, cancellationToken),
+                    () => RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
                     CancellationToken.None,
                     TaskCreationOptions.PreferFairness,
                     Options.TaskScheduler).Unwrap();
@@ -56,7 +56,7 @@ namespace System.Threading.Tasks.Flow
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Previous task exception should be observed on a task returned from Enqueue method")]
-        private async Task<T> RunAfterPrevious<T>(Func<CancellationToken, ValueTask<T>> taskFunc, Task previousTask, CancellationToken cancellationToken)
+        private async Task<T> RunAfterPrevious<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, Task previousTask, CancellationToken cancellationToken)
         {
             try
             {
@@ -68,7 +68,7 @@ namespace System.Threading.Tasks.Flow
             }
 
             using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
-            return await taskFunc(linkedToken.Token).ConfigureAwait(false);
+            return await taskFunc(state, linkedToken.Token).ConfigureAwait(false);
         }
     }
 }

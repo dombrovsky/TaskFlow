@@ -23,14 +23,14 @@ namespace System.Threading.Tasks.Flow
                 _cancelAllTokensAllocator = new CancelAllTokensAllocator();
             }
 
-            public async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
             {
                 _cancelAllTokensAllocator.Cancel();
 
                 using (_cancelAllTokensAllocator.AllocateCancellationToken(out var allocatedToken))
                 {
                     using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, allocatedToken);
-                    return await _baseTaskScheduler.Enqueue(taskFunc, linkedToken.Token).ConfigureAwait(false);
+                    return await _baseTaskScheduler.Enqueue(taskFunc, state, linkedToken.Token).ConfigureAwait(false);
                 }
             }
         }

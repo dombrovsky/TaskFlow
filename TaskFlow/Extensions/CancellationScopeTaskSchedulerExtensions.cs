@@ -22,10 +22,10 @@ namespace System.Threading.Tasks.Flow
                 _scopedCancellationToken = scopedCancellationToken;
             }
 
-            public async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
             {
                 using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _scopedCancellationToken);
-                return await _baseTaskScheduler.Enqueue(taskFunc, linkedToken.Token).ConfigureAwait(false);
+                return await _baseTaskScheduler.Enqueue(taskFunc, state, linkedToken.Token).ConfigureAwait(false);
             }
         }
     }
