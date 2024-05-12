@@ -3,6 +3,7 @@ namespace System.Threading.Tasks.Flow
     using System.ComponentModel;
     using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
+    using System.Threading.Tasks.Flow.Internal;
 
     public static class TaskSchedulerEnqueueExtensions
     {

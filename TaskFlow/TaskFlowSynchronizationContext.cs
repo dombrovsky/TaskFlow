@@ -1,6 +1,7 @@
 namespace System.Threading.Tasks.Flow
 {
     using System.Threading.Tasks.Flow.Annotations;
+    using System.Threading.Tasks.Flow.Internal;
 
     public sealed class TaskFlowSynchronizationContext : SynchronizationContext
     {

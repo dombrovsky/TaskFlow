@@ -2,6 +2,7 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
+    using System.Threading.Tasks.Flow.Internal;
 
     public abstract class TaskFlowBase : ITaskFlow
     {
