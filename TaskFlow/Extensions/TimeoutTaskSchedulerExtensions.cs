@@ -43,8 +43,8 @@ namespace System.Threading.Tasks.Flow
                 string FormatExceptionMessage()
                 {
                     var operationName = (state as ExtendedState)
-                        .Unwrap<OperationAnnotation>()
-                        .FirstOrDefault(annotation => annotation.OperationName != null)?.OperationName;
+                        .Unwrap<OperationNameAnnotation>()
+                        .FirstOrDefault()?.OperationName;
 
                     return operationName == null
                         ? string.Format(CultureInfo.InvariantCulture, "Operation has timed out in {0}", _timeout)
