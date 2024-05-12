@@ -4,7 +4,7 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class TaskSchedulerCancelPreviousExtensionsFixture
+    public sealed class CancelPreviousTaskSchedulerExtensionsFixture
     {
         private ITaskFlow? _taskFlow;
 
@@ -14,7 +14,7 @@ namespace TaskFlow.Tests.Extensions
             _taskFlow?.Dispose(TimeSpan.FromSeconds(1));
         }
 
-        [TestCaseSource(nameof(CreateTaskFlows))]
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
         public async Task Enqueue_ShouldCancelPreviousOperation(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
@@ -37,7 +37,7 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(task3.IsCompletedSuccessfully, Is.True);
         }
 
-        [TestCaseSource(nameof(CreateTaskFlows))]
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
         public async Task Enqueue_ShouldNotCancelPreviousOperations_OnParentTaskScheduler(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
@@ -62,12 +62,6 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(task1.IsCompletedSuccessfully, Is.True);
             Assert.That(task2.IsCanceled, Is.True);
             Assert.That(task3.IsCompletedSuccessfully, Is.True);
-        }
-
-        private static IEnumerable<ITaskFlow> CreateTaskFlows()
-        {
-            yield return new TaskFlow();
-            yield return new DedicatedThreadTaskFlow();
         }
     }
 }
