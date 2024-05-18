@@ -5,6 +5,7 @@ namespace TaskFlow.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
+    [FixtureTimeout(5000)]
     public abstract partial class TaskSchedulerBaseFixture<T>
         where T : ITaskScheduler
     {
