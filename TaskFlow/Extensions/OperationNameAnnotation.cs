@@ -2,7 +2,7 @@ namespace System.Threading.Tasks.Flow
 {
     public sealed class OperationNameAnnotation : IOperationAnnotation
     {
-        public OperationNameAnnotation(string operationName)
+        internal OperationNameAnnotation(string operationName)
         {
             OperationName = operationName;
         }
