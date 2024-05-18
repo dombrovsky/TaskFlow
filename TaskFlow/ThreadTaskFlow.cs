@@ -2,7 +2,9 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Collections.Concurrent;
     using System.Diagnostics.CodeAnalysis;
+    using System.Runtime.CompilerServices;
     using System.Threading.Tasks.Flow.Annotations;
+    using System.Threading.Tasks.Flow.Internal;
 
     public abstract class ThreadTaskFlow : TaskFlowBase
     {
@@ -23,7 +25,7 @@ namespace System.Threading.Tasks.Flow
 
         public abstract int ThreadId { get; }
         
-        public override async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public override async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
@@ -32,13 +34,13 @@ namespace System.Threading.Tasks.Flow
                 CheckDisposed();
             }
 
-            var executionItem = new ExecutionItem(TaskFunc, cancellationToken);
+            var executionItem = new ExecutionItem(TaskFunc, state, _synchronizationContext, cancellationToken);
             _blockingCollection.Add(executionItem, CancellationToken.None);
             return await executionItem.GetTypedTask<T>().ConfigureAwait(false);
 
-            async Task<object?> TaskFunc(CancellationToken token)
+            async Task<object?> TaskFunc(object? stateObject, CancellationToken token)
             {
-                var result = await taskFunc(token).ConfigureAwait(false);
+                var result = await taskFunc(stateObject, token).ConfigureAwait(false);
                 return result;
             }
         }
@@ -74,7 +76,6 @@ namespace System.Threading.Tasks.Flow
                 while (!cancellationToken.IsCancellationRequested)
                 {
                     var executionItem = _blockingCollection.Take(cancellationToken);
-                    SynchronizationContext.SetSynchronizationContext(_synchronizationContext);
                     executionItem.Execute(cancellationToken);
                 }
             }
@@ -89,7 +90,6 @@ namespace System.Threading.Tasks.Flow
 
                 foreach (var executionItem in _blockingCollection.GetConsumingEnumerable())
                 {
-                    SynchronizationContext.SetSynchronizationContext(_synchronizationContext);
                     executionItem.Execute(finalCancellationToken);
                 }
 
@@ -99,13 +99,21 @@ namespace System.Threading.Tasks.Flow
 
         private sealed class ExecutionItem
         {
-            private readonly Func<CancellationToken, Task<object?>> _taskFunc;
+            private readonly Func<object?, CancellationToken, Task<object?>> _taskFunc;
+            private readonly object? _state;
+            private readonly SynchronizationContext? _synchronizationContext;
             private readonly CancellationToken _cancellationToken;
             private readonly TaskCompletionSource<object?> _taskCompletionSource;
 
-            public ExecutionItem(Func<CancellationToken, Task<object?>> taskFunc, CancellationToken cancellationToken)
+            public ExecutionItem(
+                Func<object?, CancellationToken, Task<object?>> taskFunc,
+                object? state,
+                SynchronizationContext? synchronizationContext,
+                CancellationToken cancellationToken)
             {
                 _taskFunc = taskFunc;
+                _state = state;
+                _synchronizationContext = synchronizationContext;
                 _cancellationToken = cancellationToken;
                 _taskCompletionSource = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
@@ -117,31 +125,98 @@ namespace System.Threading.Tasks.Flow
             }
 
             [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Exception propagated to TaskCompletionSource")]
+            [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "linkedCts disposed after awaiter is done")]
             public void Execute(CancellationToken cancellationToken)
             {
                 var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
+                var blockingCollection = new BlockingCollection<(SendOrPostCallback Callback, object? State)>();
+
                 try
                 {
-                    var result = _taskFunc(linkedCts.Token).GetAwaiter().GetResult();
-                    _taskCompletionSource.TrySetResult(result);
-                }
-                catch (OperationCanceledException exception)
-                {
-                    _taskCompletionSource.TrySetCanceled(exception.CancellationToken);
-                }
-                catch (Exception exception)
-                {
-                    _taskCompletionSource.SetException(exception);
+                    var synchronizationContext = new BlockingCollectionSynchronizationContext(blockingCollection, _synchronizationContext);
+                    SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+                    var awaiter = _taskFunc(_state, linkedCts.Token).GetAwaiter();
+
+                    if (awaiter.IsCompleted)
+                    {
+                        HandleAwaiterCompletion(awaiter);
+                    }
+                    else
+                    {
+                        awaiter.OnCompleted(() => HandleAwaiterCompletion(awaiter));
+
+                        foreach (var (cb, state) in blockingCollection.GetConsumingEnumerable(CancellationToken.None))
+                        {
+                            SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+                            cb(state);
+                        }
+                    }
                 }
                 finally
                 {
+                    blockingCollection.Dispose();
                     linkedCts.Dispose();
+                }
+
+                return;
+
+                void HandleAwaiterCompletion(TaskAwaiter<object?> awaiter)
+                {
+                    try
+                    {
+                        _taskCompletionSource.TrySetResult(awaiter.GetResult());
+                    }
+                    catch (OperationCanceledException exception)
+                    {
+                        _taskCompletionSource.TrySetCanceled(exception.CancellationToken);
+                    }
+                    catch (Exception exception)
+                    {
+                        _taskCompletionSource.SetException(exception);
+                    }
+                    finally
+                    {
+                        blockingCollection.CompleteAdding();
+                    }
                 }
             }
 
             public void Cancel(CancellationToken token)
             {
                 _taskCompletionSource.TrySetCanceled(token);
+            }
+        }
+
+        private sealed class BlockingCollectionSynchronizationContext  : SynchronizationContext
+        {
+            private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _blockingCollection;
+            private readonly SynchronizationContext? _fallbackSynchronizationContext;
+
+            public BlockingCollectionSynchronizationContext(
+                BlockingCollection<(SendOrPostCallback Callback, object? State)> blockingCollection,
+                SynchronizationContext? fallbackSynchronizationContext)
+            {
+                _blockingCollection = blockingCollection;
+                _fallbackSynchronizationContext = fallbackSynchronizationContext;
+            }
+
+            public override void Post(SendOrPostCallback d, object? state)
+            {
+                if (_blockingCollection.IsAddingCompleted)
+                {
+                    if (_fallbackSynchronizationContext != null)
+                    {
+                        _fallbackSynchronizationContext.Post(d, state);
+                    }
+                    else
+                    {
+                        base.Post(d, state);
+                    }
+                }
+                else
+                {
+                    _blockingCollection.Add((d, state));
+                }
             }
         }
     }

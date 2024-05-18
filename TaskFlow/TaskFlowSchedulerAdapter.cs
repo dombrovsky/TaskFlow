@@ -13,11 +13,11 @@ namespace System.Threading.Tasks.Flow
             _taskScheduler = taskScheduler;
         }
 
-        public async Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
+        public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
             Argument.NotNull(taskFunc);
 
-            var task = await Task.Factory.StartNew(() => taskFunc(cancellationToken), cancellationToken, TaskCreationOptions.None, _taskScheduler).ConfigureAwait(false);
+            var task = await Task.Factory.StartNew(() => taskFunc(state, cancellationToken), cancellationToken, TaskCreationOptions.None, _taskScheduler).ConfigureAwait(false);
             return await task.ConfigureAwait(false);
         }
     }

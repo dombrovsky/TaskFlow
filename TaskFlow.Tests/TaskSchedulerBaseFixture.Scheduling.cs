@@ -125,5 +125,75 @@ namespace TaskFlow.Tests
             Assert.That(() => taskC.IsCompletedSuccessfully, Is.True.After(100, 10));
             Assert.That(taskC.Result, Is.True);
         }
+
+        [Test]
+        public void Enqueue_PropagatesStateToTaskFunc()
+        {
+            var task1 = _sut.Enqueue((state, _) => Task.FromResult(state), 42, CancellationToken.None);
+            var task2 = _sut.Enqueue((state, _) => Task.FromResult(state), 24, CancellationToken.None);
+
+            Assert.That(task1.Result, Is.EqualTo(42));
+            Assert.That(task2.Result, Is.EqualTo(24));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task Enqueue_AsyncContinuationShouldHappenOnSameScheduler(bool captureContext)
+        {
+            var result =  await _sut.Enqueue(async () =>
+            {
+                var synchronizationContext = SynchronizationContext.Current;
+                await Task.Delay(100).ConfigureAwait(captureContext);
+                var a = DateTime.Now;
+                await Task.Delay(100).ConfigureAwait(captureContext);
+                return (synchronizationContext, SynchronizationContext.Current);
+            });
+
+            Assert.That(result.Current, Is.EqualTo(captureContext ? result.synchronizationContext : null));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task Enqueue_AsyncContinuationShouldHappenBeforeNextEnqueuedItems(bool captureContext)
+        {
+            var counter = 0;
+            var task1 = _sut.Enqueue(async () =>
+            {
+                await Task.Delay(100).ConfigureAwait(captureContext);
+                Interlocked.Increment(ref counter);
+                await Task.Delay(100).ConfigureAwait(captureContext);
+                return Interlocked.Increment(ref counter);
+            });
+            var task2 = _sut.Enqueue(() => Interlocked.Increment(ref counter));
+
+            await Task.WhenAll(task1, task2);
+
+            Assert.That(task1.Result, Is.EqualTo(2));
+            Assert.That(task2.Result, Is.EqualTo(3));
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task Enqueue_AsyncContinuationThrowsException_ShouldExecuteNextOperation(bool captureContext)
+        {
+            var counter = 0;
+            var task1 = _sut.Enqueue(async () =>
+            {
+                await Task.Delay(10).ConfigureAwait(captureContext);
+                if (Interlocked.Increment(ref counter) > 0)
+                {
+                    throw new InvalidOperationException("Failure");
+                }
+
+                return Interlocked.Increment(ref counter);
+            });
+            var task2 = _sut.Enqueue(() => Interlocked.Increment(ref counter));
+
+            await task2;
+
+            Assert.That(() => task1.IsFaulted, Is.True.After(100, 10));
+            Assert.That(task1.Exception.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(task2.Result, Is.EqualTo(2));
+        }
     }
 }

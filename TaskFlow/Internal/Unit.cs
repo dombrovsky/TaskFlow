@@ -1,4 +1,4 @@
-namespace System.Threading.Tasks.Flow
+namespace System.Threading.Tasks.Flow.Internal
 {
     using System.Runtime.InteropServices;
 

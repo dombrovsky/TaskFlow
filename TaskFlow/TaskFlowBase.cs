@@ -2,6 +2,7 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
+    using System.Threading.Tasks.Flow.Internal;
 
     public abstract class TaskFlowBase : ITaskFlow
     {
@@ -51,7 +52,7 @@ namespace System.Threading.Tasks.Flow
             return result;
         }
 
-        public abstract Task<T> Enqueue<T>(Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken);
+        public abstract Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken);
 
         protected virtual void Dispose(bool disposing)
         {
