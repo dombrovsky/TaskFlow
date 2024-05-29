@@ -192,7 +192,7 @@ namespace TaskFlow.Tests
             await task2;
 
             Assert.That(() => task1.IsFaulted, Is.True.After(100, 10));
-            Assert.That(task1.Exception.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(task1.Exception?.InnerException, Is.TypeOf<InvalidOperationException>());
             Assert.That(task2.Result, Is.EqualTo(2));
         }
     }

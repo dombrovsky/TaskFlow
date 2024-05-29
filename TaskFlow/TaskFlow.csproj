@@ -1,59 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<LangVersion>12</LangVersion>
 		<TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
-		<Nullable>enable</Nullable>
-		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-		<Deterministic>true</Deterministic>
 		<RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
+    <PackageId>TaskFlow</PackageId>
 	</PropertyGroup>
-
-	<PropertyGroup>
-		<PackageId>TaskFlow</PackageId>
-		<Version>1.0.0-rc3</Version>
-		<Authors>Volodymyr Dombrovskyi</Authors>
-		<Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
-		<PackageTags>TODO</PackageTags>
-		<Description>TODO</Description>
-		<RepositoryUrl>https://github.com/dombrovsky/TaskFlow.git</RepositoryUrl>
-		<RepositoryType>git</RepositoryType>
-		<PackageProjectUrl>https://dombrovsky.github.io/TaskFlow</PackageProjectUrl>
-		<PackageLicenseFile>LICENSE</PackageLicenseFile>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<PublishRepositoryUrl>true</PublishRepositoryUrl>
-		<IncludeSymbols>true</IncludeSymbols>
-		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-		<EmbedUntrackedSources>true</EmbedUntrackedSources>
-	</PropertyGroup>
-	
-	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-	</PropertyGroup>
-
-	<PropertyGroup>
-		<RunCodeAnalysis>false</RunCodeAnalysis>
-		<EnableNETAnalyzers>true</EnableNETAnalyzers>
-		<AnalysisLevel>latest</AnalysisLevel>
-		<AnalysisMode>AllEnabledByDefault</AnalysisMode>
-		<EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-		<CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
-		<SignAssembly>True</SignAssembly>
-		<AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\TaskFlow.snk</AssemblyOriginatorKeyFile>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<AssemblyAttribute Include="System.CLSCompliant">
-			<_Parameter1>true</_Parameter1>
-			<_Parameter1_TypeName>System.Boolean</_Parameter1_TypeName>
-		</AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>
-        $(AssemblyName).Tests, PublicKey=002400000480000094000000060200000024000052534131000400000100010019048320f9788f50a6b96919219d35d14047ed0202e32cd3e19bb1d28de1a43a7f2527998078d2d6dbe4b38f16e377d0da9edb6708dcd4c880a765abf40eb940b97827a05295acf2694a990fbaf532a537223ab8d3b3f576e29403e286d30e115a6b5c72b9a8118db4828a1ac78e4a583bbdcf0589b5aafc830218de1bd9b8c4
-      </_Parameter1>
-    </AssemblyAttribute>
-	</ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="1.0.0" />
@@ -66,19 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
-      <PackageReference Include="IsExternalInit" Version="1.0.3">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="JetBrains.Annotations" Version="2022.3.1" PrivateAssets="All" />
-      <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
-	</ItemGroup>
-
-  <ItemGroup>
 		<None Include="..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
-    <Import Project="..\TaskFlow.Annotations\TaskFlow.Annotations.projitems" Label="Shared" />
+  <Import Project="..\TaskFlow.Annotations\TaskFlow.Annotations.projitems" Label="Shared" />
 
 </Project>

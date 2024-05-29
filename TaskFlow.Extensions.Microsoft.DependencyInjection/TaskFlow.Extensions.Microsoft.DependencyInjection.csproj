@@ -1,70 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<LangVersion>12</LangVersion>
 		<TargetFrameworks>netstandard2.0;net6.0;net8.0</TargetFrameworks>
-		<Nullable>enable</Nullable>
-		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
-		<Deterministic>true</Deterministic>
 		<RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
+    <PackageId>TaskFlow.Microsoft.Extensions.DependencyInjection</PackageId>
 	</PropertyGroup>
-
-	<PropertyGroup>
-		<PackageId>TaskFlow.Microsoft.Extensions.DependencyInjection</PackageId>
-		<Version>1.0.0-rc3</Version>
-		<Authors>Volodymyr Dombrovskyi</Authors>
-		<Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
-		<PackageTags>TODO</PackageTags>
-		<Description>TODO</Description>
-		<RepositoryUrl>https://github.com/dombrovsky/TaskFlow.git</RepositoryUrl>
-		<RepositoryType>git</RepositoryType>
-		<PackageProjectUrl>https://dombrovsky.github.io/TaskFlow</PackageProjectUrl>
-		<PackageLicenseFile>LICENSE</PackageLicenseFile>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<PublishRepositoryUrl>true</PublishRepositoryUrl>
-		<IncludeSymbols>true</IncludeSymbols>
-		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-		<EmbedUntrackedSources>true</EmbedUntrackedSources>
-	</PropertyGroup>
-	
-	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-  		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-	</PropertyGroup>
-
-	<PropertyGroup>
-		<RunCodeAnalysis>false</RunCodeAnalysis>
-		<EnableNETAnalyzers>true</EnableNETAnalyzers>
-		<AnalysisLevel>latest</AnalysisLevel>
-		<AnalysisMode>AllEnabledByDefault</AnalysisMode>
-		<EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-		<CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
-		<SignAssembly>True</SignAssembly>
-		<AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)..\TaskFlow.snk</AssemblyOriginatorKeyFile>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<AssemblyAttribute Include="System.CLSCompliant">
-			<_Parameter1>true</_Parameter1>
-			<_Parameter1_TypeName>System.Boolean</_Parameter1_TypeName>
-		</AssemblyAttribute>
-	</ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
-    <PackageReference Include="JetBrains.Annotations" Version="2022.3.1" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
 	</ItemGroup>
 
-    <ItemGroup>
+  <ItemGroup>
 		<None Include="..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\README.md" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\TaskFlow\TaskFlow.csproj" />
-    </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TaskFlow\TaskFlow.csproj" />
+  </ItemGroup>
 
-    <Import Project="..\TaskFlow.Annotations\TaskFlow.Annotations.projitems" Label="Shared" />
+  <Import Project="..\TaskFlow.Annotations\TaskFlow.Annotations.projitems" Label="Shared" />
 
 </Project>

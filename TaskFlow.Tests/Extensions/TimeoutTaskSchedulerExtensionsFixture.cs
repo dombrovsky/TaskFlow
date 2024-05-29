@@ -68,7 +68,7 @@ namespace TaskFlow.Tests.Extensions
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
-        public async Task Timeout_WhenOperationNameSpecified_ShouldThrowTimeoutExceptionWithOperationName(ITaskFlow taskFlow)
+        public void Timeout_WhenOperationNameSpecified_ShouldThrowTimeoutExceptionWithOperationName(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
 
