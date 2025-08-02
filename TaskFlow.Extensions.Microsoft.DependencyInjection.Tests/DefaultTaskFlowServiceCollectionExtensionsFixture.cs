@@ -5,7 +5,7 @@ namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class DefaultTaskFlowServiceCollectionExtensionsFixture
+    internal sealed class DefaultTaskFlowServiceCollectionExtensionsFixture
     {
         [Test]
         public void AddTaskFlow_ShouldRegisterTaskFlowInfoAndTaskScheduler()
