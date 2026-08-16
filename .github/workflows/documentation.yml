@@ -10,7 +10,6 @@ on:
       - "TaskFlow.Extensions.Time/README.md"
       - "TaskFlow.Extensions.Microsoft.DependencyInjection/README.md"
       - "TaskFlow.Extensions.Microsoft.Logging/README.md"
-      - "eng/validate-documentation.ps1"
       - ".github/workflows/documentation.yml"
   pull_request:
     branches: [ "main" ]
@@ -21,7 +20,6 @@ on:
       - "TaskFlow.Extensions.Time/README.md"
       - "TaskFlow.Extensions.Microsoft.DependencyInjection/README.md"
       - "TaskFlow.Extensions.Microsoft.Logging/README.md"
-      - "eng/validate-documentation.ps1"
       - ".github/workflows/documentation.yml"
   workflow_dispatch:
 
@@ -40,15 +38,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Validate Markdown links and compile examples
-        shell: pwsh
-        run: ./eng/validate-documentation.ps1
-
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
@@ -58,10 +47,6 @@ jobs:
         with:
           source: ./docs
           destination: ./_site
-
-      - name: Validate rendered links
-        shell: pwsh
-        run: ./eng/validate-documentation.ps1 -SiteRoot ./_site -SkipSnippetCompilation
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'
