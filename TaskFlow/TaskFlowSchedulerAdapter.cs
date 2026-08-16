@@ -21,7 +21,7 @@ namespace System.Threading.Tasks.Flow
     ///   <item>Using specialized schedulers (UI thread schedulers, limited concurrency schedulers, etc.)</item>
     /// </list>
     /// <para>
-    /// The adapter uses <see cref="Task.Factory.StartNew(System.Func{object}, object, CancellationToken, TaskCreationOptions, TaskScheduler)"/>
+    /// The adapter uses <c>Task.Factory.StartNew</c>
     /// to schedule tasks on the underlying <see cref="TaskScheduler"/>, ensuring that all tasks are executed
     /// according to the scheduler's specific behavior and constraints.
     /// </para>
@@ -32,11 +32,13 @@ namespace System.Threading.Tasks.Flow
     /// // Wrap the default task scheduler
     /// ITaskScheduler taskFlowScheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default);
     /// 
-    /// // Now you can use it with TaskFlow extension methods
-    /// var result = await taskFlowScheduler.Enqueue(async () => {
+    /// // A named Task&lt;T&gt; return type selects the intended overload
+    /// async Task&lt;string&gt; RunAsync()
+    /// {
     ///     await SomeAsyncOperation();
     ///     return "completed";
-    /// });
+    /// }
+    /// var result = await taskFlowScheduler.Enqueue(RunAsync);
     /// </code>
     /// <para>Using with a custom task scheduler:</para>
     /// <code>
@@ -59,7 +61,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// The adapter will delegate all task scheduling operations to the provided <paramref name="taskScheduler"/>,
-
+        ///
         /// maintaining the original scheduler's execution characteristics and constraints.
         /// </remarks>
         public TaskFlowSchedulerAdapter(TaskScheduler taskScheduler)
@@ -82,15 +84,19 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ObjectDisposedException">Thrown if the underlying task scheduler has been disposed.</exception>
         /// <remarks>
         /// <para>
-        /// This method uses <see cref="Task.Factory.StartNew(System.Func{object}, object, CancellationToken, TaskCreationOptions, TaskScheduler)"/>
+        /// This method uses <c>Task.Factory.StartNew</c>
         /// to schedule the task function on the underlying <see cref="TaskScheduler"/>. The function is executed
         /// according to the scheduler's specific behavior and constraints.
+        /// </para>
+        /// <para>
+        /// Unlike the built-in <see cref="TaskFlow"/> implementations, this adapter supplies the caller's cancellation token
+        /// to the underlying scheduling operation. The scheduled task can therefore be canceled before the delegate is invoked.
         /// </para>
         /// <para>
         /// The method performs a double-await pattern:
         /// </para>
         /// <list type="number">
-        ///   <item>First await on the task returned by <see cref="Task.Factory.StartNew(System.Func{object}, object, CancellationToken, TaskCreationOptions, TaskScheduler)"/></item>
+        ///   <item>First await on the task returned by <c>Task.Factory.StartNew</c></item>
         ///   <item>Second await on the <see cref="ValueTask{TResult}"/> returned by the task function</item>
         /// </list>
         /// <para>
@@ -99,7 +105,8 @@ namespace System.Threading.Tasks.Flow
         /// </para>
         /// <para>
         /// The cancellation token is honored by both the task scheduling mechanism and passed through to
-        /// the task function for internal cancellation handling.
+        /// the task function for internal cancellation handling. If cancellation occurs before the underlying
+        /// scheduler starts the task, the task function may not be invoked.
         /// </para>
         /// </remarks>
         public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)

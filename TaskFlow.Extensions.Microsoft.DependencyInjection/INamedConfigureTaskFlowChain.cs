@@ -99,7 +99,7 @@ namespace System.Threading.Tasks.Flow
     ///     if (_environment.IsProduction())
     ///     {
     ///         baseScheduler = baseScheduler
-    ///             .WithDebounce(TimeSpan.FromSeconds(1))
+    ///             .WithThrottle(TimeSpan.FromSeconds(1))
     ///             .OnError&lt;Exception&gt;(ex =&gt; _telemetry.TrackException(ex));
     ///     }
     ///     else
@@ -189,8 +189,8 @@ namespace System.Threading.Tasks.Flow
         /// <list type="bullet">
         ///   <item><see cref="AnnotatingTaskSchedulerExtensions.WithOperationName(ITaskScheduler, string)"/> - Add operation naming</item>
         ///   <item><see cref="TimeoutTaskSchedulerExtensions.WithTimeout(ITaskScheduler, TimeSpan)"/> - Add timeout protection</item>
-        ///   <item><see cref="ThrottlingTaskSchedulerExtensions.WithDebounce(ITaskScheduler, TimeSpan, TimeProvider?)"/> - Add debouncing</item>
-        ///   <item><see cref="ExceptionTaskSchedulerExtensions.OnError{TException}(ITaskScheduler, Action{TException})"/> - Add error handling</item>
+        ///   <item><c>WithThrottle</c> - Add admission throttling (on target frameworks that support it)</item>
+        ///   <item><c>OnError</c> - Add error observation</item>
         ///   <item><see cref="CancellationScopeTaskSchedulerExtensions.CreateCancellationScope(ITaskScheduler, CancellationToken)"/> - Add cancellation scopes</item>
         ///   <item><see cref="CancelPreviousTaskSchedulerExtensions.CreateCancelPrevious(ITaskScheduler)"/> - Add cancel-previous behavior</item>
         /// </list>
@@ -220,7 +220,7 @@ namespace System.Threading.Tasks.Flow
         ///     if (_configuration.GetValue&lt;bool&gt;("EnableThrottling"))
         ///     {
         ///         var interval = _configuration.GetValue&lt;TimeSpan&gt;("ThrottleInterval");
-        ///         chain = chain.WithDebounce(interval);
+        ///         chain = chain.WithThrottle(interval);
         ///     }
         ///     
         ///     // Add error handling

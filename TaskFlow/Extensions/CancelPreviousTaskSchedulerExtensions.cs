@@ -27,7 +27,7 @@ namespace System.Threading.Tasks.Flow
     ///   <item>Search suggestions - cancel previous search when user types new characters</item>
     ///   <item>Auto-save operations - cancel previous save when new save is triggered</item>
     ///   <item>Real-time data updates - cancel previous fetch when new data is requested</item>
-    ///   <item>UI debouncing - cancel previous UI update when new update is needed</item>
+    ///   <item>Latest-request-wins UI updates - cancel obsolete work when a newer update is needed</item>
     ///   <item>Progressive loading - cancel previous load operation when new load is started</item>
     /// </list>
     /// <para>
@@ -62,7 +62,7 @@ namespace System.Threading.Tasks.Flow
     /// {
     ///     // Cancel any pending save and start a new one
     ///     _ = autoSaveScheduler.Enqueue(async token => {
-    ///         await Task.Delay(1000, token); // Debounce for 1 second
+    ///         await Task.Delay(1000, token); // Give newer changes time to cancel obsolete work
     ///         token.ThrowIfCancellationRequested();
     ///         await SaveDocumentAsync(token);
     ///     });
@@ -80,14 +80,17 @@ namespace System.Threading.Tasks.Flow
     /// 
     /// async Task RefreshDataAsync()
     /// {
+    ///     async Task&lt;Data&gt; FetchAsync(CancellationToken token)
+    ///     {
+    ///         var freshData = await FetchLatestDataAsync(token);
+    ///         token.ThrowIfCancellationRequested();
+    ///         return freshData;
+    ///     }
+    ///
     ///     try 
     ///     {
-    ///         var data = await dataUpdateScheduler.Enqueue(async token => {
-    ///             // This will be cancelled if another refresh is triggered
-    ///             var freshData = await FetchLatestDataAsync(token);
-    ///             token.ThrowIfCancellationRequested();
-    ///             return freshData;
-    ///         });
+    ///         // This will be canceled if another refresh is triggered
+    ///         var data = await dataUpdateScheduler.Enqueue(FetchAsync);
     ///         
     ///         UpdateUI(data);
     ///     }
@@ -143,22 +146,19 @@ namespace System.Threading.Tasks.Flow
         /// <code>
         /// ITaskScheduler baseScheduler = new TaskFlow();
         /// var cancelPreviousScheduler = baseScheduler.CreateCancelPrevious();
+        ///
+        /// async Task&lt;string&gt; RunAsync(string result, CancellationToken token)
+        /// {
+        ///     await Task.Delay(1000, token);
+        ///     return result;
+        /// }
         /// 
         /// // Enqueue multiple operations rapidly
-        /// var task1 = cancelPreviousScheduler.Enqueue(async token => {
-        ///     await Task.Delay(1000, token); // Will likely be cancelled
-        ///     return "Task 1";
-        /// });
+        /// var task1 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 1", token));
         /// 
-        /// var task2 = cancelPreviousScheduler.Enqueue(async token => {
-        ///     await Task.Delay(1000, token); // Will likely be cancelled  
-        ///     return "Task 2";
-        /// });
+        /// var task2 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 2", token));
         /// 
-        /// var task3 = cancelPreviousScheduler.Enqueue(async token => {
-        ///     await Task.Delay(1000, token); // Most likely to complete
-        ///     return "Task 3";
-        /// });
+        /// var task3 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 3", token));
         /// 
         /// try 
         /// {

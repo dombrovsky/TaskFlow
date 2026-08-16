@@ -71,7 +71,8 @@ namespace System.Threading.Tasks.Flow
         /// </para>
         /// <para>
         /// When a task flow is disposed synchronously, this value determines how long to wait for
-        /// all pending tasks to complete before returning from the disposal operation.
+        /// tracked tasks to complete before returning from the disposal operation. If the timeout expires,
+        /// synchronous disposal returns while the asynchronous cleanup operation continues.
         /// </para>
         /// <para>
         /// The default value is <see cref="Timeout.InfiniteTimeSpan"/>, which means the disposal
@@ -79,8 +80,8 @@ namespace System.Threading.Tasks.Flow
         /// </para>
         /// <para>
         /// This setting does not affect asynchronous disposal through <see cref="IAsyncDisposable.DisposeAsync"/>,
-
-        /// which always waits for full completion.
+        ///
+        /// which always waits for tracked work and cleanup to complete. Cancellation remains cooperative.
         /// </para>
         /// </remarks>
         public TimeSpan SynchronousDisposeTimeout { get; init; } = Timeout.InfiniteTimeSpan;

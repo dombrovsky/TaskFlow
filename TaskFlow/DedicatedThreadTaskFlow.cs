@@ -21,6 +21,10 @@ namespace System.Threading.Tasks.Flow
     /// The dedicated thread is created as a background thread, which means it will not prevent
     /// the application from exiting if all foreground threads have terminated.
     /// </para>
+    /// <para>
+    /// A queued delegate is still invoked if cancellation is requested before it reaches the front of the queue;
+    /// it receives an already-canceled token and must respond cooperatively.
+    /// </para>
     /// <example>
     /// Basic usage:
     /// <code>

@@ -16,7 +16,7 @@ namespace System.Threading.Tasks.Flow
     /// This exception is commonly thrown by:
     /// </para>
     /// <list type="bullet">
-    ///   <item>Debounce mechanisms when operations are enqueued too quickly</item>
+    ///   <item>Leading-edge throttles when operations are enqueued too quickly</item>
     ///   <item>Rate limiting systems when operation frequency exceeds allowed thresholds</item>
     ///   <item>Throttling wrappers that enforce minimum intervals between operations</item>
     ///   <item>Backpressure systems that reject operations under high load</item>
@@ -33,15 +33,15 @@ namespace System.Threading.Tasks.Flow
     /// </para>
     /// </remarks>
     /// <example>
-    /// <para>Handling throttled operations in a debounce scenario:</para>
+    /// <para>Handling an admission-throttled operation:</para>
     /// <code>
-    /// var debouncedScheduler = scheduler.WithDebounce(TimeSpan.FromSeconds(1));
+    /// var throttledScheduler = scheduler.WithThrottle(TimeSpan.FromSeconds(1));
     /// 
     /// try 
     /// {
     ///     // These operations are enqueued too quickly
-    ///     await debouncedScheduler.Enqueue(() => SaveDocumentAsync());
-    ///     await debouncedScheduler.Enqueue(() => SaveDocumentAsync()); // Too soon - will throw
+    ///     await throttledScheduler.Enqueue(() => SaveDocumentAsync());
+    ///     await throttledScheduler.Enqueue(() => SaveDocumentAsync()); // Too soon - will throw
     /// }
     /// catch (OperationThrottledException ex)
     /// {
@@ -50,7 +50,7 @@ namespace System.Threading.Tasks.Flow
     ///     
     ///     // Could implement retry logic
     ///     await Task.Delay(TimeSpan.FromSeconds(1));
-    ///     await debouncedScheduler.Enqueue(() => SaveDocumentAsync());
+    ///     await throttledScheduler.Enqueue(() => SaveDocumentAsync());
     /// }
     /// catch (OperationCanceledException ex) when (ex is not OperationThrottledException)
     /// {
@@ -79,15 +79,21 @@ namespace System.Threading.Tasks.Flow
     [Serializable]
     public sealed class OperationThrottledException : OperationCanceledException
     {
+        /// <summary>Initializes a new instance of the <see cref="OperationThrottledException"/> class.</summary>
         public OperationThrottledException()
         {
         }
 
+        /// <summary>Initializes a new instance of the <see cref="OperationThrottledException"/> class with a message.</summary>
+        /// <param name="message">The message that describes the throttling rejection.</param>
         public OperationThrottledException(string message)
             : base(message)
         {
         }
 
+        /// <summary>Initializes a new instance of the <see cref="OperationThrottledException"/> class with a message and inner exception.</summary>
+        /// <param name="message">The message that describes the throttling rejection.</param>
+        /// <param name="innerException">The exception that caused the current exception.</param>
         public OperationThrottledException(string message, Exception innerException)
             : base(message, innerException)
         {

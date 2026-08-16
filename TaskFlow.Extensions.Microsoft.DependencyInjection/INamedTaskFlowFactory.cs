@@ -70,7 +70,7 @@ namespace System.Threading.Tasks.Flow
     /// 
     /// // Register using delegate factory
     /// services.AddTaskFlow("database", (provider, options) =&gt; 
-    ///     new TaskFlow(options with { MaxConcurrency = 1 }));
+    ///     new TaskFlow(options));
     /// </code>
     /// <para>Using named factories:</para>
     /// <code>
@@ -137,8 +137,8 @@ namespace System.Threading.Tasks.Flow
         ///     
         ///     public ITaskFlow Create(TaskFlowOptions options)
         ///     {
-        ///         // Create task flow optimized for database operations
-        ///         return new TaskFlow(options with { MaxConcurrency = 1 });
+        ///         // Each TaskFlow processes database operations sequentially
+        ///         return new TaskFlow(options);
         ///     }
         /// }
         /// </code>
@@ -194,7 +194,7 @@ namespace System.Threading.Tasks.Flow
         ///     {
         ///         "background" =&gt; new DedicatedThreadTaskFlow(options),
         ///         "ui" =&gt; new CurrentThreadTaskFlow(options),
-        ///         "parallel" =&gt; new TaskFlow(options with { MaxConcurrency = Environment.ProcessorCount }),
+        ///         "sequential" =&gt; new TaskFlow(options),
         ///         _ =&gt; new TaskFlow(options)
         ///     };
         ///     
