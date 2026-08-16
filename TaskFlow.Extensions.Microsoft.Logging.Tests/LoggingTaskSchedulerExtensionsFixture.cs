@@ -5,7 +5,7 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class LoggingTaskSchedulerExtensionsFixture
+    internal sealed class LoggingTaskSchedulerExtensionsFixture
     {
         private const int EnqueuedEventId = 0x5446_0001;
         private const int StartedEventId = 0x5446_0002;
@@ -14,7 +14,15 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
         private const int FailedEventId = 0x5446_0005;
         private const int FinishedEventId = 0x5446_0006;
         private TaskFlow? _taskFlow;
-        [TearDown] public void TearDown() => _taskFlow?.Dispose(TimeSpan.FromSeconds(1));
+        [TearDown]
+        public async Task TearDown()
+        {
+            if (_taskFlow != null)
+            {
+                await _taskFlow.DisposeAsync().ConfigureAwait(false);
+                _taskFlow = null;
+            }
+        }
 
         [Test]
         public async Task WithLogging_LogsFullLifecycleAtTraceByDefault()
@@ -99,7 +107,8 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             public RecordingLogger(LogLevel minimumLevel) => _minimumLevel = minimumLevel;
             public List<LogEntry> Entries { get; } = new List<LogEntry>();
             public int IsEnabledCalls { get; private set; }
-            public IDisposable BeginScope<TState>(TState state) => EmptyDisposable.Instance;
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => EmptyDisposable.Instance;
             public bool IsEnabled(LogLevel logLevel) { IsEnabledCalls++; return logLevel >= _minimumLevel; }
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Entries.Add(new LogEntry(logLevel, eventId, exception, formatter(state, exception)));
         }

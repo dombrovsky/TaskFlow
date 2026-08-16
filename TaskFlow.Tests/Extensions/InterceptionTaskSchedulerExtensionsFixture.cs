@@ -4,10 +4,23 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class InterceptionTaskSchedulerExtensionsFixture
+    internal sealed class InterceptionTaskSchedulerExtensionsFixture
     {
+        private static readonly string[] SuccessfulLifecycle = ["before", "operation", "success:42", "finally"];
+        private static readonly string[] FailedLifecycle = ["before", "error:boom", "finally"];
+        private static readonly int[] SuccessfulResults = [1, 2];
+        private static readonly string[] SuccessfulHookLifecycle = ["before", "success:42", "finally"];
+        private static readonly string[] FailedBeforeLifecycle = ["before", "finally"];
         private ITaskFlow? _taskFlow;
-        [TearDown] public void TearDown() => _taskFlow?.Dispose(TimeSpan.FromSeconds(1));
+        [TearDown]
+        public async Task TearDown()
+        {
+            if (_taskFlow != null)
+            {
+                await _taskFlow.DisposeAsync().ConfigureAwait(false);
+                _taskFlow = null;
+            }
+        }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
         public async Task Intercept_AwaitsAsynchronousHooksInOrder(ITaskFlow taskFlow)
@@ -22,7 +35,7 @@ namespace TaskFlow.Tests.Extensions
                 return 42;
             });
             Assert.That(result, Is.EqualTo(42));
-            Assert.That(events, Is.EqualTo(new[] { "before", "operation", "success:42", "finally" }));
+            Assert.That(events, Is.EqualTo(SuccessfulLifecycle));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
@@ -36,7 +49,7 @@ namespace TaskFlow.Tests.Extensions
             var task = taskFlow.Intercept(interceptor).WithOperationName("failure")
                 .Enqueue(operation, state, CancellationToken.None);
             Assert.That(async () => await task, Throws.InvalidOperationException.With.Message.EqualTo("boom"));
-            Assert.That(events, Is.EqualTo(new[] { "before", "error:boom", "finally" }));
+            Assert.That(events, Is.EqualTo(FailedLifecycle));
             Assert.That(interceptor.Context?.GetAnnotation<OperationNameAnnotation>()?.OperationName, Is.EqualTo("failure"));
             Assert.That(interceptor.Context?.State, Is.SameAs(state));
         }
@@ -47,7 +60,7 @@ namespace TaskFlow.Tests.Extensions
             _taskFlow = taskFlow;
             var interceptor = new ThrowingSuccessInterceptor();
             var task = taskFlow.Intercept(interceptor).Enqueue(() => 42);
-            Assert.That(async () => await task, Throws.TypeOf<ApplicationException>());
+            Assert.That(async () => await task, Throws.TypeOf<NotSupportedException>());
             Assert.That(interceptor.ErrorCalled, Is.False);
         }
 
@@ -146,7 +159,7 @@ namespace TaskFlow.Tests.Extensions
             var scheduler = taskFlow.Intercept(new SynchronousRecordingInterceptor(events));
             var results = await Task.WhenAll(scheduler.Enqueue(() => 1), scheduler.Enqueue(() => 2));
 
-            Assert.That(results, Is.EqualTo(new[] { 1, 2 }));
+            Assert.That(results, Is.EqualTo(SuccessfulResults));
             Assert.That(events.Count(x => x == "before:1"), Is.EqualTo(2));
             Assert.That(events, Does.Contain("success:1:1"));
             Assert.That(events, Does.Contain("success:1:2"));
@@ -172,7 +185,7 @@ namespace TaskFlow.Tests.Extensions
                 }, state, cts.Token);
 
             Assert.That(result, Is.EqualTo(42));
-            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "operation", "success:42", "finally" }));
+            Assert.That(recorder.Events, Is.EqualTo(SuccessfulLifecycle));
             Assert.That(recorder.Context.State, Is.SameAs(state));
             Assert.That(recorder.Context.CancellationToken, Is.EqualTo(cts.Token));
             Assert.That(recorder.Context.GetAnnotation<OperationNameAnnotation>()?.OperationName, Is.EqualTo("sync"));
@@ -188,7 +201,7 @@ namespace TaskFlow.Tests.Extensions
             var task = taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(operation);
 
             Assert.That(async () => await task, Throws.InvalidOperationException.With.Message.EqualTo("boom"));
-            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "error:boom", "finally" }));
+            Assert.That(recorder.Events, Is.EqualTo(FailedLifecycle));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
@@ -199,8 +212,8 @@ namespace TaskFlow.Tests.Extensions
 
             var task = taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(() => 42);
 
-            Assert.That(async () => await task, Throws.TypeOf<ApplicationException>());
-            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "success:42", "finally" }));
+            Assert.That(async () => await task, Throws.TypeOf<NotSupportedException>());
+            Assert.That(recorder.Events, Is.EqualTo(SuccessfulHookLifecycle));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
@@ -214,7 +227,7 @@ namespace TaskFlow.Tests.Extensions
 
             Assert.That(async () => await task, Throws.TypeOf<InvalidOperationException>());
             Assert.That(operationCalled, Is.False);
-            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "finally" }));
+            Assert.That(recorder.Events, Is.EqualTo(FailedBeforeLifecycle));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
@@ -329,7 +342,7 @@ namespace TaskFlow.Tests.Extensions
 
         private sealed class SynchronousLifecycleRecorder
         {
-            public IList<string> Events { get; } = new List<string>();
+            public List<string> Events { get; } = new List<string>();
             public TaskSchedulerInterceptionContext Context { get; set; }
             public SynchronizationContext? BeforeContext { get; set; }
             public SynchronizationContext? SuccessContext { get; set; }
@@ -356,7 +369,7 @@ namespace TaskFlow.Tests.Extensions
             {
                 _recorder.SuccessContext = SynchronizationContext.Current;
                 _recorder.Events.Add($"success:{result}");
-                if (_recorder.ThrowOnSuccess) throw new ApplicationException();
+                if (_recorder.ThrowOnSuccess) throw new NotSupportedException();
             }
 
             public void OnError(TaskSchedulerInterceptionContext context, Exception exception) => _recorder.Events.Add($"error:{exception.Message}");
@@ -392,7 +405,7 @@ namespace TaskFlow.Tests.Extensions
             public bool ErrorCalled { get; private set; }
             public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => default;
-            public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => throw new ApplicationException();
+            public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => throw new NotSupportedException();
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) { ErrorCalled = true; return default; }
             public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context) => default;
         }

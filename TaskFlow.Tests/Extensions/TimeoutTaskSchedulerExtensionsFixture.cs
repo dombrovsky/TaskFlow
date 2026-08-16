@@ -4,7 +4,7 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class TimeoutTaskSchedulerExtensionsFixture
+    internal sealed class TimeoutTaskSchedulerExtensionsFixture
     {
         private ITaskFlow? _taskFlow;
 

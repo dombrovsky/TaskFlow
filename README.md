@@ -43,6 +43,14 @@ Add the core package:
 
 For dependency injection support:
 `dotnet add package TaskFlow.Microsoft.Extensions.DependencyInjection`
+
+For Microsoft.Extensions.Logging integration:
+`dotnet add package TaskFlow.Microsoft.Extensions.Logging`
+
+### Building from Source
+
+Use a .NET 10 SDK to restore, build, and test the repository. The test projects execute against both `net8.0` and `net10.0`, so both runtimes must be installed.
+
 ### Basic Usage
 ```csharp
 using var taskFlow = new TaskFlow();

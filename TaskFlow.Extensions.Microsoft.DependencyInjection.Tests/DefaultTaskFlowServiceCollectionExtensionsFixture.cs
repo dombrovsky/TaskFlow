@@ -70,7 +70,7 @@ namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public void AddTaskFlow_DisposeScope_ShouldCancelPendingTask()
         {
             using var container = new ServiceCollection()
@@ -91,7 +91,7 @@ namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public async Task AddTaskFlow_DisposeScopeAsync_ShouldCancelPendingTask()
         {
             using var container = new ServiceCollection()

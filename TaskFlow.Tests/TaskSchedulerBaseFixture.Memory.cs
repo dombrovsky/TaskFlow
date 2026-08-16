@@ -4,13 +4,14 @@ namespace TaskFlow.Tests
     using NUnit.Framework;
     using System.Threading.Tasks.Flow;
 
-    public abstract partial class TaskSchedulerBaseFixture<T>
+    internal abstract partial class TaskSchedulerBaseFixture<T>
     {
         [Test]
         [DotMemoryUnit(FailIfRunWithoutSupport = false)]
         public void Enqueue_ResultReferencedFromStack_ResultShouldBeAlive()
         {
             var result = _sut.Enqueue(() => new AllocatedResult()).Result;
+            Assert.That(result.Size, Is.EqualTo(100));
 
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true);
 
@@ -72,5 +73,7 @@ namespace TaskFlow.Tests
     internal sealed class AllocatedResult
     {
         private readonly byte[] _data = new byte[100];
+
+        public int Size => _data.Length;
     }
 }
