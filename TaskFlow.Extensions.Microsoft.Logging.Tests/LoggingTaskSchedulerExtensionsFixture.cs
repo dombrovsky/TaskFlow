@@ -24,7 +24,8 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             Assert.That(await _taskFlow.WithLogging(logger).WithOperationName("answer").Enqueue(() => 42), Is.EqualTo(42));
             Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { EnqueuedEventId, StartedEventId, SucceededEventId, FinishedEventId }));
             Assert.That(logger.Entries, Has.All.Property(nameof(LogEntry.Level)).EqualTo(LogLevel.Trace));
-            Assert.That(logger.Entries.Skip(1).Select(x => x.Message), Has.All.Contains("answer"));
+            Assert.That(logger.Entries.Select(x => x.Message), Has.All.Contains("operation 1"));
+            Assert.That(logger.Entries.Select(x => x.Message), Has.All.Contains("answer"));
         }
 
         [Test]

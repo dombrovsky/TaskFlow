@@ -37,8 +37,7 @@ namespace TaskFlow.Tests.Extensions
                 .Enqueue(operation, state, CancellationToken.None);
             Assert.That(async () => await task, Throws.InvalidOperationException.With.Message.EqualTo("boom"));
             Assert.That(events, Is.EqualTo(new[] { "before", "error:boom", "finally" }));
-            Assert.That(interceptor.Context?.OperationId, Is.EqualTo(1));
-            Assert.That(interceptor.Context?.OperationName, Is.EqualTo("failure"));
+            Assert.That(interceptor.Context?.GetAnnotation<OperationNameAnnotation>()?.OperationName, Is.EqualTo("failure"));
             Assert.That(interceptor.Context?.State, Is.SameAs(state));
         }
 

@@ -1,6 +1,5 @@
 namespace System.Threading.Tasks.Flow
 {
-    using System.Linq;
     using System.Threading.Tasks.Flow.Annotations;
 
     /// <summary>Provides asynchronous operation interception for <see cref="ITaskScheduler"/>.</summary>
@@ -18,8 +17,6 @@ namespace System.Threading.Tasks.Flow
         {
             private readonly ITaskScheduler _baseTaskScheduler;
             private readonly ITaskSchedulerInterceptor _interceptor;
-            private long _lastOperationId;
-
             public InterceptionTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, ITaskSchedulerInterceptor interceptor)
             {
                 _baseTaskScheduler = baseTaskScheduler;
@@ -28,9 +25,7 @@ namespace System.Threading.Tasks.Flow
 
             public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
             {
-                var operationId = Interlocked.Increment(ref _lastOperationId);
-                var operationName = (state as ExtendedState).Unwrap<OperationNameAnnotation>().FirstOrDefault()?.OperationName;
-                var context = new TaskSchedulerInterceptionContext(operationId, operationName, UnwrapState(state), cancellationToken);
+                var context = new TaskSchedulerInterceptionContext(state, cancellationToken);
                 return _baseTaskScheduler.Enqueue((_, token) => Execute(taskFunc, state, context, token), state, cancellationToken);
             }
 
@@ -58,16 +53,6 @@ namespace System.Threading.Tasks.Flow
                 {
                     await _interceptor.OnFinallyAsync(context).ConfigureAwait(true);
                 }
-            }
-
-            private static object? UnwrapState(object? state)
-            {
-                while (state is ExtendedState extendedState)
-                {
-                    state = extendedState.State;
-                }
-
-                return state;
             }
         }
     }

@@ -1,26 +1,47 @@
 namespace System.Threading.Tasks.Flow
 {
+    using System.Linq;
+
     /// <summary>Describes an operation observed by an <see cref="ITaskSchedulerInterceptor"/>.</summary>
     public sealed class TaskSchedulerInterceptionContext
     {
-        internal TaskSchedulerInterceptionContext(long operationId, string? operationName, object? state, CancellationToken cancellationToken)
+        private readonly ExtendedState? _extendedState;
+
+        internal TaskSchedulerInterceptionContext(object? state, CancellationToken cancellationToken)
         {
-            OperationId = operationId;
-            OperationName = operationName;
-            State = state;
+            _extendedState = state as ExtendedState;
+            State = UnwrapState(state);
             CancellationToken = cancellationToken;
         }
-
-        /// <summary>Gets the identifier assigned by the interception wrapper.</summary>
-        public long OperationId { get; }
-
-        /// <summary>Gets the annotated operation name, when one is available.</summary>
-        public string? OperationName { get; }
 
         /// <summary>Gets the original state supplied by the caller.</summary>
         public object? State { get; }
 
         /// <summary>Gets the cancellation token supplied to the scheduler.</summary>
         public CancellationToken CancellationToken { get; }
+
+        /// <summary>Gets the first operation annotation of the requested type, if present.</summary>
+        public TAnnotation? GetAnnotation<TAnnotation>()
+            where TAnnotation : class, IOperationAnnotation
+        {
+            return GetAnnotation<TAnnotation>(_extendedState);
+        }
+
+        /// <summary>Gets the first operation annotation of the requested type from scheduler state, if present.</summary>
+        public static TAnnotation? GetAnnotation<TAnnotation>(object? state)
+            where TAnnotation : class, IOperationAnnotation
+        {
+            return (state as ExtendedState).Unwrap<TAnnotation>().FirstOrDefault();
+        }
+
+        private static object? UnwrapState(object? state)
+        {
+            while (state is ExtendedState extendedState)
+            {
+                state = extendedState.State;
+            }
+
+            return state;
+        }
     }
 }
