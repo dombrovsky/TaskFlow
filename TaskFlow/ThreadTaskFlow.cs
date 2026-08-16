@@ -24,6 +24,10 @@ namespace System.Threading.Tasks.Flow
     /// Derived classes must specify how the execution thread is obtained and managed by
     /// implementing the <see cref="ThreadId"/> property and initializing the thread execution.
     /// </para>
+    /// <para>
+    /// Accepted delegates remain in the queue when cancellation is requested. They are invoked in order with a linked
+    /// token that may already be canceled, including when the queue is drained during disposal.
+    /// </para>
     /// </remarks>
     public abstract class ThreadTaskFlow : TaskFlowBase
     {
@@ -80,6 +84,10 @@ namespace System.Threading.Tasks.Flow
         /// <para>
         /// The task function will execute with a synchronization context that ensures that any asynchronous
         /// continuations within the task function will also be marshaled back to the same thread.
+        /// </para>
+        /// <para>
+        /// Cancellation does not remove the queued item. The delegate is invoked with a linked token that may already
+        /// be canceled so queue progression remains deterministic.
         /// </para>
         /// </remarks>
         public override async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
@@ -151,7 +159,7 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// <para>
         /// This method should be called by derived classes to start the task processing loop.
-        /// It sets the task flow state to <see cref="TaskFlowState.Running"/> and begins
+        /// It sets the task flow state to <c>Running</c> and begins
         /// processing tasks from the queue.
         /// </para>
         /// <para>

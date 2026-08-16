@@ -17,6 +17,10 @@ namespace System.Threading.Tasks.Flow
     ///   <item>Priority-based scheduling</item>
     ///   <item>Custom execution strategies</item>
     /// </list>
+    /// <para>
+    /// Cancellation behavior is implementation-specific. Built-in task flows invoke accepted queued delegates with
+    /// canceled tokens, while an adapter or custom scheduler may cancel work before invoking its delegate.
+    /// </para>
     /// </remarks>
     public interface ITaskScheduler
     {

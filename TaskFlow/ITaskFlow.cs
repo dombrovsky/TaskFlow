@@ -22,6 +22,11 @@ namespace System.Threading.Tasks.Flow
     ///   <item>Providing configuration options through the <see cref="ITaskFlowInfo.Options"/> property</item>
     ///   <item>Supporting both synchronous and asynchronous disposal patterns</item>
     /// </list>
+    /// <para>
+    /// Asynchronous disposal requests cooperative cancellation and waits for tracked work. Synchronous disposal
+    /// may return after its configured timeout. Tasks returned by <see cref="ITaskScheduler.Enqueue{T}"/> should
+    /// always be awaited or otherwise deliberately observed because disposal does not surface their failures.
+    /// </para>
     /// </remarks>
     public interface ITaskFlow : ITaskScheduler, ITaskFlowInfo, IAsyncDisposable, IDisposable
     {
@@ -33,12 +38,13 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// <para>
         /// This method attempts to dispose of the task flow asynchronously but with a time limit.
-        /// If the specified timeout is reached before all tasks complete, the method returns <c>false</c>,
-        /// but resources are still properly disposed.
+        /// If the specified timeout is reached before all tasks complete, the method returns <c>false</c>.
+        /// Asynchronous cleanup continues and finishes after tracked work completes.
         /// </para>
         /// <para>
         /// If tasks don't respond to cancellation, they may continue running after this method returns.
         /// </para>
+        /// <para>New operations are rejected once disposal has begun.</para>
         /// </remarks>
         bool Dispose(TimeSpan timeout);
     }

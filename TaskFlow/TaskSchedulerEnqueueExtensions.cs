@@ -20,6 +20,11 @@ namespace System.Threading.Tasks.Flow
     /// Methods that don't specify a <see cref="CancellationToken"/> will use <see cref="CancellationToken.None"/>.
     /// </para>
     /// <para>
+    /// A value-returning <c>async</c> lambda can match both the <see cref="Task{TResult}"/> and
+    /// <see cref="ValueTask{TResult}"/> overload families, producing compiler error <c>CS0121</c>.
+    /// Use a named local function with an explicit return type, or cast the lambda to the intended delegate type.
+    /// </para>
+    /// <para>
     /// The extension methods support:
     /// </para>
     /// <list type="bullet">
@@ -37,11 +42,22 @@ namespace System.Threading.Tasks.Flow
     /// // Enqueue a function that returns a value
     /// var result = await scheduler.Enqueue(() => 42);
     /// 
-    /// // Enqueue an async operation with cancellation
-    /// var asyncResult = await scheduler.Enqueue(async token => {
+    /// // A named return type avoids Task&lt;T&gt;/ValueTask&lt;T&gt; overload ambiguity
+    /// async Task&lt;string&gt; RunAsync(CancellationToken token)
+    /// {
     ///     await SomeAsyncOperation(token);
     ///     return "completed";
-    /// }, cancellationToken);
+    /// }
+    /// var asyncResult = await scheduler.Enqueue(RunAsync, cancellationToken);
+    ///
+    /// // An explicit delegate cast selects the ValueTask&lt;T&gt; overload
+    /// var valueTaskResult = await scheduler.Enqueue(
+    ///     (Func&lt;CancellationToken, ValueTask&lt;string&gt;&gt;)(async token =&gt;
+    ///     {
+    ///         await SomeAsyncOperation(token);
+    ///         return "completed";
+    ///     }),
+    ///     cancellationToken);
     /// 
     /// // Enqueue an action
     /// await scheduler.Enqueue(() => Console.WriteLine("Hello World"));
@@ -62,6 +78,8 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// This method adapts a function that takes only a cancellation token to the scheduler's signature
         /// that requires a state parameter by passing <c>null</c> as the state.
+        /// A direct value-returning <c>async</c> lambda may be ambiguous with the corresponding
+        /// <see cref="Task{TResult}"/> overload; use a named <see cref="ValueTask{TResult}"/> function or an explicit delegate cast.
         /// </remarks>
         public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
         {
@@ -88,6 +106,8 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// This method wraps the <see cref="Task{TResult}"/> returned by the function in a <see cref="ValueTask{TResult}"/>
         /// to match the scheduler's expected signature.
+        /// A direct value-returning <c>async</c> lambda may be ambiguous with the corresponding
+        /// <see cref="ValueTask{TResult}"/> overload; use a named <see cref="Task{TResult}"/> function or an explicit delegate cast.
         /// </remarks>
         public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc, CancellationToken cancellationToken)
         {
@@ -268,6 +288,8 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the 
         /// <see cref="Task{TResult}"/> in a <see cref="ValueTask{TResult}"/>.
+        /// A direct value-returning <c>async</c> lambda may be ambiguous with the corresponding
+        /// <see cref="ValueTask{TResult}"/> overload; use a named function or an explicit delegate cast.
         /// </remarks>
         public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc)
         {
@@ -355,6 +377,8 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter 
         /// is used to avoid method signature conflicts with other overloads.
+        /// A direct <c>async</c> lambda may be ambiguous with the corresponding
+        /// <see cref="Task"/> overload; use a named function or an explicit delegate cast.
         /// </remarks>
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {

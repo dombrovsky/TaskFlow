@@ -23,74 +23,99 @@ namespace TaskFlow.Tests.Extensions
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
-        public async Task Enqueue_ShouldExecuteOnlyIfDebounceIntervalPassed(ITaskFlow taskFlow)
+        public async Task Enqueue_ShouldAdmitFirstOperation(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
 
-            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), _timeProvider);
 
-            var counter = 0;
-            for (var i = 0; i < 10; i++)
-            {
-                _ = debounceTaskScheduler.Enqueue(() => Interlocked.Increment(ref counter));
-                _timeProvider.Advance(TimeSpan.FromSeconds(1));
-            }
+            var task = throttleTaskScheduler.Enqueue(() => 42);
 
-            await _taskFlow.Enqueue(() => { });
-
-            Assert.That(counter, Is.EqualTo(2));
+            Assert.That(await task.ConfigureAwait(false), Is.EqualTo(42));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
-        public async Task Enqueue_ShouldThrowIfDebounceIntervalNotPassed(ITaskFlow taskFlow)
+        public async Task Enqueue_ShouldRejectOperationInsideThrottleInterval(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
 
-            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), _timeProvider);
 
-            var task1 = debounceTaskScheduler.Enqueue(() => { });
-            var task2 = debounceTaskScheduler.Enqueue(() => { });
+            var admittedTask = throttleTaskScheduler.Enqueue(() => { });
+            var throttledTask = throttleTaskScheduler.Enqueue(() => { });
 
-            await _taskFlow.Enqueue(() => { });
-
-            await task1.ConfigureAwait(false);
-            Assert.That(task1.IsCompletedSuccessfully, Is.True);
-            await Assert.ThatAsync(async () => await task2.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
+            await admittedTask.ConfigureAwait(false);
+            await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
                 .ConfigureAwait(false);
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
-        public async Task Enqueue_WhenAcceptedOperationFails_ShouldStillThrottleNextOperationWithinInterval(ITaskFlow taskFlow)
+        public async Task Enqueue_ShouldAdmitOperationAtThrottleIntervalBoundary(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
 
-            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), _timeProvider);
 
-            var failedTask = debounceTaskScheduler.Enqueue(_ => Task.FromException(new InvalidOperationException("boom")));
-            var throttledTask = debounceTaskScheduler.Enqueue(() => 42);
+            await throttleTaskScheduler.Enqueue(() => { }).ConfigureAwait(false);
+            _timeProvider.Advance(TimeSpan.FromSeconds(5));
 
-            await Assert.ThatAsync(async () => await failedTask.ConfigureAwait(false), Throws.TypeOf<InvalidOperationException>())
+            var task = throttleTaskScheduler.Enqueue(() => 42);
+
+            Assert.That(await task.ConfigureAwait(false), Is.EqualTo(42));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Enqueue_ShouldTreatZeroTimestampAsValidAdmissionTime(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var timeProvider = new ZeroTimestampTimeProvider();
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), timeProvider);
+
+            var admittedTask = throttleTaskScheduler.Enqueue(() => { });
+            var throttledTask = throttleTaskScheduler.Enqueue(() => { });
+
+            await admittedTask.ConfigureAwait(false);
+            await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
+                .ConfigureAwait(false);
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Enqueue_ShouldConsumeIntervalWhenAdmittedOperationFails(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), _timeProvider);
+
+            var failedTask = throttleTaskScheduler.Enqueue(_ => Task.FromException(new InvalidOperationException("Expected test failure")));
+            var throttledTask = throttleTaskScheduler.Enqueue(() => { });
+
+            await Assert.ThatAsync(async () => await failedTask.ConfigureAwait(false), Throws.InvalidOperationException)
                 .ConfigureAwait(false);
             await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
                 .ConfigureAwait(false);
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
-        public async Task Enqueue_WhenAcceptedOperationIsCanceled_ShouldStillThrottleNextOperationWithinInterval(ITaskFlow taskFlow)
+        public async Task Enqueue_ShouldConsumeIntervalWhenAdmittedOperationIsCanceled(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
+            using var cancellationTokenSource = new CancellationTokenSource();
+            await cancellationTokenSource.CancelAsync().ConfigureAwait(false);
+            var throttleTaskScheduler = taskFlow.WithThrottle(TimeSpan.FromSeconds(5), _timeProvider);
 
-            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
-            using var cts = new CancellationTokenSource();
-            await cts.CancelAsync().ConfigureAwait(false);
-
-            var canceledTask = debounceTaskScheduler.Enqueue(Task.FromCanceled, cts.Token);
-            var throttledTask = debounceTaskScheduler.Enqueue(() => 42);
+            var canceledTask = throttleTaskScheduler.Enqueue(token => Task.Delay(Timeout.InfiniteTimeSpan, token), cancellationTokenSource.Token);
+            var throttledTask = throttleTaskScheduler.Enqueue(() => { });
 
             await Assert.ThatAsync(async () => await canceledTask.ConfigureAwait(false), Throws.InstanceOf<OperationCanceledException>())
                 .ConfigureAwait(false);
             await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
                 .ConfigureAwait(false);
+        }
+
+        private sealed class ZeroTimestampTimeProvider : TimeProvider
+        {
+            public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+            public override long GetTimestamp() => 0;
         }
     }
 }

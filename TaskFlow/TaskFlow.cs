@@ -20,6 +20,11 @@ namespace System.Threading.Tasks.Flow
     /// Tasks are executed on the thread pool or using the custom <see cref="TaskScheduler"/>
     /// specified in the <see cref="TaskFlowOptions"/>.
     /// </para>
+    /// <para>
+    /// Every accepted delegate is invoked after its predecessor completes, even if its cancellation token is already
+    /// canceled. The delegate receives the canceled token and decides cooperatively how to respond. This behavior is
+    /// specific to this built-in flow and is not a universal <see cref="ITaskScheduler"/> guarantee.
+    /// </para>
     /// <example>
     /// Basic usage:
     /// <code>
@@ -87,6 +92,10 @@ namespace System.Threading.Tasks.Flow
         ///   <item>Through the provided <paramref name="cancellationToken"/></item>
         ///   <item>Through the disposal of the <see cref="TaskFlow"/> instance</item>
         /// </list>
+        /// <para>
+        /// Cancellation does not remove a queued delegate. After earlier work completes, the delegate is invoked with
+        /// a linked token that may already be canceled. The returned task reflects the delegate's response to that token.
+        /// </para>
         /// <para>
         /// If a previous task fails with an exception, the exception is suppressed for the continuity
         /// of the task flow, but the task's exception can still be observed by awaiting the task returned

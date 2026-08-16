@@ -4,7 +4,7 @@ namespace System.Threading.Tasks.Flow
     using System.Threading.Tasks.Flow.Annotations;
 
     /// <summary>
-    /// Provides extension methods for <see cref="ITaskScheduler"/> to add error handling capabilities with optional operation annotation support.
+    /// Provides extension methods for observing scheduler errors with optional operation annotation support.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -38,6 +38,11 @@ namespace System.Threading.Tasks.Flow
     /// The error handling system works by wrapping the base scheduler and intercepting exceptions
     /// that occur during task execution. Multiple error handlers can be chained, and each handler
     /// in the chain will be invoked when matching exceptions occur.
+    /// </para>
+    /// <para>
+    /// These callbacks do not retry, recover from, or suppress a failure. After a matching callback returns,
+    /// the original exception is rethrown and remains observable through the task returned by <c>Enqueue</c>.
+    /// If the callback itself throws, the callback exception becomes the returned task's failure instead.
     /// </para>
     /// </remarks>
     /// <example>
@@ -99,13 +104,13 @@ namespace System.Threading.Tasks.Flow
     public static class ExceptionTaskSchedulerExtensions
     {
         /// <summary>
-        /// Creates a task scheduler wrapper that handles exceptions of the specified type with access to the scheduler and operation name annotation.
+        /// Creates a task scheduler wrapper that observes exceptions of the specified type with access to the scheduler and operation name annotation.
         /// </summary>
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception of type <typeparamref name="TException"/> occurs. Receives the scheduler instance, the exception, and the operation name annotation if available.</param>
         /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles exceptions according to the specified parameters.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions according to the specified parameters.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This overload specifically provides access to <see cref="OperationNameAnnotation"/> in the error handler,
@@ -119,13 +124,13 @@ namespace System.Threading.Tasks.Flow
         }
 
         /// <summary>
-        /// Creates a task scheduler wrapper that handles exceptions of the specified type with a simple error action.
+        /// Creates a task scheduler wrapper that observes exceptions of the specified type with a simple error action.
         /// </summary>
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception of type <typeparamref name="TException"/> occurs. Receives only the exception instance.</param>
         /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles exceptions according to the specified parameters.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions according to the specified parameters.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This is the simplest error handling overload, suitable for basic error logging or notification scenarios
@@ -140,14 +145,14 @@ namespace System.Threading.Tasks.Flow
         }
 
         /// <summary>
-        /// Creates a task scheduler wrapper that handles all exceptions with access to the scheduler instance.
+        /// Creates a task scheduler wrapper that observes all exceptions with access to the scheduler instance.
         /// </summary>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when any exception occurs. Receives the scheduler instance and the exception.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles all exceptions.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes all exceptions and rethrows them.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
-        /// This overload handles all exception types derived from <see cref="Exception"/>, making it suitable
+        /// This overload observes all exception types derived from <see cref="Exception"/>, making it suitable
         /// for general error logging or fallback error handling scenarios.
         /// </remarks>
         public static ITaskScheduler OnError(this ITaskScheduler taskScheduler, Action<ITaskScheduler, Exception> errorAction)
@@ -156,11 +161,11 @@ namespace System.Threading.Tasks.Flow
         }
 
         /// <summary>
-        /// Creates a task scheduler wrapper that handles all exceptions with a simple error action.
+        /// Creates a task scheduler wrapper that observes all exceptions with a simple error action.
         /// </summary>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when any exception occurs. Receives only the exception instance.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles all exceptions.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes all exceptions and rethrows them.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This is the most general error handling overload, suitable for basic error logging scenarios
@@ -172,13 +177,13 @@ namespace System.Threading.Tasks.Flow
         }
 
         /// <summary>
-        /// Creates a task scheduler wrapper that handles exceptions of the specified type with access to operation name annotations.
+        /// Creates a task scheduler wrapper that observes exceptions of the specified type with access to operation name annotations.
         /// </summary>
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception occurs. Receives the scheduler, exception, and operation name annotation.</param>
         /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles exceptions with operation name context.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions with operation name context.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This overload explicitly provides <see cref="OperationNameAnnotation"/> access, making it ideal for
@@ -191,14 +196,14 @@ namespace System.Threading.Tasks.Flow
         }
 
         /// <summary>
-        /// Creates a task scheduler wrapper that handles exceptions of the specified type with access to custom operation annotations.
+        /// Creates a task scheduler wrapper that observes exceptions of the specified type with access to custom operation annotations.
         /// </summary>
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <typeparam name="TAnnotation">The type of operation annotation to provide to the error handler. Must implement <see cref="IOperationAnnotation"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception occurs. Receives the scheduler, exception, and custom annotation.</param>
         /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
-        /// <returns>An <see cref="ITaskScheduler"/> that handles exceptions with custom annotation context.</returns>
+        /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions with custom annotation context.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This is the most flexible error handling overload, allowing access to any custom annotation type

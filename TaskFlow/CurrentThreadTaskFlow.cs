@@ -21,6 +21,10 @@ namespace System.Threading.Tasks.Flow
     /// Note that the <see cref="Run"/> method must be called to start the task flow, and it
     /// will block the calling thread until the task flow is disposed.
     /// </para>
+    /// <para>
+    /// A queued delegate is still invoked if cancellation is requested before it reaches the front of the queue;
+    /// it receives an already-canceled token and must respond cooperatively.
+    /// </para>
     /// <example>
     /// Basic usage with a background thread:
     /// <code>

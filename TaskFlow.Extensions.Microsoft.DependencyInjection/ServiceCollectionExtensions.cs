@@ -156,10 +156,9 @@ namespace System.Threading.Tasks.Flow
         /// </remarks>
         /// <example>
         /// <code>
-        /// // Register database configuration for single-threaded access
+        /// // Register independently sequential flows with different disposal policies
         /// services.AddTaskFlow("database", new TaskFlowOptions { SynchronousDisposeTimeout = TimeSpan.FromSeconds(30) });
         /// 
-        /// // Register API configuration for high concurrency
         /// services.AddTaskFlow("api", new TaskFlowOptions { SynchronousDisposeTimeout = TimeSpan.FromSeconds(10) });
         /// 
         /// // Usage
@@ -250,7 +249,7 @@ namespace System.Threading.Tasks.Flow
         ///             
         ///         if (config.GetValue&lt;bool&gt;("EnableThrottling"))
         ///         {
-        ///             chain = chain.WithDebounce(TimeSpan.FromMilliseconds(500));
+        ///             chain = chain.WithThrottle(TimeSpan.FromMilliseconds(500));
         ///         }
         ///         
         ///         return chain;

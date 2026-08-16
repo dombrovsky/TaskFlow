@@ -35,6 +35,12 @@ namespace System.Threading.Tasks.Flow
     /// completes first, the timeout task is cancelled and the operation result is returned.
     /// </para>
     /// <para>
+    /// The timeout clock starts when <c>Enqueue</c> reaches this wrapper, not when the delegate begins running.
+    /// Time spent waiting in an underlying scheduler's queue therefore counts toward the timeout. On a built-in
+    /// sequential flow, a timed-out queued delegate can later be invoked with an already-canceled token.
+    /// Cancellation is cooperative, so a delegate that ignores its token may continue running.
+    /// </para>
+    /// <para>
     /// Common use cases include:
     /// </para>
     /// <list type="bullet">
@@ -50,14 +56,17 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
     /// var timeoutScheduler = scheduler.WithTimeout(TimeSpan.FromSeconds(30));
+    ///
+    /// async Task&lt;string&gt; RunAsync(CancellationToken token)
+    /// {
+    ///     await SomeLongRunningOperationAsync(token);
+    ///     return "completed";
+    /// }
     /// 
     /// try 
     /// {
-    ///     var result = await timeoutScheduler.Enqueue(async () => {
-    ///         // This operation has 30 seconds to complete
-    ///         await SomeLongRunningOperationAsync();
-    ///         return "completed";
-    ///     });
+    ///     // Queue wait and delegate execution share the same 30-second budget
+    ///     var result = await timeoutScheduler.Enqueue(RunAsync);
     ///     
     ///     Console.WriteLine($"Operation completed: {result}");
     /// }
@@ -125,8 +134,9 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="timeout"/> is not a valid timeout value.</exception>
         /// <remarks>
         /// <para>
-        /// This method creates a wrapper that implements a timeout mechanism by racing the actual operation
-        /// against a delay task. The implementation uses <see cref="Internal.TaskExtensions.WhenAnyCancelRest"/>
+        /// This method starts a timeout race when <c>Enqueue</c> reaches the wrapper, before the delegate necessarily
+        /// starts on the base scheduler. Queue wait and delegate execution consume the same budget. The implementation
+        /// uses <see cref="Internal.TaskExtensions.WhenAnyCancelRest"/>
         /// to ensure that when one task completes, the other is properly cancelled and cleaned up.
         /// </para>
         /// <para>
@@ -134,8 +144,8 @@ namespace System.Threading.Tasks.Flow
         /// </para>
         /// <list type="bullet">
         ///   <item><strong>Race condition</strong> - The first task to complete (operation or timeout) determines the outcome</item>
-        ///   <item><strong>Automatic cancellation</strong> - When timeout occurs, the operation task receives a cancellation signal</item>
-        ///   <item><strong>Resource cleanup</strong> - Both tasks are properly cancelled and disposed regardless of which completes first</item>
+        ///   <item><strong>Automatic cancellation</strong> - When timeout occurs, the losing operation receives a cooperative cancellation signal</item>
+        ///   <item><strong>Queue delay</strong> - Time spent waiting for the base scheduler counts toward the timeout</item>
         ///   <item><strong>Exception handling</strong> - Timeout results in a <see cref="TimeoutException"/> with descriptive message</item>
         ///   <item><strong>Cancellation propagation</strong> - Original cancellation tokens are respected in addition to timeout cancellation</item>
         /// </list>
@@ -173,21 +183,22 @@ namespace System.Threading.Tasks.Flow
         /// <code>
         /// ITaskScheduler baseScheduler = new TaskFlow();
         /// 
-        /// // Create scheduler with 30-second timeout
+        /// // Create scheduler with a 30-second queue-and-execution budget
         /// var timeoutScheduler = baseScheduler.WithTimeout(TimeSpan.FromSeconds(30));
+        ///
+        /// async Task&lt;string&gt; RunAsync(CancellationToken token)
+        /// {
+        ///     for (int i = 0; i &lt; 100; i++)
+        ///     {
+        ///         token.ThrowIfCancellationRequested();
+        ///         await Task.Delay(500, token);
+        ///     }
+        ///     return "completed";
+        /// }
         /// 
         /// try 
         /// {
-        ///     // This operation must complete within 30 seconds
-        ///     var result = await timeoutScheduler.Enqueue(async token => {
-        ///         // Long-running operation that respects cancellation
-        ///         for (int i = 0; i &lt; 100; i++)
-        ///         {
-        ///             token.ThrowIfCancellationRequested(); // Check for timeout cancellation
-        ///             await Task.Delay(500, token); // Simulate work
-        ///         }
-        ///         return "completed";
-        ///     });
+        ///     var result = await timeoutScheduler.Enqueue(RunAsync);
         /// }
         /// catch (TimeoutException ex)
         /// {

@@ -19,7 +19,7 @@ namespace System.Threading.Tasks.Flow
     /// </para>
     /// <para>
     /// The class handles proper disposal patterns, including:
-    /// - Cancellation of pending tasks during disposal
+    /// - Requesting cancellation of pending and running operations during disposal
     /// - Waiting for completion of running tasks
     /// - Proper resource cleanup
     /// - Thread-safe state management
@@ -80,6 +80,11 @@ namespace System.Threading.Tasks.Flow
         /// If tasks are designed to honor cancellation tokens, they will be cancelled during disposal.
         /// Otherwise, the disposal process will wait for their completion before finishing.
         /// </para>
+        /// <para>
+        /// Cancellation is cooperative. This method waits without a timeout for tracked operations and suppresses
+        /// their failures while completing disposal. Callers should still await or otherwise deliberately observe
+        /// every task returned by <c>Enqueue</c> to receive operation failures.
+        /// </para>
         /// </remarks>
         /// <returns>A <see cref="ValueTask"/> representing the asynchronous disposal operation.</returns>
         public async ValueTask DisposeAsync()
@@ -94,7 +99,9 @@ namespace System.Threading.Tasks.Flow
         /// </summary>
         /// <remarks>
         /// This method uses the <see cref="TaskFlowOptions.SynchronousDisposeTimeout"/> to limit
-        /// the maximum wait time for task completion during disposal.
+        /// the maximum wait time for task completion during disposal. The default timeout is
+        /// <see cref="Timeout.InfiniteTimeSpan"/>. If a finite timeout expires, this method returns while
+        /// asynchronous cleanup continues; use <see cref="Dispose(TimeSpan)"/> when the completion result is required.
         /// </remarks>
         [SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "GC.SuppressFinalize called in Dispose(TimeSpan)")]
         [SuppressMessage("Design", "CA1063:Implement IDisposable Correctly", Justification = "DisposeUnmanagedResources method")]
@@ -111,11 +118,15 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// <para>
         /// This method attempts to dispose of the task flow asynchronously but with a time limit.
-        /// If the specified timeout is reached before all tasks complete, the method returns <c>false</c>,
-        /// but resources are still properly disposed.
+        /// If the specified timeout is reached before all tasks complete, the method returns <c>false</c>.
+        /// The asynchronous disposal operation continues and completes resource cleanup after tracked work finishes.
         /// </para>
         /// <para>
         /// If tasks don't respond to cancellation, they may continue running after this method returns.
+        /// </para>
+        /// <para>
+        /// Once disposal begins, new operations are rejected. Cancellation is cooperative, and operation failures
+        /// remain observable through the tasks returned by <c>Enqueue</c> rather than through disposal.
         /// </para>
         /// </remarks>
         [SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "It is also Dispose")]
