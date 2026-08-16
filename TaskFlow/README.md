@@ -1,8 +1,8 @@
-# TaskFlow
+# TaskFlow for .NET
 
-`TaskFlow` provides an owned FIFO execution lane for asynchronous .NET work. Use it when operations must run one at a time, in submission order, while each caller still receives a task for its own result or failure.
+`TaskFlow` provides owned FIFO execution lanes for asynchronous .NET work. Use it when operations must run one at a time in submission order while each caller retains a task for its own result, failure, or cancellation.
 
-## Installation
+## Install
 
 ```shell
 dotnet add package TaskFlow
@@ -15,34 +15,33 @@ using System.Threading.Tasks.Flow;
 
 await using var flow = new TaskFlow();
 
-Task first = flow.Enqueue(async cancellationToken =>
-{
-    await SaveAsync("first", cancellationToken);
-});
-
-Task second = flow.Enqueue(async cancellationToken =>
-{
-    await SaveAsync("second", cancellationToken);
-});
+Task first = flow.Enqueue(token => SaveAsync("first", token));
+Task second = flow.Enqueue(token => SaveAsync("second", token));
 
 await Task.WhenAll(first, second);
 ```
 
-`second` does not begin until `first` finishes. Calls to `Enqueue` are thread-safe, so multiple callers can share the same flow to serialize access to a resource.
+`second` starts only after `first` finishes. Calls to `Enqueue` are thread-safe, and one failed operation does not stop later queued operations.
 
-## Behavior and lifetime
+## Important behavior
 
-- Operations execute sequentially in FIFO order.
-- Each returned task reports the result, cancellation, or exception of its own operation. One failed operation does not stop later queued operations from running.
-- Cancellation is cooperative. A queued delegate is still invoked when its token has already been canceled, allowing queue progression while giving the delegate the canceled token.
-- `DisposeAsync` requests cancellation and waits for queued work to finish. Synchronous disposal waits up to `TaskFlowOptions.SynchronousDisposeTimeout`.
-- Scheduler decorators such as timeout, cancellation-scope, error-observation, interception, and cancel-previous wrappers do not own the underlying flow. Dispose the `ITaskFlow` that created the execution lane.
+- Cancellation is cooperative. Built-in flows invoke an accepted queued delegate even if its token was canceled while waiting.
+- `DisposeAsync` requests cancellation and waits for the lane to finish. Synchronous disposal is bounded by `TaskFlowOptions.SynchronousDisposeTimeout`.
+- Observe every returned operation task; disposal does not surface individual operation failures.
+- Timeout includes time spent waiting in the underlying queue.
+- Scheduler decorators do not own the flow they wrap. Dispose the original `ITaskFlow`.
 
-TaskFlow also includes `DedicatedThreadTaskFlow` and `CurrentThreadTaskFlow` for work that requires thread affinity.
+TaskFlow also provides dedicated-thread and caller-owned-thread flows, cancellation and timeout policies, leading-edge throttling, error observation, annotations, and interception.
 
-## Links
+## Documentation
 
-- [TaskFlow repository](https://github.com/dombrovsky/TaskFlow)
-- [Source code](https://github.com/dombrovsky/TaskFlow/tree/main/TaskFlow)
-- [License](https://github.com/dombrovsky/TaskFlow/blob/main/LICENSE)
-- [Issues and feedback](https://github.com/dombrovsky/TaskFlow/issues)
+- [Getting started](https://dombrovsky.github.io/TaskFlow/getting-started/)
+- [Concepts and lifecycle](https://dombrovsky.github.io/TaskFlow/concepts-and-lifecycle/)
+- [Semantics and pitfalls](https://dombrovsky.github.io/TaskFlow/semantics-and-pitfalls/)
+- [Execution models](https://dombrovsky.github.io/TaskFlow/execution-models/)
+- [Recipes](https://dombrovsky.github.io/TaskFlow/recipes/)
+- [Extensions](https://dombrovsky.github.io/TaskFlow/extensions/)
+- [Compatibility](https://dombrovsky.github.io/TaskFlow/compatibility/)
+- [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
+
+Source, license, and feedback are available in the [TaskFlow repository](https://github.com/dombrovsky/TaskFlow).

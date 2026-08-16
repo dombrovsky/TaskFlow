@@ -3,6 +3,8 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow.Extensions.Time</PackageId>
+    <Description>Leading-edge admission throttling for TaskFlow on netstandard2.0 with TimeProvider-based deterministic timing.</Description>
+    <PackageTags>async;task-scheduler;task-queue;concurrency;throttling;time-provider;netstandard</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

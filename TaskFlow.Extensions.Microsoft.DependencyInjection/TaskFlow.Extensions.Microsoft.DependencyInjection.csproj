@@ -3,6 +3,8 @@
 		<TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
 		<RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow.Microsoft.Extensions.DependencyInjection</PackageId>
+		<Description>Microsoft dependency-injection integration for TaskFlow with scoped and named FIFO execution lanes and caller-owned factories.</Description>
+		<PackageTags>async;task-scheduler;task-queue;concurrency;sequential;dependency-injection;microsoft-extensions</PackageTags>
 	</PropertyGroup>
 
   <ItemGroup>

@@ -1,68 +1,87 @@
-# TaskFlow
+# TaskFlow for .NET
 
-**TaskFlow** is a robust, high-performance, extensible, and thread-safe library for orchestrating and controlling the execution of asynchronous tasks in .NET. It provides advanced patterns for sequential task execution, resource management, and cancellation, making it ideal for scenarios where you need more than just `SemaphoreSlim` or basic Task chaining.
+TaskFlow turns calls from many places into one owned FIFO lane of work. Every submission gets an awaitable result while the lane serializes execution and provides a clear lifetime boundary.
 
 [![NuGet](https://img.shields.io/nuget/v/TaskFlow.svg)](https://www.nuget.org/packages/TaskFlow/)
+[![Build](https://github.com/dombrovsky/TaskFlow/actions/workflows/build.yml/badge.svg)](https://github.com/dombrovsky/TaskFlow/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
+## Why TaskFlow?
 
-## Key Features
+Applications often need to accept work asynchronously while ensuring that only one operation touches a resource at a time and that operations retain their original order. Building that around a semaphore or task chain leaves ordering, per-call completion, cancellation, error observation, and shutdown ownership in application code.
 
-- **Sequential Task Execution:** Guarantee that tasks are executed in the order they are enqueued, with no concurrency unless explicitly configured.
-- **Thread Affinity:** Run tasks on a dedicated thread, the current thread, or the thread pool, with full control over execution context.
-- **Robust Disposal:** Dispose/DisposeAsync will only complete after all enqueued tasks have finished, ensuring clean shutdowns. This makes it ideal for managing fire-and-forget tasks by binding their lifetime to a specific scope.
-- **Cancellation Support:** All enqueued task functions are executed, even if canceled before execution, ensuring predictable execution order.
-- **SynchronizationContext Awareness:** Async/await inside enqueued delegates will execute continuations on the same `TaskFlow` if a `SynchronizationContext` is captured.
-- **Extensibility:** Extend `TaskFlowBase` to create custom task flow implementations or use extension methods and wrappers to enhance functionality, such as throttling, error handling, or scoped cancellation.
-- **Clean Task Pipeline Definition:** Define task pipelines separately from execution logic using extension methods from `System.Threading.Tasks.Flow.Extensions`, enabling better segregation of responsibilities and cleaner code.
-- **Dependency Injection Integration:** Extensions for `Microsoft.Extensions.DependencyInjection` for easy registration and scoping.
+TaskFlow packages those concerns into a reusable execution lane. It is useful when you need to:
 
----
+- expose an asynchronous API over a synchronous or non-thread-safe resource;
+- preserve event order when synchronous callbacks initiate work;
+- own background work within a component or dependency-injection scope;
+- cancel obsolete operations when a newer request arrives;
+- add timeouts, throttling, logging, annotations, or error observation without changing the work itself; or
+- run ordered work on the thread pool, a dedicated thread, a caller-owned thread, or a custom scheduler.
 
-## When Should You Use TaskFlow?
+One flow is one sequential lane. Create separate flows for work that should proceed independently.
 
-TaskFlow is ideal for scenarios where you need:
+## Features
 
-- **Serialized access to a resource** (e.g., database, file, hardware) from multiple async operations.
-- **Order-preserving task execution** (e.g., message processing, event handling).
-- **Thread affinity** (e.g., UI thread, dedicated worker thread).
-- **Graceful shutdown** with guaranteed completion of all in-flight work.
-- **Advanced error handling and cancellation patterns.**
-- **Fire-and-forget task lifetime management:** Bind fire-and-forget operations to a scope by disposing the `TaskFlow` instance, ensuring proper cleanup and resource management.
-- **Segregation of responsibilities:** Use extension methods to define task pipelines separately from execution logic, improving maintainability and readability.
+| Feature | What it provides |
+|---|---|
+| FIFO execution | Accepted operations start in submission order and do not overlap within one flow. |
+| Per-operation tasks | Every caller can await its own result, exception, or cancellation. |
+| Owned lifetime | A flow gives queued and running work an explicit component-level shutdown boundary. |
+| Composable policies | Add cancellation scopes, latest-request-wins behavior, timeouts, leading-edge throttling, operation names, interception, and error observation. |
+| Execution choices | Use the thread pool, a dedicated thread, the current thread, or another `TaskScheduler`. |
+| Application integration | Register scoped or named flows and emit structured lifecycle logs. |
+| Extensibility | Build scheduler decorators, adapters, interceptors, or custom `TaskFlowBase` implementations. |
 
----
+See the [extension reference](https://dombrovsky.github.io/TaskFlow/extensions/) and [execution models](https://dombrovsky.github.io/TaskFlow/execution-models/) for the available policies and implementations.
 
-## Getting Started
+## Serialize synchronous work for asynchronous callers
 
-### Installation
-
-Add the core package:
-`dotnet add package TaskFlow`
-
-For dependency injection support:
-`dotnet add package TaskFlow.Microsoft.Extensions.DependencyInjection`
-
-For Microsoft.Extensions.Logging integration:
-`dotnet add package TaskFlow.Microsoft.Extensions.Logging`
-
-### Building from Source
-
-Use a .NET 10 SDK to restore, build, and test the repository. The test projects execute against both `net8.0` and `net10.0`, so both runtimes must be installed.
-
-### Basic Usage
 ```csharp
-using var taskFlow = new TaskFlow();
+using System.Threading.Tasks.Flow;
 
-// Enqueue tasks for sequential execution
-var task1 = taskFlow.Enqueue(() => Console.WriteLine("Task 1"));
-var task2 = taskFlow.Enqueue(async () => await Task.Delay(100));
+public interface IDataStore
+{
+    void Save(Data data);
+}
+
+public sealed class SerializedStore(IDataStore inner) : IAsyncDisposable
+{
+    private readonly TaskFlow _flow = new();
+
+    public Task SaveAsync(Data data) =>
+        _flow.Enqueue(() => inner.Save(data));
+
+    public ValueTask DisposeAsync() => _flow.DisposeAsync();
+}
 ```
----
 
-## Extensions
+Callers receive a task instead of blocking on `Save`. The wrapped synchronous method runs once at a time and in call order, regardless of how many callers submit work concurrently.
 
-## License
+## Packages
 
-This library is licensed under the [MIT License](LICENSE).
+| Package | Purpose |
+|---|---|
+| [`TaskFlow`](https://www.nuget.org/packages/TaskFlow/) | FIFO execution lanes, built-in execution models, and core scheduler policies. |
+| [`TaskFlow.Extensions.Time`](https://www.nuget.org/packages/TaskFlow.Extensions.Time/) | Compatibility package for the `WithThrottle` time-based policy. |
+| [`TaskFlow.Microsoft.Extensions.DependencyInjection`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.DependencyInjection/) | Scoped, named, and customizable TaskFlow registrations. |
+| [`TaskFlow.Microsoft.Extensions.Logging`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.Logging/) | Structured operation-lifecycle logging through `Microsoft.Extensions.Logging`. |
+
+## Lifecycle essentials
+
+- Await returned tasks when their outcome belongs to the caller; intentionally discarded work remains bounded by the flow and can report failures inside the operation or through a decorator when needed.
+- Prefer `await using` so asynchronous disposal can wait for the lane to finish.
+- Cancellation is cooperative, and synchronous disposal has a timeout.
+- Scheduler decorators do not own the underlying flow; dispose the original `ITaskFlow`.
+
+Read [Concepts and lifecycle](https://dombrovsky.github.io/TaskFlow/concepts-and-lifecycle/) and [Semantics and pitfalls](https://dombrovsky.github.io/TaskFlow/semantics-and-pitfalls/) for the full behavior contract.
+
+## Documentation
+
+- [Getting started](https://dombrovsky.github.io/TaskFlow/getting-started/)
+- [Recipes](https://dombrovsky.github.io/TaskFlow/recipes/)
+- [Extensions](https://dombrovsky.github.io/TaskFlow/extensions/)
+- [Dependency injection](https://dombrovsky.github.io/TaskFlow/dependency-injection/)
+- [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
+
+TaskFlow is available under the [MIT License](LICENSE). Contributions and problem reports are welcome through [GitHub issues](https://github.com/dombrovsky/TaskFlow/issues).

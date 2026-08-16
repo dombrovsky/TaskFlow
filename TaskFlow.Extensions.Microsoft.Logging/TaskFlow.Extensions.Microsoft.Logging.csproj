@@ -3,6 +3,8 @@
     <TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
     <RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow.Microsoft.Extensions.Logging</PackageId>
+    <Description>Structured Microsoft.Extensions.Logging lifecycle events for TaskFlow operations, including names, timing, cancellation, and failures.</Description>
+    <PackageTags>async;task-scheduler;task-queue;logging;observability;microsoft-extensions</PackageTags>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
