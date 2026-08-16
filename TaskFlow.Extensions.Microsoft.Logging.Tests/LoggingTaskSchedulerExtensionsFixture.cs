@@ -54,12 +54,13 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             _taskFlow = new TaskFlow();
             var logger = new RecordingLogger(LogLevel.Information);
             var interceptor = new SuccessInterceptor();
-            var scheduler = _taskFlow.WithLogging(logger, options =>
-            {
-                options.EnqueuedLogLevel = LogLevel.Information;
-                options.SucceededLogLevel = LogLevel.Information;
-                options.Interceptor = interceptor;
-            });
+            var scheduler = _taskFlow
+                .WithLogging(logger, options =>
+                {
+                    options.EnqueuedLogLevel = LogLevel.Information;
+                    options.SucceededLogLevel = LogLevel.Information;
+                })
+                .Intercept(interceptor);
             await scheduler.Enqueue(() => 42);
             Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { EnqueuedEventId, SucceededEventId }));
             Assert.That(interceptor.Result, Is.EqualTo(42));

@@ -100,10 +100,10 @@ namespace System.Threading.Tasks.Flow
                         "TaskFlow operation {OperationId} ({OperationName}) started", context.OperationId, context.OperationName);
                 }
 
-                return _options.Interceptor?.OnBeforeAsync(context) ?? default;
+                return default;
             }
 
-            public async ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
+            public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
             {
                 if (_logger.IsEnabled(_options.SucceededLogLevel))
                 {
@@ -112,13 +112,10 @@ namespace System.Threading.Tasks.Flow
                         context.OperationId, context.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds(context.OperationId));
                 }
 
-                if (_options.Interceptor != null)
-                {
-                    await _options.Interceptor.OnSuccessAsync(context, result).ConfigureAwait(true);
-                }
+                return default;
             }
 
-            public async ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception)
+            public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception)
             {
                 if (_logger.IsEnabled(_options.FailedLogLevel))
                 {
@@ -127,25 +124,13 @@ namespace System.Threading.Tasks.Flow
                         context.OperationId, context.OperationName, GetElapsedMilliseconds(context.OperationId));
                 }
 
-                if (_options.Interceptor != null)
-                {
-                    await _options.Interceptor.OnErrorAsync(context, exception).ConfigureAwait(true);
-                }
+                return default;
             }
 
-            public async ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context)
+            public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context)
             {
-                try
-                {
-                    if (_options.Interceptor != null)
-                    {
-                        await _options.Interceptor.OnFinallyAsync(context).ConfigureAwait(true);
-                    }
-                }
-                finally
-                {
-                    LogFinished(context);
-                }
+                LogFinished(context);
+                return default;
             }
 
             private void LogFinished(TaskSchedulerInterceptionContext context)

@@ -22,8 +22,5 @@ namespace System.Threading.Tasks.Flow
 
         /// <summary>Gets or sets the level used when an operation finishes.</summary>
         public LogLevel FinishedLogLevel { get; set; } = LogLevel.Trace;
-
-        /// <summary>Gets or sets an optional asynchronous interceptor invoked with the logging interceptor.</summary>
-        public ITaskSchedulerInterceptor? Interceptor { get; set; }
     }
 }
