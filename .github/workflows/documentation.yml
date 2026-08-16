@@ -1,0 +1,88 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "TaskFlow/README.md"
+      - "TaskFlow.Extensions.Time/README.md"
+      - "TaskFlow.Extensions.Microsoft.DependencyInjection/README.md"
+      - "TaskFlow.Extensions.Microsoft.Logging/README.md"
+      - "eng/validate-documentation.ps1"
+      - ".github/workflows/documentation.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "TaskFlow/README.md"
+      - "TaskFlow.Extensions.Time/README.md"
+      - "TaskFlow.Extensions.Microsoft.DependencyInjection/README.md"
+      - "TaskFlow.Extensions.Microsoft.Logging/README.md"
+      - "eng/validate-documentation.ps1"
+      - ".github/workflows/documentation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate Markdown links and compile examples
+        shell: pwsh
+        run: ./eng/validate-documentation.ps1
+
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Build the rendered site
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: Validate rendered links
+        shell: pwsh
+        run: ./eng/validate-documentation.ps1 -SiteRoot ./_site -SkipSnippetCompilation
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./_site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
