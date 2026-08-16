@@ -1,5 +1,6 @@
 namespace TaskFlow.Tests
 {
+    using System.Collections.Concurrent;
     using NUnit.Framework;
     using System.Threading.Tasks;
     using System.Threading.Tasks.Flow;
@@ -195,6 +196,59 @@ namespace TaskFlow.Tests
             Assert.That(() => task1.IsFaulted, Is.True.After(100, 10));
             Assert.That(task1.Exception?.InnerException, Is.TypeOf<InvalidOperationException>());
             Assert.That(await task2.ConfigureAwait(false), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task Enqueue_FromMultipleProducers_ShouldExecuteAllOperationsOnceAndKeepPerProducerOrder()
+        {
+            const int producerCount = 8;
+            const int operationsPerProducer = 40;
+
+            using var startGate = new ManualResetEventSlim();
+            var producerTasks = new Task[producerCount];
+            var scheduledTasks = new ConcurrentBag<Task>();
+            var executionOrder = new List<(int Producer, int Index)>();
+            var executionLock = new object();
+
+            for (var producer = 0; producer < producerCount; producer++)
+            {
+                var producerId = producer;
+                producerTasks[producer] = Task.Run(
+                    () =>
+                    {
+                        startGate.Wait();
+                        for (var index = 0; index < operationsPerProducer; index++)
+                        {
+                            var operationIndex = index;
+                            var task = _sut.Enqueue(
+                                () =>
+                                {
+                                    lock (executionLock)
+                                    {
+                                        executionOrder.Add((producerId, operationIndex));
+                                    }
+                                });
+                            scheduledTasks.Add(task);
+                        }
+                    });
+            }
+
+            startGate.Set();
+            await Task.WhenAll(producerTasks).ConfigureAwait(false);
+            await Task.WhenAll(scheduledTasks).ConfigureAwait(false);
+
+            Assert.That(executionOrder.Count, Is.EqualTo(producerCount * operationsPerProducer));
+
+            var groupedByProducer = executionOrder
+                .GroupBy(item => item.Producer)
+                .ToDictionary(group => group.Key, group => group.Select(item => item.Index).ToArray());
+
+            Assert.That(groupedByProducer.Count, Is.EqualTo(producerCount));
+            for (var producer = 0; producer < producerCount; producer++)
+            {
+                Assert.That(groupedByProducer.ContainsKey(producer), Is.True);
+                Assert.That(groupedByProducer[producer], Is.EqualTo(Enumerable.Range(0, operationsPerProducer).ToArray()));
+            }
         }
     }
 }

@@ -58,5 +58,39 @@ namespace TaskFlow.Tests.Extensions
             await Assert.ThatAsync(async () => await task2.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
                 .ConfigureAwait(false);
         }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Enqueue_WhenAcceptedOperationFails_ShouldStillThrottleNextOperationWithinInterval(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+
+            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
+
+            var failedTask = debounceTaskScheduler.Enqueue(_ => Task.FromException(new InvalidOperationException("boom")));
+            var throttledTask = debounceTaskScheduler.Enqueue(() => 42);
+
+            await Assert.ThatAsync(async () => await failedTask.ConfigureAwait(false), Throws.TypeOf<InvalidOperationException>())
+                .ConfigureAwait(false);
+            await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
+                .ConfigureAwait(false);
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Enqueue_WhenAcceptedOperationIsCanceled_ShouldStillThrottleNextOperationWithinInterval(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+
+            var debounceTaskScheduler = taskFlow.WithDebounce(TimeSpan.FromSeconds(5), _timeProvider);
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync().ConfigureAwait(false);
+
+            var canceledTask = debounceTaskScheduler.Enqueue(Task.FromCanceled, cts.Token);
+            var throttledTask = debounceTaskScheduler.Enqueue(() => 42);
+
+            await Assert.ThatAsync(async () => await canceledTask.ConfigureAwait(false), Throws.InstanceOf<OperationCanceledException>())
+                .ConfigureAwait(false);
+            await Assert.ThatAsync(async () => await throttledTask.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
+                .ConfigureAwait(false);
+        }
     }
 }
