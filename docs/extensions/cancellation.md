@@ -6,6 +6,8 @@ permalink: /extensions/cancellation/
 
 # Cancellation extensions
 
+Cancellation scope and cancel-previous are enqueue middleware. They link or replace the producer token before the terminal scheduler accepts the operation while retaining the submitting caller's token separately. Pipeline wrappers remain non-owning and dispose only the linked token sources created for an invocation.
+
 Cancellation policies compose additional cancellation sources with the caller token and the underlying flow's disposal token. They request cancellation; they cannot force a delegate to stop.
 
 ## Component cancellation scopes

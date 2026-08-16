@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.3.32901.215
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12105.275 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TaskFlow", "TaskFlow\TaskFlow.csproj", "{7B846A17-1146-4BF1-9E01-81AAFB097A02}"
 EndProject
@@ -68,6 +68,7 @@ Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{38b4a885-e50e-4339-91f6-b07976dce941}*SharedItemsImports = 5
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{7b846a17-1146-4bf1-9e01-81aafb097a02}*SharedItemsImports = 5
+		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{a8d73e43-4792-4a8d-a57a-2df8e91ccf88}*SharedItemsImports = 5
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{b9a7fa49-0771-408d-82cf-42ea7ebe0f31}*SharedItemsImports = 13
 		TaskFlow.Annotations\TaskFlow.Annotations.projitems*{dd1d5309-b058-4563-8bb3-96b93ab7731f}*SharedItemsImports = 5
 	EndGlobalSection

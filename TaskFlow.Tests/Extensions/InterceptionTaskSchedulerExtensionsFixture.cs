@@ -46,7 +46,7 @@ namespace TaskFlow.Tests.Extensions
             var interceptor = new RecordingInterceptor(events, false);
             var state = new object();
             Func<object?, CancellationToken, ValueTask<int>> operation = (_, _) => throw new InvalidOperationException("boom");
-            var task = taskFlow.Intercept(interceptor).WithOperationName("failure")
+            var task = taskFlow.WithOperationName("failure").Intercept(interceptor)
                 .Enqueue(operation, state, CancellationToken.None);
             Assert.That(async () => await task, Throws.InvalidOperationException.With.Message.EqualTo("boom"));
             Assert.That(events, Is.EqualTo(FailedLifecycle));
@@ -174,8 +174,8 @@ namespace TaskFlow.Tests.Extensions
             var state = new object();
             using var cts = new CancellationTokenSource();
 
-            var result = await taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder))
-                .WithOperationName("sync")
+            var result = await taskFlow.WithOperationName("sync")
+                .Intercept(new SynchronousLifecycleInterceptor(recorder))
                 .Enqueue((operationState, token) =>
                 {
                     recorder.Events.Add("operation");

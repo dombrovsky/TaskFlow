@@ -62,11 +62,221 @@ Derive from `TaskFlowBase` only when the implementation needs an owned lifecycle
 
 Use `ThisLock` for state coordinated with the base disposal state. Do not claim built-in FIFO or canceled-delegate behavior unless the custom implementation actually preserves it and tests it.
 
-## Interceptors and decorators
+## Middleware and terminal schedulers
 
-Prefer an `ITaskScheduler` decorator when adding a cross-cutting policy without owning the lane. Forward the original state and cancellation token unless the policy intentionally transforms them. Preserve the returned task's result and failure unless replacement behavior is part of the documented contract.
+Implement `ITaskScheduler` when you need a new terminal scheduling strategy. Implement middleware when the terminal scheduling strategy is already correct and you only need to add admission, execution, or outcome policy. Middleware does not require changes to `ITaskScheduler.Enqueue`, so it can be placed around built-in flows and third-party schedulers.
 
-Use `ITaskSchedulerInterceptor` or `IAsyncTaskSchedulerInterceptor` for operation lifecycle callbacks. See [Observability extensions](extensions/observability.md) for callback ordering and exception replacement rules.
+The pipeline has three phases:
+
+| Phase | Runs | Typical uses | Continuation behavior |
+| --- | --- | --- | --- |
+| Enqueue | Before the terminal accepts the operation | admission, coalescing, throttling, cancellation-token transformation | Call zero or one time |
+| Execution | Inside the delegate invoked by the terminal | instrumentation, retries, operation wrapping | Call one or more times |
+| Completion | After a result or exception is available | error handling, result transformation, final telemetry | Normally call exactly once |
+
+Implement one or more of these interfaces:
+
+- `ITaskSchedulerEnqueueMiddleware`
+- `ITaskSchedulerExecutionMiddleware`
+- `ITaskSchedulerCompletionMiddleware`
+
+Every middleware also implements the marker interface `ITaskSchedulerMiddleware`. Register it with `UseMiddleware`. A single-phase object registers that phase; a compound object atomically registers every phase it implements.
+
+### Register middleware
+
+Registration returns a new immutable scheduler snapshot. It does not modify the source scheduler:
+
+```csharp
+ITaskScheduler terminal = new TaskFlow();
+
+ITaskScheduler observed = terminal
+    .UseMiddleware(new TraceExecutionMiddleware())
+    .UseMiddleware(new TraceCompletionMiddleware());
+
+// `terminal` has no middleware. `observed` has both registrations.
+```
+
+Snapshots may be reused concurrently and branched safely:
+
+```csharp
+ITaskScheduler common = terminal.UseMiddleware(new MetricsMiddleware());
+ITaskScheduler interactive = common.UseMiddleware(new InteractiveAdmissionMiddleware());
+ITaskScheduler background = common.UseMiddleware(new BackgroundAdmissionMiddleware());
+```
+
+The snapshot is non-owning. Disposing a terminal that implements `IDisposable` remains the caller's responsibility. A pipeline never disposes the terminal, middleware objects, or collaborators held by middleware.
+
+### Phase ordering
+
+For registrations `A`, then `B`, the phases run in this order:
+
+```text
+enqueue:    B -> A -> terminal
+execution:  terminal -> A -> B -> operation
+completion: terminal outcome -> A -> B -> caller
+```
+
+Enqueue uses reverse registration order because the newest admission policy is the outermost policy. Execution and completion use registration order. A compound middleware occupies one registration position in every phase it implements.
+
+An existing scheduler wrapper that does not expose the middleware pipeline is an opaque boundary. Adding middleware outside that wrapper creates a new pipeline; TaskFlow does not inspect, flatten, or reorder the wrapper and any pipeline hidden inside it.
+
+### Enqueue middleware
+
+Enqueue middleware receives immutable operation facts and decides whether or how to continue toward the terminal:
+
+```csharp
+public sealed class RejectWhenStopping : ITaskSchedulerEnqueueMiddleware
+{
+    private readonly Func<bool> _isStopping;
+
+    public RejectWhenStopping(Func<bool> isStopping) => _isStopping = isStopping;
+
+    public Task<TResult> InvokeAsync<TResult>(
+        TaskSchedulerEnqueueContext<TResult> context,
+        TaskSchedulerEnqueueDelegate<TResult> continuation)
+    {
+        if (_isStopping())
+            return Task.FromException<TResult>(new InvalidOperationException("The service is stopping."));
+
+        return continuation(context);
+    }
+}
+```
+
+Returning without invoking `continuation` prevents terminal scheduling. This supports rejection and shared-work policies. Invoke the enqueue continuation at most once: the terminal contract represents one submitted operation.
+
+`context.CallerCancellationToken` is always the token supplied by the caller. `context.CancellationToken` is the effective producer token currently flowing toward the terminal. To transform only the producer token, pass a copied context onward:
+
+```csharp
+return continuation(context.WithCancellationToken(producerToken));
+```
+
+`WithCancellationToken` retains the original state, caller token, annotations, operation identity, and registration-local state. Middleware that separates a caller's wait from shared producer work should observe `CallerCancellationToken` for the wait and pass the shared producer token through `WithCancellationToken`.
+
+### Execution middleware
+
+Execution middleware runs on the context chosen by the terminal scheduler. It can surround the operation in the same way application middleware surrounds a request:
+
+```csharp
+public sealed class TraceExecutionMiddleware : ITaskSchedulerExecutionMiddleware
+{
+    public async ValueTask<TResult> InvokeAsync<TResult>(
+        TaskSchedulerOperationContext context,
+        TaskSchedulerExecutionDelegate<TResult> continuation)
+    {
+        Console.WriteLine("Starting");
+        try
+        {
+            return await continuation(context).ConfigureAwait(true);
+        }
+        finally
+        {
+            Console.WriteLine("Finished execution");
+        }
+    }
+}
+```
+
+Ordinary middleware should invoke `continuation` once. Orchestration middleware may invoke it repeatedly—for example, to implement retry—without enqueueing another terminal delegate. Such middleware owns the semantics of repeated operation execution, including which failures are retryable and how cancellation is handled.
+
+Use `ConfigureAwait(true)` when asynchronous middleware must preserve the synchronization context or scheduler affinity established by the terminal.
+
+### Completion middleware and outcomes
+
+Completion middleware receives a `TaskSchedulerOperationOutcome<TResult>`. Inspect `IsSuccess` before reading `Result`; `Exception` is non-null for a failed outcome.
+
+```csharp
+public sealed class TraceCompletionMiddleware : ITaskSchedulerCompletionMiddleware
+{
+    public ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
+        TaskSchedulerOperationContext context,
+        TaskSchedulerOperationOutcome<TResult> outcome,
+        TaskSchedulerCompletionDelegate<TResult> continuation)
+    {
+        if (!outcome.IsSuccess)
+            Console.Error.WriteLine(outcome.Exception);
+
+        return continuation(context, outcome);
+    }
+}
+```
+
+Pass the same outcome onward to preserve an exception's identity and captured stack. Use `TaskSchedulerOperationOutcome<TResult>.FromResult` or `FromException` only when intentionally replacing the current result or failure. If completion middleware throws, that exception replaces the current outcome and later completion middleware sees the replacement.
+
+Completion is claimed atomically and runs at most once for an operation, including races between rejection, timeout, and the scheduled delegate. Failures produced during terminal execution are completed on the terminal context. Failures raised before the terminal accepts or invokes the operation cannot claim terminal thread or synchronization-context affinity.
+
+### Share per-operation state between phases
+
+One middleware object may implement multiple phase interfaces. Register it once with `UseMiddleware` to give all of its phases one operation-local state slot:
+
+```csharp
+public sealed class TimingMiddleware :
+    ITaskSchedulerExecutionMiddleware,
+    ITaskSchedulerCompletionMiddleware
+{
+    private sealed class TimingState
+    {
+        public Stopwatch Stopwatch { get; } = new Stopwatch();
+    }
+
+    public async ValueTask<TResult> InvokeAsync<TResult>(
+        TaskSchedulerOperationContext context,
+        TaskSchedulerExecutionDelegate<TResult> continuation)
+    {
+        context.GetOrCreateLocalState(() => new TimingState()).Stopwatch.Start();
+        return await continuation(context).ConfigureAwait(true);
+    }
+
+    public ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
+        TaskSchedulerOperationContext context,
+        TaskSchedulerOperationOutcome<TResult> outcome,
+        TaskSchedulerCompletionDelegate<TResult> continuation)
+    {
+        TimingState? state = context.GetLocalState<TimingState>();
+        state?.Stopwatch.Stop();
+        Console.WriteLine(state?.Stopwatch.Elapsed);
+        return continuation(context, outcome);
+    }
+}
+```
+
+The slot is isolated per scheduled operation and per registration. `GetOrCreateLocalState<TState>` creates its value atomically. A different state type cannot later occupy the same registration slot. Registering the same middleware object twice creates two independent slots; registering its phases separately also creates separate slots.
+
+Middleware objects themselves are shared by all operations and must therefore keep any mutable registration-wide state thread-safe. Put operation-specific mutable state in the context slot rather than in middleware instance fields.
+
+### Forward-scoped annotations
+
+Annotations are immutable metadata scopes keyed by their registered type:
+
+```csharp
+public sealed class TenantAnnotation : IOperationAnnotation
+{
+    public TenantAnnotation(string tenantId) => TenantId = tenantId;
+    public string TenantId { get; }
+}
+
+ITaskScheduler tenantPipeline = terminal
+    .WithAnnotation(new TenantAnnotation("north"))
+    .UseMiddleware(new TenantTelemetryMiddleware());
+```
+
+A middleware registration captures only annotations added before that registration. Later annotations are visible only to later registrations and to the final context-aware operation. Adding another annotation with the same registered type shadows the earlier value without changing existing registrations or sibling pipeline branches.
+
+Read captured metadata with `context.GetAnnotation<TAnnotation>()`. The lookup uses the exact type supplied to `WithAnnotation<TAnnotation>`; registering an implementation as an interface and querying by its concrete type are different keys.
+
+Use `AnnotatedEnqueue` when the final operation needs an annotation from the final scope:
+
+```csharp
+string tenant = await tenantPipeline.AnnotatedEnqueue<string, TenantAnnotation>(
+    (state, annotation, token) => new ValueTask<string>(
+        annotation?.TenantId ?? "unknown"),
+    state: null,
+    cancellationToken: CancellationToken.None);
+```
+
+### Choosing middleware or interceptors
+
+Use middleware for reusable policy that needs to affect admission, wrap execution, transform outcomes, carry metadata, or coordinate state across phases. Use `ITaskSchedulerInterceptor` or `IAsyncTaskSchedulerInterceptor` for the established operation lifecycle callback model. The built-in interception, error, timeout, throttling, cancellation, and logging extensions are composed through the middleware pipeline but retain their existing public APIs. See [Observability extensions](extensions/observability.md) for callback ordering and exception replacement rules.
 
 ## Testing custom implementations
 

@@ -14,80 +14,76 @@ namespace System.Threading.Tasks.Flow
         private static readonly EventId FailedEvent = new EventId(0x5446_0005, "TaskFlowOperationFailed");
         private static readonly EventId FinishedEvent = new EventId(0x5446_0006, "TaskFlowOperationFinished");
 
-        /// <summary>Wraps a scheduler with configurable structured lifecycle logging.</summary>
+        /// <summary>Registers structured enqueue and execution lifecycle logging for every scheduled operation.</summary>
         /// <param name="taskScheduler">The scheduler whose operations will be logged.</param>
         /// <param name="logger">The logger that receives lifecycle events.</param>
         /// <param name="configure">
         /// An optional callback that configures event levels. When omitted, every lifecycle event uses
         /// <see cref="LogLevel.Trace"/>.
         /// </param>
-        /// <returns>An <see cref="ITaskScheduler"/> that logs the lifecycle of every enqueued operation.</returns>
+        /// <returns>A new immutable scheduler snapshot that logs operation lifecycles.</returns>
         /// <exception cref="ArgumentNullException">
-        /// Thrown when <paramref name="taskScheduler"/> or <paramref name="logger"/> is <c>null</c>.
+        /// <paramref name="taskScheduler"/> or <paramref name="logger"/> is <c>null</c>.
         /// </exception>
         /// <remarks>
         /// <para>
-        /// The decorator emits enqueue, start, cancellation-request, success or failure, and finish events. Events
-        /// contain structured operation ID, optional operation name, result type, and elapsed-duration fields where
-        /// applicable. Failure events include the operation exception.
+        /// The compound middleware emits enqueue, start, cancellation-request, success or failure, and finish events.
+        /// Every event carries an increasing operation ID and the <see cref="OperationNameAnnotation"/> visible when
+        /// this logging registration is created. Result type and elapsed duration are included where applicable.
         /// </para>
         /// <para>
-        /// <see cref="ILogger.IsEnabled(LogLevel)"/> is checked before logging each event and before optional timing
-        /// work is started. Disabled events do not call <see cref="ILogger.Log{TState}(LogLevel, EventId, TState, Exception, Func{TState, Exception, string})"/>.
+        /// Call <see cref="AnnotatingTaskSchedulerExtensions.WithOperationName(ITaskScheduler, string)"/> before
+        /// <c>WithLogging</c>. Metadata is forward-scoped, so an operation name registered later does not retroactively
+        /// change this logging registration.
         /// </para>
         /// <para>
-        /// Cancellation requests are observed synchronously from the cancellation token. This event does not mean
-        /// that cancellation was accepted or that the operation ultimately completed as canceled.
+        /// <see cref="ILogger.IsEnabled(LogLevel)"/> is checked before each event and before optional timing work begins.
+        /// Disabled events do not invoke <see cref="ILogger.Log{TState}(LogLevel, EventId, TState, Exception, Func{TState, Exception, string})"/>.
+        /// Cancellation-request logging observes the submitting caller's token and does not imply that the operation
+        /// ultimately completes as canceled. Logging never suppresses or replaces the operation outcome.
         /// </para>
-        /// <para>
-        /// Place <c>WithOperationName</c> outside this decorator, for example
-        /// <c>scheduler.WithLogging(logger).WithOperationName("Import")</c>, so logging can observe the annotation.
-        /// </para>
+        /// <para>The returned pipeline snapshot is non-owning and does not dispose the underlying scheduler or logger.</para>
         /// </remarks>
         /// <example>
         /// <code>
         /// var scheduler = taskFlow
-        ///     .WithLogging(logger, options =>
+        ///     .WithOperationName("imports.run")
+        ///     .WithLogging(logger, options =&gt;
         ///     {
+        ///         options.StartedLogLevel = LogLevel.Information;
         ///         options.FailedLogLevel = LogLevel.Error;
         ///         options.FinishedLogLevel = LogLevel.Debug;
-        ///     })
-        ///     .WithOperationName("Import");
+        ///     });
         ///
-        /// await scheduler.Enqueue(() => ImportAsync());
+        /// await scheduler.Enqueue(token =&gt; ImportAsync(token));
         /// </code>
         /// </example>
         public static ITaskScheduler WithLogging(this ITaskScheduler taskScheduler, ILogger logger, Action<TaskFlowLoggingOptions>? configure = null)
         {
             Argument.NotNull(taskScheduler);
             Argument.NotNull(logger);
-
             var options = new TaskFlowLoggingOptions();
             configure?.Invoke(options);
-            return new LoggingTaskSchedulerWrapper(taskScheduler, logger, options);
+            return taskScheduler.UseMiddleware(new LoggingMiddleware(logger, options));
         }
 
-        private sealed class LoggingTaskSchedulerWrapper : ITaskScheduler
+        private sealed class LoggingMiddleware : ITaskSchedulerEnqueueMiddleware, ITaskSchedulerExecutionMiddleware
         {
             private readonly ILogger _logger;
             private readonly TaskFlowLoggingOptions _options;
-            private readonly ITaskScheduler _interceptedScheduler;
             private long _lastOperationId;
 
-            public LoggingTaskSchedulerWrapper(ITaskScheduler taskScheduler, ILogger logger, TaskFlowLoggingOptions options)
+            public LoggingMiddleware(ILogger logger, TaskFlowLoggingOptions options)
             {
                 _logger = logger;
                 _options = options;
-                _interceptedScheduler = taskScheduler.Intercept(new LoggingInterceptor(logger, options));
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
-                var operation = new LoggingOperationState<T>(
+                var operation = context.GetOrCreateLocalState(() => new LoggingOperationState(
                     Interlocked.Increment(ref _lastOperationId),
-                    TaskSchedulerInterceptionContext.GetAnnotation<OperationNameAnnotation>(state)?.OperationName,
-                    taskFunc,
-                    state);
+                    context.GetAnnotation<OperationNameAnnotation>()?.OperationName));
 
                 if (_logger.IsEnabled(_options.EnqueuedLogLevel))
                 {
@@ -95,7 +91,7 @@ namespace System.Threading.Tasks.Flow
                         "TaskFlow operation {OperationId} ({OperationName}) enqueued", operation.OperationId, operation.OperationName);
                 }
 
-                using var registration = cancellationToken.Register(() =>
+                using var registration = context.CallerCancellationToken.Register(() =>
                 {
                     if (_logger.IsEnabled(_options.CancellationRequestedLogLevel))
                     {
@@ -104,118 +100,81 @@ namespace System.Threading.Tasks.Flow
                     }
                 });
 
-                return await _interceptedScheduler.Enqueue(Execute, operation, cancellationToken).ConfigureAwait(false);
-
-                static ValueTask<T> Execute(object? operationState, CancellationToken token)
-                {
-                    var loggingState = (LoggingOperationState<T>)operationState!;
-                    return loggingState.TaskFunc(loggingState.State, token);
-                }
-            }
-        }
-
-        private struct LoggingInterceptor : ITaskSchedulerInterceptor
-        {
-            private readonly ILogger _logger;
-            private readonly TaskFlowLoggingOptions _options;
-            private long _startTimestamp;
-
-            public LoggingInterceptor(ILogger logger, TaskFlowLoggingOptions options)
-            {
-                _logger = logger;
-                _options = options;
-                _startTimestamp = 0;
+                return await continuation(context).ConfigureAwait(false);
             }
 
-            public void OnBefore(TaskSchedulerInterceptionContext context)
+            public async ValueTask<TResult> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerExecutionDelegate<TResult> continuation)
             {
+                var operation = context.GetOrCreateLocalState(() => new LoggingOperationState(
+                    Interlocked.Increment(ref _lastOperationId),
+                    context.GetAnnotation<OperationNameAnnotation>()?.OperationName));
+
                 if (_logger.IsEnabled(_options.SucceededLogLevel) || _logger.IsEnabled(_options.FailedLogLevel) || _logger.IsEnabled(_options.FinishedLogLevel))
                 {
-                    _startTimestamp = Stopwatch.GetTimestamp();
+                    operation.StartTimestamp = Stopwatch.GetTimestamp();
                 }
 
                 if (_logger.IsEnabled(_options.StartedLogLevel))
                 {
-                    var operation = GetLoggingState(context);
                     _logger.Log(_options.StartedLogLevel, StartedEvent,
                         "TaskFlow operation {OperationId} ({OperationName}) started", operation.OperationId, operation.OperationName);
                 }
 
-            }
-
-            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result)
-            {
-                if (_logger.IsEnabled(_options.SucceededLogLevel))
+                try
                 {
-                    var operation = GetLoggingState(context);
-                    _logger.Log(_options.SucceededLogLevel, SucceededEvent,
-                        "TaskFlow operation {OperationId} ({OperationName}) succeeded with result type {ResultType} in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds());
+                    TResult result;
+                    try
+                    {
+                        result = await continuation(context).ConfigureAwait(true);
+                    }
+                    catch (Exception exception)
+                    {
+                        if (_logger.IsEnabled(_options.FailedLogLevel))
+                        {
+                            _logger.Log(_options.FailedLogLevel, FailedEvent, exception,
+                                "TaskFlow operation {OperationId} ({OperationName}) failed in {ElapsedMilliseconds} ms",
+                                operation.OperationId, operation.OperationName, operation.GetElapsedMilliseconds());
+                        }
+
+                        throw;
+                    }
+
+                    if (_logger.IsEnabled(_options.SucceededLogLevel))
+                    {
+                        _logger.Log(_options.SucceededLogLevel, SucceededEvent,
+                            "TaskFlow operation {OperationId} ({OperationName}) succeeded with result type {ResultType} in {ElapsedMilliseconds} ms",
+                            operation.OperationId, operation.OperationName, typeof(TResult).FullName, operation.GetElapsedMilliseconds());
+                    }
+
+                    return result;
                 }
-
-            }
-
-            public void OnError(TaskSchedulerInterceptionContext context, Exception exception)
-            {
-                if (_logger.IsEnabled(_options.FailedLogLevel))
+                finally
                 {
-                    var operation = GetLoggingState(context);
-                    _logger.Log(_options.FailedLogLevel, FailedEvent, exception,
-                        "TaskFlow operation {OperationId} ({OperationName}) failed in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds());
+                    if (_logger.IsEnabled(_options.FinishedLogLevel))
+                    {
+                        _logger.Log(_options.FinishedLogLevel, FinishedEvent,
+                            "TaskFlow operation {OperationId} ({OperationName}) finished in {ElapsedMilliseconds} ms",
+                            operation.OperationId, operation.OperationName, operation.GetElapsedMilliseconds());
+                    }
                 }
-
-            }
-
-            public void OnFinally(TaskSchedulerInterceptionContext context)
-            {
-                LogFinished(context);
-            }
-
-            private void LogFinished(TaskSchedulerInterceptionContext context)
-            {
-                if (_logger.IsEnabled(_options.FinishedLogLevel))
-                {
-                    var operation = GetLoggingState(context);
-                    _logger.Log(_options.FinishedLogLevel, FinishedEvent,
-                        "TaskFlow operation {OperationId} ({OperationName}) finished in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds());
-                }
-            }
-
-            private double GetElapsedMilliseconds()
-            {
-                return _startTimestamp != 0
-                    ? (Stopwatch.GetTimestamp() - _startTimestamp) * 1000d / Stopwatch.Frequency
-                    : 0d;
-            }
-
-            private static ILoggingOperationState GetLoggingState(TaskSchedulerInterceptionContext context)
-            {
-                return (ILoggingOperationState)context.State!;
             }
         }
 
-        private interface ILoggingOperationState
+        private sealed class LoggingOperationState
         {
-            long OperationId { get; }
-            string? OperationName { get; }
-        }
-
-        private sealed class LoggingOperationState<T> : ILoggingOperationState
-        {
-            public LoggingOperationState(long operationId, string? operationName, Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state)
+            public LoggingOperationState(long operationId, string? operationName)
             {
                 OperationId = operationId;
                 OperationName = operationName;
-                TaskFunc = taskFunc;
-                State = state;
             }
 
             public long OperationId { get; }
             public string? OperationName { get; }
-            public Func<object?, CancellationToken, ValueTask<T>> TaskFunc { get; }
-            public object? State { get; }
+            public long StartTimestamp { get; set; }
+
+            public double GetElapsedMilliseconds() => StartTimestamp == 0
+                ? 0d
+                : (Stopwatch.GetTimestamp() - StartTimestamp) * 1000d / Stopwatch.Frequency;
         }
     }
 }

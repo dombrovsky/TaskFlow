@@ -12,12 +12,22 @@ namespace System.Threading.Tasks.Flow
     public readonly struct TaskSchedulerInterceptionContext
     {
         private readonly ExtendedState? _extendedState;
+        private readonly TaskSchedulerOperationContext? _operationContext;
 
         internal TaskSchedulerInterceptionContext(object? state, CancellationToken cancellationToken)
         {
             _extendedState = state as ExtendedState;
+            _operationContext = null;
             State = UnwrapState(state);
             CancellationToken = cancellationToken;
+        }
+
+        internal TaskSchedulerInterceptionContext(TaskSchedulerOperationContext context)
+        {
+            _extendedState = null;
+            _operationContext = context;
+            State = context.State;
+            CancellationToken = context.CancellationToken;
         }
 
         /// <summary>Gets the original operation state after TaskFlow extended-state wrappers have been removed.</summary>
@@ -35,7 +45,7 @@ namespace System.Threading.Tasks.Flow
         public TAnnotation? GetAnnotation<TAnnotation>()
             where TAnnotation : class, IOperationAnnotation
         {
-            return GetAnnotation<TAnnotation>(_extendedState);
+            return _operationContext?.GetAnnotation<TAnnotation>() ?? GetAnnotation<TAnnotation>(_extendedState);
         }
 
         /// <summary>Gets the first annotation of the requested type from raw scheduler state.</summary>

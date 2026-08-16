@@ -105,5 +105,59 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(exceptions, Is.EqualTo(Generic));
             exceptions.Clear();
         }
+
+        [Test]
+        public void OnError_DedicatedThread_AsynchronousFailureCallbackRetainsFlowContext()
+        {
+            var flow = new DedicatedThreadTaskFlow();
+            _taskFlow = flow;
+            var operationThread = 0;
+            var callbackThread = 0;
+            SynchronizationContext? operationContext = null;
+            SynchronizationContext? callbackContext = null;
+
+            var task = flow.OnError<InvalidOperationException>(_ =>
+                {
+                    callbackThread = Environment.CurrentManagedThreadId;
+                    callbackContext = SynchronizationContext.Current;
+                })
+                .Enqueue(FailAsync);
+
+            Assert.That(async () => await task, Throws.InvalidOperationException);
+            Assert.That(callbackThread, Is.EqualTo(operationThread));
+            Assert.That(callbackContext, Is.SameAs(operationContext).And.Not.Null);
+
+            async ValueTask<int> FailAsync(CancellationToken _)
+            {
+                await Task.Yield();
+                operationThread = Environment.CurrentManagedThreadId;
+                operationContext = SynchronizationContext.Current;
+                throw new InvalidOperationException("expected");
+            }
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void OnError_CallbackFailureBecomesOutcomeForLaterHandlers(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            Exception? observed = null;
+            var scheduler = taskFlow
+                .OnError<InvalidOperationException>(_ => throw new NotSupportedException("replacement"))
+                .Intercept(new NoOpInterceptor())
+                .OnError<Exception>(exception => observed = exception);
+
+            var task = scheduler.Enqueue(() => throw new InvalidOperationException("original"));
+
+            Assert.That(async () => await task, Throws.TypeOf<NotSupportedException>().With.Message.EqualTo("replacement"));
+            Assert.That(observed, Is.TypeOf<NotSupportedException>().With.Message.EqualTo("replacement"));
+        }
+
+        private readonly struct NoOpInterceptor : ITaskSchedulerInterceptor
+        {
+            public void OnBefore(TaskSchedulerInterceptionContext context) { }
+            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result) { }
+            public void OnError(TaskSchedulerInterceptionContext context, Exception exception) { }
+            public void OnFinally(TaskSchedulerInterceptionContext context) { }
+        }
     }
 }
