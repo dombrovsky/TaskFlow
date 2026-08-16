@@ -20,6 +20,7 @@
     <PackageProjectUrl>https://dombrovsky.github.io/TaskFlow</PackageProjectUrl>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
 
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -27,6 +28,10 @@
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)assets\icon.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>

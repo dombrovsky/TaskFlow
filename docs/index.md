@@ -4,6 +4,23 @@ title: TaskFlow for .NET
 permalink: /
 ---
 
+<style>
+    .home .page-heading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .home .page-heading::before {
+        content: "";
+        width: 52px;
+        height: 52px;
+        display: inline-block;
+        background: url('{{ "/assets/icon.png" | relative_url }}') no-repeat center / contain;
+        flex: 0 0 auto;
+    }
+</style>
+
 TaskFlow is an owned FIFO execution lane for asynchronous .NET work. Each submitted operation gets its own result task while the lane serializes access, preserves submission order, and provides a clear shutdown boundary.
 
 Use TaskFlow to:
