@@ -1,9 +1,11 @@
 namespace System.Threading.Tasks.Flow
 {
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
 
-    /// <summary>Describes an operation observed by an <see cref="ITaskSchedulerInterceptor"/>.</summary>
-    public sealed class TaskSchedulerInterceptionContext
+    /// <summary>Describes an operation observed by a task scheduler interceptor.</summary>
+    [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types", Justification = "Lifecycle contexts have no value equality semantics.")]
+    public readonly struct TaskSchedulerInterceptionContext
     {
         private readonly ExtendedState? _extendedState;
 

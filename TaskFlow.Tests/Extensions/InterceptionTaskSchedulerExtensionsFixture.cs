@@ -137,12 +137,244 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(interceptor.FinallyCallCount, Is.EqualTo(1));
         }
 
-        private sealed class RecordingInterceptor : ITaskSchedulerInterceptor
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Intercept_SynchronousStructMaintainsPerOperationState(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var events = new List<string>();
+
+            var scheduler = taskFlow.Intercept(new SynchronousRecordingInterceptor(events));
+            var results = await Task.WhenAll(scheduler.Enqueue(() => 1), scheduler.Enqueue(() => 2));
+
+            Assert.That(results, Is.EqualTo(new[] { 1, 2 }));
+            Assert.That(events.Count(x => x == "before:1"), Is.EqualTo(2));
+            Assert.That(events, Does.Contain("success:1:1"));
+            Assert.That(events, Does.Contain("success:1:2"));
+            Assert.That(events.Count(x => x == "finally:1"), Is.EqualTo(2));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Intercept_SynchronousHooksRunInOrderAndObserveContext(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var recorder = new SynchronousLifecycleRecorder();
+            var state = new object();
+            using var cts = new CancellationTokenSource();
+
+            var result = await taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder))
+                .WithOperationName("sync")
+                .Enqueue((operationState, token) =>
+                {
+                    recorder.Events.Add("operation");
+                    Assert.That(operationState, Is.SameAs(state));
+                    Assert.That(token.CanBeCanceled, Is.True);
+                    return new ValueTask<int>(42);
+                }, state, cts.Token);
+
+            Assert.That(result, Is.EqualTo(42));
+            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "operation", "success:42", "finally" }));
+            Assert.That(recorder.Context.State, Is.SameAs(state));
+            Assert.That(recorder.Context.CancellationToken, Is.EqualTo(cts.Token));
+            Assert.That(recorder.Context.GetAnnotation<OperationNameAnnotation>()?.OperationName, Is.EqualTo("sync"));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Intercept_SynchronousHooksObserveOperationError(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var recorder = new SynchronousLifecycleRecorder();
+            Func<ValueTask<int>> operation = () => throw new InvalidOperationException("boom");
+
+            var task = taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(operation);
+
+            Assert.That(async () => await task, Throws.InvalidOperationException.With.Message.EqualTo("boom"));
+            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "error:boom", "finally" }));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Intercept_SynchronousSuccessFailureDoesNotInvokeError(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var recorder = new SynchronousLifecycleRecorder { ThrowOnSuccess = true };
+
+            var task = taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(() => 42);
+
+            Assert.That(async () => await task, Throws.TypeOf<ApplicationException>());
+            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "success:42", "finally" }));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Intercept_SynchronousFinallyRunsWhenBeforeFails(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var recorder = new SynchronousLifecycleRecorder { ThrowOnBefore = true };
+            var operationCalled = false;
+
+            var task = taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(() => operationCalled = true);
+
+            Assert.That(async () => await task, Throws.TypeOf<InvalidOperationException>());
+            Assert.That(operationCalled, Is.False);
+            Assert.That(recorder.Events, Is.EqualTo(new[] { "before", "finally" }));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Intercept_SynchronousHooksPreserveSchedulerContext(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var recorder = new SynchronousLifecycleRecorder();
+            SynchronizationContext? operationContext = null;
+
+            await taskFlow.Intercept(new SynchronousLifecycleInterceptor(recorder)).Enqueue(async () =>
+            {
+                await Task.Yield();
+                operationContext = SynchronizationContext.Current;
+            });
+
+            Assert.That(recorder.BeforeContext, Is.SameAs(operationContext));
+            Assert.That(recorder.SuccessContext, Is.SameAs(operationContext));
+            Assert.That(recorder.FinallyContext, Is.SameAs(operationContext));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public async Task Intercept_AsynchronousFactoryCreatesInterceptorPerOperation(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var events = new List<string>();
+            var factory = new PerOperationAsyncInterceptorFactory(events);
+            var scheduler = taskFlow.Intercept(factory);
+
+            await Task.WhenAll(scheduler.Enqueue(() => 1), scheduler.Enqueue(() => 2));
+
+            Assert.That(factory.CreatedCount, Is.EqualTo(2));
+            Assert.That(events, Does.Contain("before:1"));
+            Assert.That(events, Does.Contain("success:1:1"));
+            Assert.That(events, Does.Contain("finally:1"));
+            Assert.That(events, Does.Contain("before:2"));
+            Assert.That(events, Does.Contain("success:2:2"));
+            Assert.That(events, Does.Contain("finally:2"));
+        }
+
+        private sealed class PerOperationAsyncInterceptorFactory : IAsyncTaskSchedulerInterceptor
+        {
+            private readonly IList<string> _events;
+            private int _createdCount;
+
+            public PerOperationAsyncInterceptorFactory(IList<string> events) => _events = events;
+
+            public int CreatedCount => _createdCount;
+
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context)
+            {
+                return new PerOperationAsyncInterceptor(Interlocked.Increment(ref _createdCount), _events);
+            }
+        }
+
+        private sealed class PerOperationAsyncInterceptor : IAsyncTaskInterceptor
+        {
+            private readonly int _id;
+            private readonly IList<string> _events;
+
+            public PerOperationAsyncInterceptor(int id, IList<string> events)
+            {
+                _id = id;
+                _events = events;
+            }
+
+            public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context)
+            {
+                _events.Add($"before:{_id}");
+                return default;
+            }
+
+            public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
+            {
+                _events.Add($"success:{_id}:{result}");
+                return default;
+            }
+
+            public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception)
+            {
+                _events.Add($"error:{_id}");
+                return default;
+            }
+
+            public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context)
+            {
+                _events.Add($"finally:{_id}");
+                return default;
+            }
+        }
+
+        private struct SynchronousRecordingInterceptor : ITaskSchedulerInterceptor
+        {
+            private readonly IList<string> _events;
+            private int _stage;
+
+            public SynchronousRecordingInterceptor(IList<string> events)
+            {
+                _events = events;
+                _stage = 0;
+            }
+
+            public void OnBefore(TaskSchedulerInterceptionContext context)
+            {
+                _stage++;
+                _events.Add($"before:{_stage}");
+            }
+
+            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result) => _events.Add($"success:{_stage}:{result}");
+            public void OnError(TaskSchedulerInterceptionContext context, Exception exception) => _events.Add($"error:{_stage}");
+            public void OnFinally(TaskSchedulerInterceptionContext context) => _events.Add($"finally:{_stage}");
+        }
+
+        private sealed class SynchronousLifecycleRecorder
+        {
+            public IList<string> Events { get; } = new List<string>();
+            public TaskSchedulerInterceptionContext Context { get; set; }
+            public SynchronizationContext? BeforeContext { get; set; }
+            public SynchronizationContext? SuccessContext { get; set; }
+            public SynchronizationContext? FinallyContext { get; set; }
+            public bool ThrowOnBefore { get; set; }
+            public bool ThrowOnSuccess { get; set; }
+        }
+
+        private readonly struct SynchronousLifecycleInterceptor : ITaskSchedulerInterceptor
+        {
+            private readonly SynchronousLifecycleRecorder _recorder;
+
+            public SynchronousLifecycleInterceptor(SynchronousLifecycleRecorder recorder) => _recorder = recorder;
+
+            public void OnBefore(TaskSchedulerInterceptionContext context)
+            {
+                _recorder.Context = context;
+                _recorder.BeforeContext = SynchronizationContext.Current;
+                _recorder.Events.Add("before");
+                if (_recorder.ThrowOnBefore) throw new InvalidOperationException();
+            }
+
+            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result)
+            {
+                _recorder.SuccessContext = SynchronizationContext.Current;
+                _recorder.Events.Add($"success:{result}");
+                if (_recorder.ThrowOnSuccess) throw new ApplicationException();
+            }
+
+            public void OnError(TaskSchedulerInterceptionContext context, Exception exception) => _recorder.Events.Add($"error:{exception.Message}");
+
+            public void OnFinally(TaskSchedulerInterceptionContext context)
+            {
+                _recorder.FinallyContext = SynchronizationContext.Current;
+                _recorder.Events.Add("finally");
+            }
+        }
+
+        private sealed class RecordingInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             private readonly IList<string> _events;
             private readonly bool _asynchronous;
             public RecordingInterceptor(IList<string> events, bool asynchronous) { _events = events; _asynchronous = asynchronous; }
             public TaskSchedulerInterceptionContext? Context { get; private set; }
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) { Context = context; return RecordAsync("before"); }
             public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => RecordAsync($"success:{result}");
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) => RecordAsync($"error:{exception.Message}");
@@ -155,28 +387,31 @@ namespace TaskFlow.Tests.Extensions
             private async Task RecordLaterAsync(string value) { await Task.Yield(); _events.Add(value); }
         }
 
-        private sealed class ThrowingSuccessInterceptor : ITaskSchedulerInterceptor
+        private sealed class ThrowingSuccessInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             public bool ErrorCalled { get; private set; }
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => default;
             public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => throw new ApplicationException();
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) { ErrorCalled = true; return default; }
             public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context) => default;
         }
 
-        private sealed class DelegateInterceptor : ITaskSchedulerInterceptor
+        private sealed class DelegateInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             private readonly Func<ValueTask> _before;
             public DelegateInterceptor(Func<ValueTask> before) => _before = before;
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => _before();
             public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => default;
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) => default;
             public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context) => default;
         }
 
-        private sealed class BeforeFailureInterceptor : ITaskSchedulerInterceptor
+        private sealed class BeforeFailureInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             public int FinallyCallCount { get; private set; }
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => throw new InvalidOperationException();
             public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) => default;
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) => default;
@@ -187,12 +422,14 @@ namespace TaskFlow.Tests.Extensions
             }
         }
 
-        private sealed class ContextRecordingInterceptor : ITaskSchedulerInterceptor
+        private sealed class ContextRecordingInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             public SynchronizationContext? BeforeContext { get; private set; }
             public SynchronizationContext? SuccessContext { get; private set; }
             public SynchronizationContext? ErrorContext { get; private set; }
             public SynchronizationContext? FinallyContext { get; private set; }
+
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
 
             public async ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context)
             {
@@ -219,11 +456,13 @@ namespace TaskFlow.Tests.Extensions
             }
         }
 
-        private sealed class ThreadRecordingInterceptor : ITaskSchedulerInterceptor
+        private sealed class ThreadRecordingInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             public int BeforeThreadId { get; private set; }
             public int SuccessThreadId { get; private set; }
             public int FinallyThreadId { get; private set; }
+
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
 
             public async ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context)
             {

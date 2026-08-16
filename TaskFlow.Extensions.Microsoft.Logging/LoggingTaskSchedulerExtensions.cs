@@ -76,21 +76,24 @@ namespace System.Threading.Tasks.Flow
             }
         }
 
-        private sealed class LoggingInterceptor : ITaskSchedulerInterceptor
+        private struct LoggingInterceptor : ITaskSchedulerInterceptor
         {
             private readonly ILogger _logger;
             private readonly TaskFlowLoggingOptions _options;
+            private long _startTimestamp;
+
             public LoggingInterceptor(ILogger logger, TaskFlowLoggingOptions options)
             {
                 _logger = logger;
                 _options = options;
+                _startTimestamp = 0;
             }
 
-            public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context)
+            public void OnBefore(TaskSchedulerInterceptionContext context)
             {
                 if (_logger.IsEnabled(_options.SucceededLogLevel) || _logger.IsEnabled(_options.FailedLogLevel) || _logger.IsEnabled(_options.FinishedLogLevel))
                 {
-                    GetLoggingState(context).StartTimestamp = Stopwatch.GetTimestamp();
+                    _startTimestamp = Stopwatch.GetTimestamp();
                 }
 
                 if (_logger.IsEnabled(_options.StartedLogLevel))
@@ -100,39 +103,35 @@ namespace System.Threading.Tasks.Flow
                         "TaskFlow operation {OperationId} ({OperationName}) started", operation.OperationId, operation.OperationName);
                 }
 
-                return default;
             }
 
-            public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
+            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result)
             {
                 if (_logger.IsEnabled(_options.SucceededLogLevel))
                 {
                     var operation = GetLoggingState(context);
                     _logger.Log(_options.SucceededLogLevel, SucceededEvent,
                         "TaskFlow operation {OperationId} ({OperationName}) succeeded with result type {ResultType} in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds(operation));
+                        operation.OperationId, operation.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds());
                 }
 
-                return default;
             }
 
-            public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception)
+            public void OnError(TaskSchedulerInterceptionContext context, Exception exception)
             {
                 if (_logger.IsEnabled(_options.FailedLogLevel))
                 {
                     var operation = GetLoggingState(context);
                     _logger.Log(_options.FailedLogLevel, FailedEvent, exception,
                         "TaskFlow operation {OperationId} ({OperationName}) failed in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds(operation));
+                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds());
                 }
 
-                return default;
             }
 
-            public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context)
+            public void OnFinally(TaskSchedulerInterceptionContext context)
             {
                 LogFinished(context);
-                return default;
             }
 
             private void LogFinished(TaskSchedulerInterceptionContext context)
@@ -142,14 +141,14 @@ namespace System.Threading.Tasks.Flow
                     var operation = GetLoggingState(context);
                     _logger.Log(_options.FinishedLogLevel, FinishedEvent,
                         "TaskFlow operation {OperationId} ({OperationName}) finished in {ElapsedMilliseconds} ms",
-                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds(operation));
+                        operation.OperationId, operation.OperationName, GetElapsedMilliseconds());
                 }
             }
 
-            private static double GetElapsedMilliseconds(ILoggingOperationState operation)
+            private double GetElapsedMilliseconds()
             {
-                return operation.StartTimestamp != 0
-                    ? (Stopwatch.GetTimestamp() - operation.StartTimestamp) * 1000d / Stopwatch.Frequency
+                return _startTimestamp != 0
+                    ? (Stopwatch.GetTimestamp() - _startTimestamp) * 1000d / Stopwatch.Frequency
                     : 0d;
             }
 
@@ -163,7 +162,6 @@ namespace System.Threading.Tasks.Flow
         {
             long OperationId { get; }
             string? OperationName { get; }
-            long StartTimestamp { get; set; }
         }
 
         private sealed class LoggingOperationState<T> : ILoggingOperationState
@@ -178,7 +176,6 @@ namespace System.Threading.Tasks.Flow
 
             public long OperationId { get; }
             public string? OperationName { get; }
-            public long StartTimestamp { get; set; }
             public Func<object?, CancellationToken, ValueTask<T>> TaskFunc { get; }
             public object? State { get; }
         }

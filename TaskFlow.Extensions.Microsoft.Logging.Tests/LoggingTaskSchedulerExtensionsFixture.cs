@@ -83,9 +83,10 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(FinishedEventId));
         }
 
-        private sealed class SuccessInterceptor : ITaskSchedulerInterceptor
+        private sealed class SuccessInterceptor : IAsyncTaskSchedulerInterceptor, IAsyncTaskInterceptor
         {
             public object? Result { get; private set; }
+            public IAsyncTaskInterceptor CreateInterceptor(TaskSchedulerInterceptionContext context) => this;
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => default;
             public async ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) { await Task.Yield(); Result = result; }
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) => default;
