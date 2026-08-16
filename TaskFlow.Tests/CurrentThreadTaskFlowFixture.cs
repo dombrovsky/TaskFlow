@@ -27,6 +27,21 @@ namespace TaskFlow.Tests
             return taskFlow;
         }
 
+        [Test]
+        [CancelAfter(1000)]
+        public void Enqueue_BeforeRun_ShouldExecuteAfterRunStarts()
+        {
+            var taskFlow = CreateSutNotStarted();
+            var task = taskFlow.Enqueue(() => 42);
+
+            Assert.That(task.Wait(100), Is.False);
+
+            new Thread(taskFlow.Run) { IsBackground = true }.Start();
+
+            Assert.That(task.Wait(500), Is.True);
+            Assert.That(task.Result, Is.EqualTo(42));
+        }
+
         private CurrentThreadTaskFlow CreateSutNotStarted()
         {
             var taskFlow = new CurrentThreadTaskFlow();

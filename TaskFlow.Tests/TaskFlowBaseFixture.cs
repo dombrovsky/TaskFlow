@@ -172,5 +172,51 @@ namespace TaskFlow.Tests
             Assert.That(sut.DisposeAsync, Throws.Nothing);
             Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10), failedTask.Status.ToString);
         }
+
+        [Test]
+        [CancelAfter(3000)]
+        public async Task DisposeAsync_WhenEnqueueRacesWithDispose_ShouldCompleteWithoutDeadlock()
+        {
+            var sut = CreateSut();
+            using var operationStarted = new ManualResetEventSlim();
+
+            var blockingTask = sut.Enqueue(async token =>
+            {
+                operationStarted.Set();
+                await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+            });
+
+            Assert.That(operationStarted.Wait(500), Is.True);
+
+            var disposeTask = sut.DisposeAsync().AsTask();
+            var racedEnqueueTask = Task.Run(
+                async () =>
+                {
+                    try
+                    {
+                        await sut.Enqueue(() => 42).ConfigureAwait(false);
+                        return "completed";
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return "disposed";
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return "canceled";
+                    }
+                });
+
+            await Assert.ThatAsync(async () => await disposeTask.ConfigureAwait(false), Throws.Nothing).ConfigureAwait(false);
+
+            var raceResult = await racedEnqueueTask.ConfigureAwait(false);
+            Assert.That(raceResult, Is.EqualTo("completed").Or.EqualTo("disposed").Or.EqualTo("canceled"));
+            Assert.That(() => blockingTask.IsCanceled, Is.True.After(200, 10), blockingTask.Status.ToString);
+
+            await Assert.ThatAsync(
+                    async () => await sut.Enqueue(() => Task.CompletedTask).ConfigureAwait(false),
+                    Throws.TypeOf<ObjectDisposedException>())
+                .ConfigureAwait(false);
+        }
     }
 }
