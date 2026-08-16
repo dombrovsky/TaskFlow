@@ -20,7 +20,7 @@ namespace TaskFlow.Tests.Extensions
             _taskFlow = taskFlow;
 
             var timeout = taskFlow.WithTimeout(TimeSpan.FromSeconds(1));
-            var debounce = taskFlow.WithDebounce(TimeSpan.FromSeconds(1));
+            var throttle = taskFlow.WithThrottle(TimeSpan.FromSeconds(1));
             var cancelPrevious = taskFlow.CreateCancelPrevious();
             var cancellationScope = taskFlow.CreateCancellationScope(CancellationToken.None);
             var intercepted = taskFlow.Intercept(new NoOpAsyncInterceptorFactory());
@@ -28,8 +28,8 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(timeout, Is.Not.InstanceOf<IDisposable>());
             Assert.That(timeout, Is.Not.InstanceOf<IAsyncDisposable>());
 
-            Assert.That(debounce, Is.Not.InstanceOf<IDisposable>());
-            Assert.That(debounce, Is.Not.InstanceOf<IAsyncDisposable>());
+            Assert.That(throttle, Is.Not.InstanceOf<IDisposable>());
+            Assert.That(throttle, Is.Not.InstanceOf<IAsyncDisposable>());
 
             Assert.That(cancelPrevious, Is.Not.InstanceOf<IDisposable>());
             Assert.That(cancelPrevious, Is.Not.InstanceOf<IAsyncDisposable>());

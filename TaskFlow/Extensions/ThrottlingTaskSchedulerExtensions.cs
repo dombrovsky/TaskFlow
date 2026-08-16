@@ -182,21 +182,22 @@ namespace System.Threading.Tasks.Flow
         /// await debouncedScheduler.Enqueue(() => Console.WriteLine("Operation 3"));
         /// </code>
         /// </example>
-        public static ITaskScheduler WithDebounce(this ITaskScheduler taskScheduler, TimeSpan interval, TimeProvider? timeProvider = null)
+        public static ITaskScheduler WithThrottle(this ITaskScheduler taskScheduler, TimeSpan interval, TimeProvider? timeProvider = null)
         {
-            return new DebounceTaskSchedulerWrapper(taskScheduler, timeProvider ?? TimeProvider.System, interval);
+            return new ThrottleTaskSchedulerWrapper(taskScheduler, timeProvider ?? TimeProvider.System, interval);
         }
 
-        private sealed class DebounceTaskSchedulerWrapper : ITaskScheduler
+        private sealed class ThrottleTaskSchedulerWrapper : ITaskScheduler
         {
             private readonly ITaskScheduler _baseTaskScheduler;
             private readonly TimeProvider _timeProvider;
             private readonly TimeSpan _interval;
-            private readonly object _lastExecutionLock;
+            private readonly object _lastAdmissionLock;
 
-            private long _lastExecutionTimestamp;
+            private long _lastAdmissionTimestamp;
+            private bool _hasAdmission;
 
-            public DebounceTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, TimeProvider timeProvider, TimeSpan interval)
+            public ThrottleTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, TimeProvider timeProvider, TimeSpan interval)
             {
                 Argument.NotNull(baseTaskScheduler);
                 Argument.NotNull(timeProvider);
@@ -205,22 +206,22 @@ namespace System.Threading.Tasks.Flow
                 _baseTaskScheduler = baseTaskScheduler;
                 _interval = interval;
                 _timeProvider = timeProvider;
-                _lastExecutionLock = new object();
+                _lastAdmissionLock = new object();
             }
 
             public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
             {
-                var currentTimestamp = _timeProvider.GetTimestamp();
-
-                lock (_lastExecutionLock)
+                lock (_lastAdmissionLock)
                 {
-                    var elapsed = _timeProvider.GetElapsedTime(_lastExecutionTimestamp);
-                    if (_lastExecutionTimestamp > 0 && elapsed <= _interval)
+                    var currentTimestamp = _timeProvider.GetTimestamp();
+                    var elapsed = _timeProvider.GetElapsedTime(_lastAdmissionTimestamp, currentTimestamp);
+                    if (_hasAdmission && elapsed < _interval)
                     {
-                        throw new OperationThrottledException($"Operation did not execute due to debounce interval not elapsed. Interval: {_interval}. Elapsed: {elapsed}.");
+                        throw new OperationThrottledException($"Operation did not execute because the throttle interval has not elapsed. Interval: {_interval}. Elapsed: {elapsed}.");
                     }
 
-                    _lastExecutionTimestamp = currentTimestamp;
+                    _lastAdmissionTimestamp = currentTimestamp;
+                    _hasAdmission = true;
                 }
 
                 return await _baseTaskScheduler.Enqueue(taskFunc, state, cancellationToken).ConfigureAwait(false);
