@@ -7,6 +7,12 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
     [TestFixture]
     public sealed class LoggingTaskSchedulerExtensionsFixture
     {
+        private const int EnqueuedEventId = 0x5446_0001;
+        private const int StartedEventId = 0x5446_0002;
+        private const int CancellationRequestedEventId = 0x5446_0003;
+        private const int SucceededEventId = 0x5446_0004;
+        private const int FailedEventId = 0x5446_0005;
+        private const int FinishedEventId = 0x5446_0006;
         private TaskFlow? _taskFlow;
         [TearDown] public void TearDown() => _taskFlow?.Dispose(TimeSpan.FromSeconds(1));
 
@@ -16,7 +22,7 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             _taskFlow = new TaskFlow();
             var logger = new RecordingLogger(LogLevel.Trace);
             Assert.That(await _taskFlow.WithLogging(logger).WithOperationName("answer").Enqueue(() => 42), Is.EqualTo(42));
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { 1, 2, 4, 6 }));
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { EnqueuedEventId, StartedEventId, SucceededEventId, FinishedEventId }));
             Assert.That(logger.Entries, Has.All.Property(nameof(LogEntry.Level)).EqualTo(LogLevel.Trace));
             Assert.That(logger.Entries.Skip(1).Select(x => x.Message), Has.All.Contains("answer"));
         }
@@ -28,8 +34,8 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             var logger = new RecordingLogger(LogLevel.Trace);
             var task = _taskFlow.WithLogging(logger).Enqueue(() => throw new InvalidOperationException("boom"));
             Assert.That(async () => await task, Throws.InvalidOperationException);
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { 1, 2, 5, 6 }));
-            Assert.That(logger.Entries.Single(x => x.EventId.Id == 5).Exception, Is.TypeOf<InvalidOperationException>());
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { EnqueuedEventId, StartedEventId, FailedEventId, FinishedEventId }));
+            Assert.That(logger.Entries.Single(x => x.EventId.Id == FailedEventId).Exception, Is.TypeOf<InvalidOperationException>());
         }
 
         [Test]
@@ -55,7 +61,7 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
                 options.Interceptor = interceptor;
             });
             await scheduler.Enqueue(() => 42);
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { 1, 4 }));
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Is.EqualTo(new[] { EnqueuedEventId, SucceededEventId }));
             Assert.That(interceptor.Result, Is.EqualTo(42));
         }
 
@@ -70,9 +76,9 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             cts.Cancel();
 
             Assert.That(async () => await task, Throws.InstanceOf<OperationCanceledException>());
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(3));
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(5));
-            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(6));
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(CancellationRequestedEventId));
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(FailedEventId));
+            Assert.That(logger.Entries.Select(x => x.EventId.Id), Does.Contain(FinishedEventId));
         }
 
         private sealed class SuccessInterceptor : ITaskSchedulerInterceptor
@@ -81,6 +87,7 @@ namespace TaskFlow.Extensions.Microsoft.Logging.Tests
             public ValueTask OnBeforeAsync(TaskSchedulerInterceptionContext context) => default;
             public async ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result) { await Task.Yield(); Result = result; }
             public ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception) => default;
+            public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context) => default;
         }
 
         private sealed class RecordingLogger : ILogger

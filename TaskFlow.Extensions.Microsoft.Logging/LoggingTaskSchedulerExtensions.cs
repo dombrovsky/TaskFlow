@@ -8,12 +8,12 @@ namespace System.Threading.Tasks.Flow
     /// <summary>Adds structured lifecycle logging to task schedulers.</summary>
     public static class LoggingTaskSchedulerExtensions
     {
-        private static readonly EventId EnqueuedEvent = new EventId(1, "TaskFlowOperationEnqueued");
-        private static readonly EventId StartedEvent = new EventId(2, "TaskFlowOperationStarted");
-        private static readonly EventId CancellationRequestedEvent = new EventId(3, "TaskFlowOperationCancellationRequested");
-        private static readonly EventId SucceededEvent = new EventId(4, "TaskFlowOperationSucceeded");
-        private static readonly EventId FailedEvent = new EventId(5, "TaskFlowOperationFailed");
-        private static readonly EventId FinishedEvent = new EventId(6, "TaskFlowOperationFinished");
+        private static readonly EventId EnqueuedEvent = new EventId(0x5446_0001, "TaskFlowOperationEnqueued");
+        private static readonly EventId StartedEvent = new EventId(0x5446_0002, "TaskFlowOperationStarted");
+        private static readonly EventId CancellationRequestedEvent = new EventId(0x5446_0003, "TaskFlowOperationCancellationRequested");
+        private static readonly EventId SucceededEvent = new EventId(0x5446_0004, "TaskFlowOperationSucceeded");
+        private static readonly EventId FailedEvent = new EventId(0x5446_0005, "TaskFlowOperationFailed");
+        private static readonly EventId FinishedEvent = new EventId(0x5446_0006, "TaskFlowOperationFinished");
 
         /// <summary>Wraps a scheduler with trace-level structured lifecycle logging.</summary>
         public static ITaskScheduler WithLogging(this ITaskScheduler taskScheduler, ILogger logger)
@@ -105,40 +105,41 @@ namespace System.Threading.Tasks.Flow
 
             public async ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
             {
-                try
+                if (_logger.IsEnabled(_options.SucceededLogLevel))
                 {
-                    if (_logger.IsEnabled(_options.SucceededLogLevel))
-                    {
-                        _logger.Log(_options.SucceededLogLevel, SucceededEvent,
-                            "TaskFlow operation {OperationId} ({OperationName}) succeeded with result type {ResultType} in {ElapsedMilliseconds} ms",
-                            context.OperationId, context.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds(context.OperationId));
-                    }
-
-                    if (_options.Interceptor != null)
-                    {
-                        await _options.Interceptor.OnSuccessAsync(context, result).ConfigureAwait(true);
-                    }
+                    _logger.Log(_options.SucceededLogLevel, SucceededEvent,
+                        "TaskFlow operation {OperationId} ({OperationName}) succeeded with result type {ResultType} in {ElapsedMilliseconds} ms",
+                        context.OperationId, context.OperationName, typeof(TResult).FullName, GetElapsedMilliseconds(context.OperationId));
                 }
-                finally
+
+                if (_options.Interceptor != null)
                 {
-                    LogFinished(context);
+                    await _options.Interceptor.OnSuccessAsync(context, result).ConfigureAwait(true);
                 }
             }
 
             public async ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception)
             {
+                if (_logger.IsEnabled(_options.FailedLogLevel))
+                {
+                    _logger.Log(_options.FailedLogLevel, FailedEvent, exception,
+                        "TaskFlow operation {OperationId} ({OperationName}) failed in {ElapsedMilliseconds} ms",
+                        context.OperationId, context.OperationName, GetElapsedMilliseconds(context.OperationId));
+                }
+
+                if (_options.Interceptor != null)
+                {
+                    await _options.Interceptor.OnErrorAsync(context, exception).ConfigureAwait(true);
+                }
+            }
+
+            public async ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context)
+            {
                 try
                 {
-                    if (_logger.IsEnabled(_options.FailedLogLevel))
-                    {
-                        _logger.Log(_options.FailedLogLevel, FailedEvent, exception,
-                            "TaskFlow operation {OperationId} ({OperationName}) failed in {ElapsedMilliseconds} ms",
-                            context.OperationId, context.OperationName, GetElapsedMilliseconds(context.OperationId));
-                    }
-
                     if (_options.Interceptor != null)
                     {
-                        await _options.Interceptor.OnErrorAsync(context, exception).ConfigureAwait(true);
+                        await _options.Interceptor.OnFinallyAsync(context).ConfigureAwait(true);
                     }
                 }
                 finally

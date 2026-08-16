@@ -11,5 +11,8 @@ namespace System.Threading.Tasks.Flow
 
         /// <summary>Runs after the scheduled operation throws or is canceled.</summary>
         ValueTask OnErrorAsync(TaskSchedulerInterceptionContext context, Exception exception);
+
+        /// <summary>Runs after all other interception stages, regardless of their outcome.</summary>
+        ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context);
     }
 }
