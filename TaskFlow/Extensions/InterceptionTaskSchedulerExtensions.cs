@@ -2,10 +2,31 @@ namespace System.Threading.Tasks.Flow
 {
     using System.Threading.Tasks.Flow.Annotations;
 
-    /// <summary>Provides asynchronous operation interception for <see cref="ITaskScheduler"/>.</summary>
+    /// <summary>Provides synchronous and asynchronous operation interception for <see cref="ITaskScheduler"/>.</summary>
     public static class InterceptionTaskSchedulerExtensions
     {
-        /// <summary>Wraps a scheduler with the specified synchronous value-type interceptor.</summary>
+        /// <summary>Wraps a scheduler with a synchronous value-type interceptor.</summary>
+        /// <typeparam name="TInterceptor">The value type that implements the lifecycle callbacks.</typeparam>
+        /// <param name="taskScheduler">The scheduler whose operations will be intercepted.</param>
+        /// <param name="interceptor">The interceptor template to copy for each operation.</param>
+        /// <returns>A scheduler that invokes <paramref name="interceptor"/> around every operation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+        /// <remarks>
+        /// <para>
+        /// A separate copy of <paramref name="interceptor"/> is made when each operation starts. Mutable fields on the
+        /// copy may be used as allocation-free per-operation state and are preserved across all lifecycle callbacks.
+        /// </para>
+        /// <para>
+        /// Interceptor callbacks run on the selected TaskFlow scheduler context. A callback exception follows the
+        /// replacement semantics documented by <see cref="ITaskSchedulerInterceptor"/>.
+        /// </para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// var intercepted = scheduler.Intercept(new TimingInterceptor());
+        /// var result = await intercepted.Enqueue(() => ComputeAsync());
+        /// </code>
+        /// </example>
         public static ITaskScheduler Intercept<TInterceptor>(this ITaskScheduler taskScheduler, TInterceptor interceptor)
             where TInterceptor : struct, ITaskSchedulerInterceptor
         {
@@ -13,7 +34,23 @@ namespace System.Threading.Tasks.Flow
             return new InterceptionTaskSchedulerWrapper<TInterceptor>(taskScheduler, interceptor);
         }
 
-        /// <summary>Wraps a scheduler with the specified asynchronous interceptor.</summary>
+        /// <summary>Wraps a scheduler with a factory for asynchronous per-operation interceptors.</summary>
+        /// <param name="taskScheduler">The scheduler whose operations will be intercepted.</param>
+        /// <param name="interceptor">The factory that creates an interceptor for each operation.</param>
+        /// <returns>A scheduler that asynchronously intercepts every operation.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <paramref name="taskScheduler"/> or <paramref name="interceptor"/> is <c>null</c>.
+        /// </exception>
+        /// <remarks>
+        /// <para>
+        /// The factory is invoked once per operation on the selected scheduler. Every lifecycle <see cref="ValueTask"/>
+        /// is awaited before execution advances, and continuations retain the TaskFlow synchronization context.
+        /// </para>
+        /// <para>
+        /// The returned scheduler preserves the enqueue operation's cancellation and exception behavior when all
+        /// interceptor callbacks complete successfully.
+        /// </para>
+        /// </remarks>
         public static ITaskScheduler Intercept(this ITaskScheduler taskScheduler, IAsyncTaskSchedulerInterceptor interceptor)
         {
             Argument.NotNull(taskScheduler);

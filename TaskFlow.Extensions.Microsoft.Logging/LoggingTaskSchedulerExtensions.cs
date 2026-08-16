@@ -4,7 +4,7 @@ namespace System.Threading.Tasks.Flow
     using Microsoft.Extensions.Logging;
     using System.Threading.Tasks.Flow.Annotations;
 
-    /// <summary>Adds structured lifecycle logging to task schedulers.</summary>
+    /// <summary>Adds Microsoft.Extensions.Logging structured lifecycle events to task schedulers.</summary>
     public static class LoggingTaskSchedulerExtensions
     {
         private static readonly EventId EnqueuedEvent = new EventId(0x5446_0001, "TaskFlowOperationEnqueued");
@@ -15,10 +15,48 @@ namespace System.Threading.Tasks.Flow
         private static readonly EventId FinishedEvent = new EventId(0x5446_0006, "TaskFlowOperationFinished");
 
         /// <summary>Wraps a scheduler with configurable structured lifecycle logging.</summary>
+        /// <param name="taskScheduler">The scheduler whose operations will be logged.</param>
+        /// <param name="logger">The logger that receives lifecycle events.</param>
+        /// <param name="configure">
+        /// An optional callback that configures event levels. When omitted, every lifecycle event uses
+        /// <see cref="LogLevel.Trace"/>.
+        /// </param>
+        /// <returns>An <see cref="ITaskScheduler"/> that logs the lifecycle of every enqueued operation.</returns>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <paramref name="taskScheduler"/> or <paramref name="logger"/> is <c>null</c>.
+        /// </exception>
         /// <remarks>
+        /// <para>
+        /// The decorator emits enqueue, start, cancellation-request, success or failure, and finish events. Events
+        /// contain structured operation ID, optional operation name, result type, and elapsed-duration fields where
+        /// applicable. Failure events include the operation exception.
+        /// </para>
+        /// <para>
+        /// <see cref="ILogger.IsEnabled(LogLevel)"/> is checked before logging each event and before optional timing
+        /// work is started. Disabled events do not call <see cref="ILogger.Log{TState}(LogLevel, EventId, TState, Exception, Func{TState, Exception, string})"/>.
+        /// </para>
+        /// <para>
+        /// Cancellation requests are observed synchronously from the cancellation token. This event does not mean
+        /// that cancellation was accepted or that the operation ultimately completed as canceled.
+        /// </para>
+        /// <para>
         /// Place <c>WithOperationName</c> outside this decorator, for example
         /// <c>scheduler.WithLogging(logger).WithOperationName("Import")</c>, so logging can observe the annotation.
+        /// </para>
         /// </remarks>
+        /// <example>
+        /// <code>
+        /// var scheduler = taskFlow
+        ///     .WithLogging(logger, options =>
+        ///     {
+        ///         options.FailedLogLevel = LogLevel.Error;
+        ///         options.FinishedLogLevel = LogLevel.Debug;
+        ///     })
+        ///     .WithOperationName("Import");
+        ///
+        /// await scheduler.Enqueue(() => ImportAsync());
+        /// </code>
+        /// </example>
         public static ITaskScheduler WithLogging(this ITaskScheduler taskScheduler, ILogger logger, Action<TaskFlowLoggingOptions>? configure = null)
         {
             Argument.NotNull(taskScheduler);
