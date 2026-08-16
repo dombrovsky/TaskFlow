@@ -43,7 +43,7 @@ static Task PersistAsync(CancellationToken token) => Task.CompletedTask;
 
 ## Common rules
 
-- Always observe the task returned by `Enqueue`.
+- Await or return an operation task when its outcome matters to the caller. For intentional fire-and-forget work, discard it explicitly and add failure reporting inside the operation or through a decorator when needed.
 - Dispose the underlying flow, not its decorators.
 - Treat cancellation as a request rather than proof that work stopped.
 - Use named local functions for value-returning asynchronous delegates if overload resolution is ambiguous.

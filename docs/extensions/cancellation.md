@@ -73,4 +73,4 @@ This is a useful latest-request-wins recipe, but it is not a dedicated trailing-
 
 ## Disposal and ownership
 
-Neither cancellation decorator is disposable. Dispose the flow that owns the execution lane. During shutdown, continue observing returned operation tasks so expected cancellation and unexpected failures are distinguished deliberately.
+Neither cancellation decorator is disposable. Dispose the flow that owns the execution lane. Await individual operation tasks when their outcomes belong to a caller; intentional fire-and-forget submissions can rely on flow disposal for their lifetime but need a separate error-reporting policy when failures matter.

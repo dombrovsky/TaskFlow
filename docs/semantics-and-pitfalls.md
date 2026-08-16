@@ -52,9 +52,11 @@ The timeout is cooperative. A delegate that ignores the token can continue runni
 
 Prefer asynchronous disposal for component-owned background work and make long-running delegates observe cancellation promptly.
 
-## Disposal is not operation-task observation
+## Disposal owns lifetime, not operation outcomes
 
-Disposal waits for lane completion and suppresses operation failures internally. It does not replace awaiting or otherwise observing the task returned for each operation. Store a background loop's completion task so unexpected terminal failures remain visible.
+Disposal waits for lane completion and suppresses operation failures internally. This makes deliberate fire-and-forget possible: a component can discard selected operation tasks and still use flow disposal to request cancellation and wait for accepted work.
+
+Disposal does not propagate an ignored operation's exception. Await or return the task when its outcome belongs to a caller. For intentionally discarded work, handle failures inside the delegate or use a decorator such as `OnError` to report them. `OnError` observes and rethrows, so its diagnostic side effect still runs even when the returned task is deliberately ignored.
 
 ## Decorator order changes what a policy sees
 

@@ -38,9 +38,9 @@ await Task.WhenAll(first, second);
 
 Calls to `Enqueue` are thread-safe. The standard `TaskFlow` invokes one operation at a time in submission order. Each call returns a task representing that operation's result, exception, or cancellation.
 
-## Await operation tasks
+## Choose whether to await an operation
 
-TaskFlow keeps the lane moving after an operation fails, but it does not consume the failure on behalf of the caller. Await returned tasks, return them to a caller, retain them as a component completion signal, or deliberately observe them with application-specific telemetry.
+TaskFlow keeps the lane moving after an operation fails. Await or return the task when the operation's result, cancellation, or exception belongs to a caller:
 
 ```csharp
 Task write = flow.Enqueue(token => WriteAsync(token));
@@ -56,6 +56,8 @@ catch (IOException exception)
 
 static Task WriteAsync(CancellationToken token) => Task.CompletedTask;
 ```
+
+For component-owned fire-and-forget work, discard the task explicitly with `_ = flow.Enqueue(...)`. Disposing the flow still requests cancellation and waits for accepted work, but it does not surface an ignored operation's exception. Handle failures inside the operation or add an error-observation decorator when diagnostics are required.
 
 ## Prefer asynchronous disposal
 

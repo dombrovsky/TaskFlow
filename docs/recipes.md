@@ -6,7 +6,7 @@ permalink: /recipes/
 
 # Recipes
 
-These examples focus on ownership and observable operation tasks rather than treating queued work as untracked fire-and-forget work.
+These examples use both caller-observed operation tasks and deliberate fire-and-forget submissions whose lifetime is owned by a flow.
 
 ## Serialize a non-thread-safe resource
 
@@ -41,39 +41,37 @@ All callers remain asynchronous while access to `_inner` stays FIFO and non-conc
 ```csharp
 public sealed class ReadingSubscriber : IAsyncDisposable
 {
+    private readonly IReadingSource _source;
     private readonly IReadingSink _sink;
     private readonly TaskFlow _flow = new();
+    private readonly ITaskScheduler _events;
 
     public ReadingSubscriber(IReadingSource source, IReadingSink sink)
     {
+        _source = source;
         _sink = sink;
+        _events = _flow.OnError<Exception>(
+            exception => Console.Error.WriteLine(exception));
         source.ReadingReceived += OnReadingReceived;
     }
 
-    private async void OnReadingReceived(object? sender, ReadingEventArgs args)
+    private void OnReadingReceived(object? sender, ReadingEventArgs args)
     {
         Reading reading = args.Reading;
 
-        try
-        {
-            await _flow.Enqueue(
-                token => _sink.HandleAsync(reading, token));
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when the subscriber is disposed.
-        }
-        catch (Exception exception)
-        {
-            Console.Error.WriteLine(exception);
-        }
+        _ = _events.Enqueue(
+            token => _sink.HandleAsync(reading, token));
     }
 
-    public ValueTask DisposeAsync() => _flow.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        _source.ReadingReceived -= OnReadingReceived;
+        await _flow.DisposeAsync();
+    }
 }
 ```
 
-The event handler copies the event data and calls `Enqueue` before its first suspension, so TaskFlow preserves callback submission order. Event handlers are the conventional exception to avoiding `async void`; this one catches every operation outcome locally. In production, unsubscribe the event before disposing the flow so no callback can submit during shutdown.
+The synchronous event handler only captures the event data and enqueues the asynchronous work. It returns immediately without becoming `async void`, and TaskFlow preserves callback submission order. The operation tasks are intentionally discarded; `OnError` reports failures, while disposing `_flow` controls the lifetime of every accepted callback. Unsubscribe before disposal so no callback can submit during shutdown.
 
 ## Avoid duplicate credential refreshes
 
@@ -162,59 +160,47 @@ Each submission cancels unfinished older submissions. The initial delay means ra
 ## Own a recoverable background loop
 
 ```csharp
-public sealed class InboxPump : IAsyncDisposable
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Threading.Tasks.Flow;
+
+public sealed class InboxPump : IHostedService
 {
     private readonly IInbox _inbox;
-    private readonly ILogger _logger;
-    private readonly TaskFlow _flow = new();
-    private Task? _completion;
+    private readonly ILogger<InboxPump> _logger;
+    private readonly TaskFlow _lifetime = new();
 
-    public InboxPump(IInbox inbox, ILogger logger)
+    public InboxPump(IInbox inbox, ILogger<InboxPump> logger)
     {
         _inbox = inbox;
         _logger = logger;
     }
 
-    public Task Completion => _completion ?? Task.CompletedTask;
-
-    public void Start()
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        _completion ??= _flow.Enqueue(RunAsync);
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = _lifetime.Enqueue(RunAsync);
+        return Task.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        await _flow.DisposeAsync();
-
-        if (_completion is null)
-        {
-            return;
-        }
-
-        try
-        {
-            await _completion;
-        }
-        catch (OperationCanceledException)
-        {
-            // Disposal canceled the loop: normal shutdown.
-        }
-    }
+    public Task StopAsync(CancellationToken cancellationToken) =>
+        _lifetime.DisposeAsync().AsTask().WaitAsync(cancellationToken);
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            await using (var iteration = new TaskFlow())
+            {
+                ITaskScheduler work = iteration.OnError<Exception>(
+                    exception => _logger.LogWarning(
+                        exception,
+                        "Inbox iteration failed"),
+                    _ => !cancellationToken.IsCancellationRequested);
 
-            try
-            {
-                await _inbox.ProcessAvailableAsync(cancellationToken);
-            }
-            catch (TransientInboxException exception)
-                when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(exception, "Inbox iteration failed");
+                _ = work.Enqueue(
+                    _inbox.ProcessAvailableAsync,
+                    cancellationToken);
             }
 
             await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
@@ -223,7 +209,9 @@ public sealed class InboxPump : IAsyncDisposable
 }
 ```
 
-Recoverable failures are caught per iteration so the loop survives them. `Completion` exposes unexpected terminal failures, while disposal cancellation is handled as normal shutdown. An outer `OnError` decorator can report a terminal failure but cannot restart a failed loop.
+`StartAsync` deliberately discards the outer operation task and returns promptly to the host. The outer flow owns the loop and supplies its shutdown token; `StopAsync` disposes that flow and waits within the host's shutdown budget.
+
+Each pass creates an inner flow, submits one fire-and-forget operation, and disposes the inner flow before delaying. Inner disposal waits for that iteration but does not propagate its operation failure into the outer loop, so the next iteration still runs. `OnError` reports failures before rethrowing them into the intentionally ignored per-iteration task. The delay belongs to the outer operation, so stopping the host cancels both the current iteration and the wait before the next one.
 
 ## Compose operational policies
 

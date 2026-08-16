@@ -69,7 +69,7 @@ Callers receive a task instead of blocking on `Save`. The wrapped synchronous me
 
 ## Lifecycle essentials
 
-- Observe every task returned by `Enqueue`; ownership does not make failures unobservable.
+- Await returned tasks when their outcome belongs to the caller; intentionally discarded work remains bounded by the flow and can report failures inside the operation or through a decorator when needed.
 - Prefer `await using` so asynchronous disposal can wait for the lane to finish.
 - Cancellation is cooperative, and synchronous disposal has a timeout.
 - Scheduler decorators do not own the underlying flow; dispose the original `ITaskFlow`.

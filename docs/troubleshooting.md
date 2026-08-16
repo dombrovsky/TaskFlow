@@ -40,7 +40,7 @@ That is expected for `TaskFlow`, `DedicatedThreadTaskFlow`, and `CurrentThreadTa
 
 ## A background loop stopped after one failure
 
-`OnError` observes and rethrows; it does not retry or suppress. Catch recoverable exceptions inside each loop iteration. Retain the loop's returned task so unexpected terminal failures remain observable. See the [background-loop recipe](recipes.md#own-a-recoverable-background-loop).
+`OnError` observes and rethrows; it does not retry or suppress. Catch recoverable exceptions inside each loop iteration, or give each iteration an inner TaskFlow whose disposal waits for that iteration while an `OnError` decorator reports its failure. See the [hosted background-loop recipe](recipes.md#own-a-recoverable-background-loop).
 
 ## Operation names are missing from logs
 
