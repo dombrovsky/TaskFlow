@@ -4,7 +4,7 @@ namespace TaskFlow.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class CurrentThreadTaskFlowFixture : TaskFlowBaseFixture<CurrentThreadTaskFlow>
+    internal sealed class CurrentThreadTaskFlowFixture : TaskFlowBaseFixture<CurrentThreadTaskFlow>
     {
         private readonly List<CurrentThreadTaskFlow> _suts = new();
 

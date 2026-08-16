@@ -5,7 +5,7 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class ThrottlingTaskSchedulerExtensionsFixture
+    internal sealed class ThrottlingTaskSchedulerExtensionsFixture
     {
         private ITaskFlow? _taskFlow;
         private FakeTimeProvider _timeProvider;
@@ -53,8 +53,10 @@ namespace TaskFlow.Tests.Extensions
 
             await _taskFlow.Enqueue(() => { });
 
+            await task1.ConfigureAwait(false);
             Assert.That(task1.IsCompletedSuccessfully, Is.True);
-            Assert.That(async () => await task2, Throws.TypeOf<OperationThrottledException>());
+            await Assert.ThatAsync(async () => await task2.ConfigureAwait(false), Throws.TypeOf<OperationThrottledException>())
+                .ConfigureAwait(false);
         }
     }
 }

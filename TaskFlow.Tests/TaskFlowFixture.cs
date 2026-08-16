@@ -4,7 +4,7 @@ namespace TaskFlow.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class TaskFlowFixture : TaskFlowBaseFixture<TaskFlow>
+    internal sealed class TaskFlowFixture : TaskFlowBaseFixture<TaskFlow>
     {
         protected override TaskFlow CreateSut()
         {

@@ -5,11 +5,11 @@ namespace TaskFlow.Tests
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public abstract class TaskFlowBaseFixture<T> : TaskSchedulerBaseFixture<T>
+    internal abstract class TaskFlowBaseFixture<T> : TaskSchedulerBaseFixture<T>
         where T : ITaskFlow
     {
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public async Task DisposeAsync_ShouldCancelPendingTask()
         {
             var sut = CreateSut();
@@ -26,7 +26,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public async Task DisposeAsync_ShouldWaitQueuedOperations()
         {
             var sut = CreateSut();
@@ -44,7 +44,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public void Dispose_ShouldWaitQueuedOperations()
         {
             var sut = CreateSut();
@@ -62,7 +62,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public void Dispose_ShouldReturnFalseIfTimedOut()
         {
             var sut = CreateSut();
@@ -76,7 +76,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public void Dispose_ShouldReturnTrueIfNotTimedOut()
         {
             var sut = CreateSut();
@@ -90,7 +90,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public void Dispose_CanCallMultipleTimes()
         {
             var sut = CreateSut();
@@ -103,7 +103,7 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public async Task DisposeAsync_CanCallMultipleTimes()
         {
             var sut = CreateSut();
@@ -111,12 +111,12 @@ namespace TaskFlow.Tests
 
             await sut.DisposeAsync().ConfigureAwait(false);
 
-            Assert.That(sut.DisposeAsync, Throws.Nothing);
-            Assert.That(sut.DisposeAsync, Throws.Nothing);
+            await sut.DisposeAsync().ConfigureAwait(false);
+            await sut.DisposeAsync().ConfigureAwait(false);
         }
 
         [Test]
-        [Timeout(1000)]
+        [CancelAfter(1000)]
         public async Task Dispose_CanCallAfterDisposeAsync()
         {
             var sut = CreateSut();
@@ -128,12 +128,15 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        public void Enqueue_ShouldThrowAfterDispose()
+        public async Task Enqueue_ShouldThrowAfterDispose()
         {
             var sut = CreateSut();
             sut.Dispose();
 
-            Assert.That(() => sut.Enqueue(() => Task.CompletedTask), Throws.TypeOf<ObjectDisposedException>());
+            await Assert.ThatAsync(
+                    async () => await sut.Enqueue(() => Task.CompletedTask).ConfigureAwait(false),
+                    Throws.TypeOf<ObjectDisposedException>())
+                .ConfigureAwait(false);
         }
 
         [Test]
@@ -142,7 +145,10 @@ namespace TaskFlow.Tests
             var sut = CreateSut();
             await sut.DisposeAsync().ConfigureAwait(false);
 
-            Assert.That(() => sut.Enqueue(() => Task.CompletedTask), Throws.TypeOf<ObjectDisposedException>());
+            await Assert.ThatAsync(
+                    async () => await sut.Enqueue(() => Task.CompletedTask).ConfigureAwait(false),
+                    Throws.TypeOf<ObjectDisposedException>())
+                .ConfigureAwait(false);
         }
 
         [Test]

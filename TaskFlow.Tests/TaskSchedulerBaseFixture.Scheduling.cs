@@ -4,7 +4,7 @@ namespace TaskFlow.Tests
     using System.Threading.Tasks;
     using System.Threading.Tasks.Flow;
 
-    public abstract partial class TaskSchedulerBaseFixture<T>
+    internal abstract partial class TaskSchedulerBaseFixture<T>
     {
         [Test]
         public async Task Enqueue_ShouldExecuteInScheduledOrder()
@@ -52,14 +52,15 @@ namespace TaskFlow.Tests
         }
 
         [Test]
-        public void Enqueue_ReturnedTaskShouldBeCanceledWhenTaskFuncCanceled()
+        public async Task Enqueue_ReturnedTaskShouldBeCanceledWhenTaskFuncCanceled()
         {
             using var cts = new CancellationTokenSource();
             var task = _sut.Enqueue(token => Task.Delay(1000, token), cts.Token);
 
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(false);
 
-            Assert.That(async () => await task.ConfigureAwait(false), Throws.InstanceOf<OperationCanceledException>());
+            await Assert.ThatAsync(async () => await task.ConfigureAwait(false), Throws.InstanceOf<OperationCanceledException>())
+                .ConfigureAwait(false);
             Assert.That(task.IsCanceled, Is.True);
         }
 
@@ -103,7 +104,7 @@ namespace TaskFlow.Tests
             using var taskACompletionEvent = new ManualResetEventSlim();
 
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(false);
 
             var counter = 0;
             var taskA = _sut.Enqueue(() =>
@@ -114,16 +115,16 @@ namespace TaskFlow.Tests
             var taskB = _sut.Enqueue(Task.FromCanceled, cts.Token);
             var taskC = _sut.Enqueue(() => Interlocked.Increment(ref counter) == 2);
 
-            await Task.Delay(100);
+            await Task.Delay(100).ConfigureAwait(false);
             taskACompletionEvent.Set();
 
             Assert.That(() => taskA.IsCompletedSuccessfully, Is.True.After(100, 10));
-            Assert.That(taskA.Result, Is.True);
+            Assert.That(await taskA.ConfigureAwait(false), Is.True);
 
             Assert.That(() => taskB.IsCanceled, Is.True.After(100, 10));
 
             Assert.That(() => taskC.IsCompletedSuccessfully, Is.True.After(100, 10));
-            Assert.That(taskC.Result, Is.True);
+            Assert.That(await taskC.ConfigureAwait(false), Is.True);
         }
 
         [Test]
@@ -140,14 +141,14 @@ namespace TaskFlow.Tests
         [TestCase(false)]
         public async Task Enqueue_AsyncContinuationShouldHappenOnSameScheduler(bool captureContext)
         {
-            var result =  await _sut.Enqueue(async () =>
+            var result = await _sut.Enqueue(async () =>
             {
                 var synchronizationContext = SynchronizationContext.Current;
                 await Task.Delay(100).ConfigureAwait(captureContext);
                 var a = DateTime.Now;
                 await Task.Delay(100).ConfigureAwait(captureContext);
                 return (synchronizationContext, SynchronizationContext.Current);
-            });
+            }).ConfigureAwait(false);
 
             Assert.That(result.Current, Is.EqualTo(captureContext ? result.synchronizationContext : null));
         }
@@ -166,10 +167,10 @@ namespace TaskFlow.Tests
             });
             var task2 = _sut.Enqueue(() => Interlocked.Increment(ref counter));
 
-            await Task.WhenAll(task1, task2);
+            await Task.WhenAll(task1, task2).ConfigureAwait(false);
 
-            Assert.That(task1.Result, Is.EqualTo(2));
-            Assert.That(task2.Result, Is.EqualTo(3));
+            Assert.That(await task1.ConfigureAwait(false), Is.EqualTo(2));
+            Assert.That(await task2.ConfigureAwait(false), Is.EqualTo(3));
         }
 
         [TestCase(true)]
@@ -189,11 +190,11 @@ namespace TaskFlow.Tests
             });
             var task2 = _sut.Enqueue(() => Interlocked.Increment(ref counter));
 
-            await task2;
+            await task2.ConfigureAwait(false);
 
             Assert.That(() => task1.IsFaulted, Is.True.After(100, 10));
             Assert.That(task1.Exception?.InnerException, Is.TypeOf<InvalidOperationException>());
-            Assert.That(task2.Result, Is.EqualTo(2));
+            Assert.That(await task2.ConfigureAwait(false), Is.EqualTo(2));
         }
     }
 }

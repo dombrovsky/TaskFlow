@@ -19,22 +19,29 @@ jobs:
      checks: write
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      id: setup-dotnet
+      uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: |
+          8.0.x
+          10.0.x
+    - name: Select .NET 10 SDK
+      run: dotnet new globaljson --sdk-version "${{ steps.setup-dotnet.outputs.dotnet-version }}" --roll-forward latestPatch --force
+    - name: Show .NET SDK
+      run: dotnet --version
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --configuration Release --no-restore
     - name: Test
-      run: dotnet test --no-build --verbosity normal --logger "trx;LogFileName=stage\test-results.trx"
+      run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFilePrefix=test-results"
     - name: Test Report
-      uses: dorny/test-reporter@v1
+      uses: dorny/test-reporter@v2
       if: always()
       with:
         name: DotNET Tests
-        path: "**/test-results.trx"                            
+        path: "**/test-results*.trx"
         reporter: dotnet-trx
         fail-on-error: true

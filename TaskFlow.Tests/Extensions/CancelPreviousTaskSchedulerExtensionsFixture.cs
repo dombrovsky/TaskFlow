@@ -4,7 +4,7 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class CancelPreviousTaskSchedulerExtensionsFixture
+    internal sealed class CancelPreviousTaskSchedulerExtensionsFixture
     {
         private ITaskFlow? _taskFlow;
 

@@ -4,7 +4,7 @@ namespace TaskFlow.Tests.Extensions
     using System.Threading.Tasks.Flow;
 
     [TestFixture]
-    public sealed class CancellationScopeTaskSchedulerExtensionsFixture
+    internal sealed class CancellationScopeTaskSchedulerExtensionsFixture
     {
         private ITaskFlow? _taskFlow;
 
@@ -26,7 +26,7 @@ namespace TaskFlow.Tests.Extensions
             var task2 = _taskFlow.Enqueue(token => Task.Delay(1000, token));
             var task3 = cancellationScope.Enqueue(token => Task.Delay(1000, token));
 
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(false);
 
             Assert.That(() => task1.IsCanceled, Is.True.After(100, 10), task1.Status.ToString);
             Assert.That(() => task2.IsCanceled, Is.False.After(100, 10), task2.Status.ToString);
@@ -51,7 +51,7 @@ namespace TaskFlow.Tests.Extensions
             var task2 = cancellationScope2.Enqueue(token => Task.Delay(1000, token));
             var task3 = cancellationScope1.Enqueue(token => Task.Delay(1000, token));
 
-            scope1Cts.Cancel();
+            await scope1Cts.CancelAsync().ConfigureAwait(false);
 
             Assert.That(() => task1.IsCanceled, Is.True.After(100, 10), task1.Status.ToString);
             Assert.That(() => task2.IsCanceled, Is.False.After(100, 10), task2.Status.ToString);
