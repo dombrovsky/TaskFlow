@@ -352,6 +352,7 @@ namespace System.Threading.Tasks.Flow
         /// <see cref="Unit"/> result to match the scheduler's signature requirement. The dummy parameter is used
         /// to avoid method signature conflicts with other overloads.
         /// </remarks>
+        [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
@@ -380,6 +381,7 @@ namespace System.Threading.Tasks.Flow
         /// A direct <c>async</c> lambda may be ambiguous with the corresponding
         /// <see cref="Task"/> overload; use a named function or an explicit delegate cast.
         /// </remarks>
+        [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
@@ -401,6 +403,7 @@ namespace System.Threading.Tasks.Flow
         /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter 
         /// is used to avoid method signature conflicts with other overloads.
         /// </remarks>
+        [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
         public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
@@ -423,6 +426,7 @@ namespace System.Threading.Tasks.Flow
         /// cancellation token parameter when calling the function. The dummy parameter is used to avoid method
         /// signature conflicts with other overloads.
         /// </remarks>
+        [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
         public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);
@@ -444,6 +448,7 @@ namespace System.Threading.Tasks.Flow
         /// cancellation token parameter when calling the function. The dummy parameter is used to avoid method
         /// signature conflicts with other overloads.
         /// </remarks>
+        [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
         public static Task Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> valueTaskFunc, DummyParameter? _ = null)
         {
             Argument.NotNull(taskScheduler);

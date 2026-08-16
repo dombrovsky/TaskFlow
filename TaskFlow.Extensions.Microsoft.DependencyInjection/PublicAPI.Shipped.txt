@@ -1,0 +1,22 @@
+#nullable enable
+System.Threading.Tasks.Flow.IDefaultTaskFlowFactory
+System.Threading.Tasks.Flow.IDefaultTaskFlowFactory.Create(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> System.Threading.Tasks.Flow.ITaskFlow!
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowChain
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowChain.ConfigureChain(System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> System.Threading.Tasks.Flow.ITaskScheduler!
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowChain.Name.get -> string!
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowOptions
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowOptions.Configure() -> System.Threading.Tasks.Flow.TaskFlowOptions!
+System.Threading.Tasks.Flow.INamedConfigureTaskFlowOptions.Name.get -> string!
+System.Threading.Tasks.Flow.INamedTaskFlowFactory
+System.Threading.Tasks.Flow.INamedTaskFlowFactory.Create(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> System.Threading.Tasks.Flow.ITaskFlow!
+System.Threading.Tasks.Flow.INamedTaskFlowFactory.Name.get -> string!
+System.Threading.Tasks.Flow.ITaskFlowFactory
+System.Threading.Tasks.Flow.ITaskFlowFactory.CreateTaskFlow(string? name = null) -> System.Threading.Tasks.Flow.ITaskFlow!
+System.Threading.Tasks.Flow.ServiceCollectionExtensions
+System.Threading.Tasks.Flow.TaskFlowFactory
+System.Threading.Tasks.Flow.TaskFlowFactory.CreateTaskFlow(string? name = null) -> System.Threading.Tasks.Flow.ITaskFlow!
+System.Threading.Tasks.Flow.TaskFlowFactory.TaskFlowFactory(System.Collections.Generic.IEnumerable<System.Threading.Tasks.Flow.INamedTaskFlowFactory!>! namedTaskFlowFactories, System.Collections.Generic.IEnumerable<System.Threading.Tasks.Flow.INamedConfigureTaskFlowChain!>! namedConfigureTaskFlowChains, System.Collections.Generic.IEnumerable<System.Threading.Tasks.Flow.INamedConfigureTaskFlowOptions!>! namedConfigureTaskFlowOptions, System.Threading.Tasks.Flow.IDefaultTaskFlowFactory! defaultTaskFlowFactory) -> void
+static System.Threading.Tasks.Flow.ServiceCollectionExtensions.AddTaskFlow(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static System.Threading.Tasks.Flow.ServiceCollectionExtensions.AddTaskFlow(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! name, System.Threading.Tasks.Flow.TaskFlowOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static System.Threading.Tasks.Flow.ServiceCollectionExtensions.AddTaskFlow(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string? name, System.Func<System.IServiceProvider!, System.Threading.Tasks.Flow.TaskFlowOptions!, System.Threading.Tasks.Flow.ITaskFlow!>? baseTaskFlowFactory = null, System.Func<System.IServiceProvider!, System.Threading.Tasks.Flow.TaskFlowOptions!>? configureOptions = null, System.Func<System.Threading.Tasks.Flow.ITaskScheduler!, System.IServiceProvider!, System.Threading.Tasks.Flow.ITaskScheduler!>? configureSchedulerChain = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static System.Threading.Tasks.Flow.ServiceCollectionExtensions.AddTaskFlow(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Threading.Tasks.Flow.TaskFlowOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

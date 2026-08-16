@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <DefineConstants>$(DefineConstants);TASKFLOW_EXTENSIONS_TIME</DefineConstants>
     <RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow.Extensions.Time</PackageId>
     <Description>Leading-edge admission throttling for TaskFlow on netstandard2.0 with TimeProvider-based deterministic timing.</Description>
