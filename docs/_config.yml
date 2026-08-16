@@ -1,0 +1,17 @@
+title: TaskFlow for .NET
+description: FIFO async execution lanes with owned lifetime, cancellation, diagnostics, and thread affinity.
+url: https://dombrovsky.github.io
+baseurl: /TaskFlow
+repository: dombrovsky/TaskFlow
+theme: minima
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+header_pages:
+  - getting-started.md
+  - recipes.md
+  - execution-models.md
+  - extensions/index.md
+  - dependency-injection.md

@@ -3,6 +3,8 @@
 		<TargetFrameworks>netstandard2.0;net8.0;net10.0</TargetFrameworks>
 		<RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow</PackageId>
+		<Description>A composable .NET async scheduler for FIFO execution, lifetime-bound background work, cancellation, timeouts, logging, and thread affinity.</Description>
+		<PackageTags>async;task-scheduler;task-queue;concurrency;sequential;serialization;cancellation;thread-affinity;background-tasks</PackageTags>
 	</PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">

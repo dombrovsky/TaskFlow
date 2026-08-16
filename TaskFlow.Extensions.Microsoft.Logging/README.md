@@ -1,16 +1,14 @@
 # TaskFlow.Microsoft.Extensions.Logging
 
-`TaskFlow.Microsoft.Extensions.Logging` adds structured lifecycle logging to any TaskFlow `ITaskScheduler` through `Microsoft.Extensions.Logging`.
+This package adds structured `Microsoft.Extensions.Logging` lifecycle events to any TaskFlow `ITaskScheduler`.
 
-## Installation
+## Install
 
 ```shell
 dotnet add package TaskFlow.Microsoft.Extensions.Logging
 ```
 
-This package references the core `TaskFlow` package.
-
-## Basic usage
+## Log operation lifecycles
 
 ```csharp
 using Microsoft.Extensions.Logging;
@@ -21,44 +19,25 @@ await using var flow = new TaskFlow();
 ITaskScheduler operations = flow
     .WithLogging(logger, options =>
     {
-        options.EnqueuedLogLevel = LogLevel.Debug;
         options.StartedLogLevel = LogLevel.Information;
         options.SucceededLogLevel = LogLevel.Information;
         options.FailedLogLevel = LogLevel.Error;
-        options.FinishedLogLevel = LogLevel.Debug;
     })
     .WithOperationName("orders.persist");
 
 await operations.Enqueue(token => PersistOrdersAsync(token));
 ```
 
-Place `WithOperationName` outside `WithLogging`, as shown above, so the logging decorator can read the operation-name annotation.
+The decorator can emit enqueued, started, cancellation-requested, succeeded or failed, and finished events. Events include structured operation IDs, optional operation names, durations where applicable, and failure exceptions.
 
-## Logged lifecycle
+Place `WithOperationName` outside `WithLogging`, as shown, so logging can read the annotation. Cancellation logging reports a request rather than the final outcome. Failures remain observable through the task returned by `Enqueue`.
 
-The decorator can emit an event when an operation is:
+The logging decorator does not own the underlying flow.
 
-- enqueued;
-- starting;
-- requested to cancel through its enqueue token;
-- completed successfully;
-- failed or observed cancellation; and
-- finished, regardless of outcome.
+## Documentation
 
-All event levels default to `LogLevel.Trace`. Set any corresponding `TaskFlowLoggingOptions` property to `LogLevel.None` to disable that event.
+- [Observability extensions](https://dombrovsky.github.io/TaskFlow/extensions/observability/)
+- [Extension composition](https://dombrovsky.github.io/TaskFlow/extensions/)
+- [Semantics and pitfalls](https://dombrovsky.github.io/TaskFlow/semantics-and-pitfalls/)
 
-## Behavior and lifetime
-
-- The cancellation-request event reports a request, not the final outcome. The operation can still complete successfully if it does not observe cancellation.
-- Failures are logged with their exception and still propagate through the task returned by `Enqueue`.
-- Each logging wrapper assigns increasing operation IDs to the operations it observes.
-- `WithLogging` returns a scheduler decorator and does not own the underlying flow. Dispose the original `ITaskFlow`.
-- Decorator order is observable; add operation names and other annotations outside the logging wrapper when the logger should include them.
-
-## Links
-
-- [TaskFlow repository](https://github.com/dombrovsky/TaskFlow)
-- [Logging extension source](https://github.com/dombrovsky/TaskFlow/tree/main/TaskFlow.Extensions.Microsoft.Logging)
-- [Core TaskFlow package documentation](https://github.com/dombrovsky/TaskFlow/blob/main/TaskFlow/README.md)
-- [License](https://github.com/dombrovsky/TaskFlow/blob/main/LICENSE)
-- [Issues and feedback](https://github.com/dombrovsky/TaskFlow/issues)
+Source, license, and feedback are available in the [TaskFlow repository](https://github.com/dombrovsky/TaskFlow).
