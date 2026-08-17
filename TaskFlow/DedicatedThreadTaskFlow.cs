@@ -45,9 +45,8 @@ namespace System.Threading.Tasks.Flow
         private readonly Thread _thread;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with default options and an optional name.
+        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with default options and the default thread name.
         /// </summary>
-        /// <param name="name">Optional name for the dedicated thread. If null or empty, uses the class name.</param>
         /// <remarks>
         /// <para>
         /// This constructor uses the default options from <see cref="TaskFlowOptions.Default"/>.
@@ -56,17 +55,41 @@ namespace System.Threading.Tasks.Flow
         /// The task flow immediately creates and starts a dedicated background thread for processing tasks.
         /// </para>
         /// </remarks>
-        public DedicatedThreadTaskFlow(string? name = default)
+        public DedicatedThreadTaskFlow()
+            : this(TaskFlowOptions.Default, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with default options and the specified thread name.
+        /// </summary>
+        /// <param name="name">The dedicated thread name. If <c>null</c> or empty, the class name is used.</param>
+        /// <remarks>
+        /// The task flow immediately creates and starts a dedicated background thread using the default options from
+        /// <see cref="TaskFlowOptions.Default"/>.
+        /// </remarks>
+        public DedicatedThreadTaskFlow(string? name)
             : this(TaskFlowOptions.Default, name)
         {
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with the specified options and an optional name.
+        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with the specified options and the default thread name.
         /// </summary>
         /// <param name="options">The options that configure the behavior of this task flow.</param>
-        /// <param name="name">Optional name for the dedicated thread. If null or empty, uses the class name.</param>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="options"/> is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
+        /// <remarks>The task flow immediately creates and starts a dedicated background thread.</remarks>
+        public DedicatedThreadTaskFlow(TaskFlowOptions options)
+            : this(options, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DedicatedThreadTaskFlow"/> class with the specified options and thread name.
+        /// </summary>
+        /// <param name="options">The options that configure the behavior of this task flow.</param>
+        /// <param name="name">The dedicated thread name. If <c>null</c> or empty, the class name is used.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> is <c>null</c>.</exception>
         /// <remarks>
         /// <para>
         /// The task flow immediately creates and starts a dedicated background thread for processing tasks.
@@ -75,7 +98,7 @@ namespace System.Threading.Tasks.Flow
         /// The thread name is useful for debugging and thread identification in thread dumps or profiling tools.
         /// </para>
         /// </remarks>
-        public DedicatedThreadTaskFlow(TaskFlowOptions options, string? name = default)
+        public DedicatedThreadTaskFlow(TaskFlowOptions options, string? name)
             : base(options)
         {
             _thread = new Thread(ThreadStart)

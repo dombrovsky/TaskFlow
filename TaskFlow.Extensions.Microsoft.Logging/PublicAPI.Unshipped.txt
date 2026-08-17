@@ -1,0 +1,17 @@
+#nullable enable
+System.Threading.Tasks.Flow.LoggingTaskSchedulerExtensions
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.CancellationRequestedLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.CancellationRequestedLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.EnqueuedLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.EnqueuedLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.FailedLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.FailedLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.FinishedLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.FinishedLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.StartedLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.StartedLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.SucceededLogLevel.get -> Microsoft.Extensions.Logging.LogLevel
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.SucceededLogLevel.set -> void
+System.Threading.Tasks.Flow.TaskFlowLoggingOptions.TaskFlowLoggingOptions() -> void
+static System.Threading.Tasks.Flow.LoggingTaskSchedulerExtensions.WithLogging(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, Microsoft.Extensions.Logging.ILogger! logger, System.Action<System.Threading.Tasks.Flow.TaskFlowLoggingOptions!>? configure = null) -> System.Threading.Tasks.Flow.ITaskScheduler!

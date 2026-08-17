@@ -109,7 +109,6 @@ namespace System.Threading.Tasks.Flow
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception of type <typeparamref name="TException"/> occurs. Receives the scheduler instance, the exception, and the operation name annotation if available.</param>
-        /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
         /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions according to the specified parameters.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
@@ -117,7 +116,20 @@ namespace System.Threading.Tasks.Flow
         /// making it convenient for scenarios where operation names are used for error logging and diagnostics.
         /// The error handler receives the scheduler instance, allowing for reactive error handling patterns.
         /// </remarks>
-        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException> errorAction, Func<TException, bool>? errorFilter = null)
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException> errorAction)
+            where TException : Exception
+        {
+            return OnError(taskScheduler, errorAction, null);
+        }
+
+        /// <summary>Creates a scheduler that observes exceptions of the specified type when they satisfy a filter.</summary>
+        /// <typeparam name="TException">The exception type to observe.</typeparam>
+        /// <param name="taskScheduler">The scheduler to decorate.</param>
+        /// <param name="errorAction">The callback that receives the registration scheduler and matching exception.</param>
+        /// <param name="errorFilter">The predicate used to select matching exceptions. A <c>null</c> value observes every exception of the specified type.</param>
+        /// <returns>A scheduler that invokes <paramref name="errorAction"/> for matching failures and then propagates the current failure.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException> errorAction, Func<TException, bool>? errorFilter)
             where TException : Exception
         {
             return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, IOperationAnnotation>(errorFilter ?? DefaultErrorFilter, (scheduler, exception, _) => errorAction(scheduler, exception)));
@@ -129,14 +141,26 @@ namespace System.Threading.Tasks.Flow
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception of type <typeparamref name="TException"/> occurs. Receives only the exception instance.</param>
-        /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
         /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions according to the specified parameters.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This is the simplest error handling overload, suitable for basic error logging or notification scenarios
         /// where scheduler access and annotation context are not needed.
         /// </remarks>
-        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<TException> errorAction, Func<TException, bool>? errorFilter = null)
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<TException> errorAction)
+            where TException : Exception
+        {
+            return OnError(taskScheduler, errorAction, null);
+        }
+
+        /// <summary>Creates a scheduler that observes exceptions of the specified type when they satisfy a filter.</summary>
+        /// <typeparam name="TException">The exception type to observe.</typeparam>
+        /// <param name="taskScheduler">The scheduler to decorate.</param>
+        /// <param name="errorAction">The callback that receives each matching exception.</param>
+        /// <param name="errorFilter">The predicate used to select matching exceptions. A <c>null</c> value observes every exception of the specified type.</param>
+        /// <returns>A scheduler that invokes <paramref name="errorAction"/> for matching failures and then propagates the current failure.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<TException> errorAction, Func<TException, bool>? errorFilter)
             where TException : Exception
         {
             Argument.NotNull(errorAction);
@@ -182,14 +206,26 @@ namespace System.Threading.Tasks.Flow
         /// <typeparam name="TException">The type of exception to handle. Must derive from <see cref="Exception"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception occurs. Receives the scheduler, exception, and operation name annotation.</param>
-        /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
         /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions with operation name context.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// This overload explicitly provides <see cref="OperationNameAnnotation"/> access, making it ideal for
         /// scenarios where operation names are consistently used and needed for error context.
         /// </remarks>
-        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, OperationNameAnnotation?> errorAction, Func<TException, bool>? errorFilter = null)
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, OperationNameAnnotation?> errorAction)
+            where TException : Exception
+        {
+            return OnError(taskScheduler, errorAction, null);
+        }
+
+        /// <summary>Creates a scheduler that observes filtered exceptions with operation-name metadata.</summary>
+        /// <typeparam name="TException">The exception type to observe.</typeparam>
+        /// <param name="taskScheduler">The scheduler to decorate.</param>
+        /// <param name="errorAction">The callback receiving the registration scheduler, matching exception, and captured operation-name annotation.</param>
+        /// <param name="errorFilter">The predicate used to select matching exceptions. A <c>null</c> value observes every exception of the specified type.</param>
+        /// <returns>A scheduler that invokes <paramref name="errorAction"/> for matching failures and then propagates the current failure.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
+        public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, OperationNameAnnotation?> errorAction, Func<TException, bool>? errorFilter)
             where TException : Exception
         {
             return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, OperationNameAnnotation>(errorFilter ?? DefaultErrorFilter, errorAction));
@@ -202,7 +238,6 @@ namespace System.Threading.Tasks.Flow
         /// <typeparam name="TAnnotation">The type of operation annotation to provide to the error handler. Must implement <see cref="IOperationAnnotation"/>.</typeparam>
         /// <param name="taskScheduler">The task scheduler to wrap with error handling.</param>
         /// <param name="errorAction">The action to execute when an exception occurs. Receives the scheduler, exception, and custom annotation.</param>
-        /// <param name="errorFilter">An optional predicate to filter which exceptions should be handled. If <c>null</c>, all exceptions of the specified type are handled.</param>
         /// <returns>An <see cref="ITaskScheduler"/> that observes matching exceptions with custom annotation context.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
@@ -210,7 +245,22 @@ namespace System.Threading.Tasks.Flow
         /// that implements <see cref="IOperationAnnotation"/>. This enables rich contextual error handling
         /// with application-specific metadata.
         /// </remarks>
-        public static ITaskScheduler OnError<TException, TAnnotation>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, TAnnotation?> errorAction, Func<TException, bool>? errorFilter = null)
+        public static ITaskScheduler OnError<TException, TAnnotation>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, TAnnotation?> errorAction)
+            where TException : Exception
+            where TAnnotation : IOperationAnnotation
+        {
+            return OnError(taskScheduler, errorAction, null);
+        }
+
+        /// <summary>Creates a scheduler that observes filtered exceptions with custom annotation metadata.</summary>
+        /// <typeparam name="TException">The exception type to observe.</typeparam>
+        /// <typeparam name="TAnnotation">The captured annotation type supplied to the callback.</typeparam>
+        /// <param name="taskScheduler">The scheduler to decorate.</param>
+        /// <param name="errorAction">The callback receiving the registration scheduler, matching exception, and captured annotation.</param>
+        /// <param name="errorFilter">The predicate used to select matching exceptions. A <c>null</c> value observes every exception of the specified type.</param>
+        /// <returns>A scheduler that invokes <paramref name="errorAction"/> for matching failures and then propagates the current failure.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="taskScheduler"/> or <paramref name="errorAction"/> is <c>null</c>.</exception>
+        public static ITaskScheduler OnError<TException, TAnnotation>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, TAnnotation?> errorAction, Func<TException, bool>? errorFilter)
             where TException : Exception
             where TAnnotation : IOperationAnnotation
         {

@@ -1,0 +1,57 @@
+#nullable enable
+*REMOVED*static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
+*REMOVED*static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
+*REMOVED*static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
+*REMOVED*static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
+*REMOVED*System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(string? name = null) -> void
+*REMOVED*System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options, string? name = null) -> void
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow() -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(string? name) -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options, string? name) -> void
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.UseMiddleware(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.ITaskSchedulerMiddleware! middleware) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.WithAnnotation<TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, TAnnotation! annotation) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.FromException(System.Exception! exception) -> System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+static System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.FromResult(TResult result) -> System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+System.Threading.Tasks.Flow.ITaskSchedulerCompletionMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerCompletionMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult> outcome, System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>! continuation) -> System.Threading.Tasks.ValueTask<System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>>
+System.Threading.Tasks.Flow.ITaskSchedulerEnqueueMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerEnqueueMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>! context, System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>! continuation) -> System.Threading.Tasks.Task<TResult>!
+System.Threading.Tasks.Flow.ITaskSchedulerExecutionMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerExecutionMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>! continuation) -> System.Threading.Tasks.ValueTask<TResult>
+System.Threading.Tasks.Flow.ITaskSchedulerMiddleware
+System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.CallerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.CancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetAnnotation<TAnnotation>() -> TAnnotation?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetLocalState<TState>() -> TState?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetOrCreateLocalState<TState>(System.Func<TState!>! stateFactory) -> TState!
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.State.get -> object?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.WithCancellationToken(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>!
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.CallerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.CancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetAnnotation<TAnnotation>() -> TAnnotation?
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetLocalState<TState>() -> TState?
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetOrCreateLocalState<TState>(System.Func<TState!>! stateFactory) -> TState!
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.State.get -> object?
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.Exception.get -> System.Exception?
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.IsSuccess.get -> bool
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.Result.get -> TResult
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.TaskSchedulerOperationOutcome() -> void
+virtual System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult> outcome) -> System.Threading.Tasks.ValueTask<System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>>
+virtual System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>! context) -> System.Threading.Tasks.Task<TResult>!
+virtual System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context) -> System.Threading.Tasks.ValueTask<TResult>

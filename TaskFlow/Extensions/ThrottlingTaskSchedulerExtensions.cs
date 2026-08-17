@@ -1,5 +1,6 @@
 namespace System.Threading.Tasks.Flow
 {
+    using System.Diagnostics.CodeAnalysis;
     using System.Threading.Tasks.Flow.Annotations;
 
     /// <summary>
@@ -58,6 +59,9 @@ namespace System.Threading.Tasks.Flow
     /// await testScheduler.Enqueue(() => SomeOperation()); // Should succeed
     /// </code>
     /// </example>
+#if !TASKFLOW_EXTENSIONS_TIME
+    [SuppressMessage("ApiDesign", "RS0016:Add public types and members to the declared API", Justification = "This API is conditionally unavailable on netstandard2.0 and predates the shared API baseline.")]
+#endif
     public static class ThrottlingTaskSchedulerExtensions
     {
         /// <summary>
