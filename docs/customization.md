@@ -145,6 +145,8 @@ public sealed class RejectWhenStopping : ITaskSchedulerEnqueueMiddleware
 
 Returning without invoking `continuation` prevents terminal scheduling. This supports rejection and shared-work policies. Invoke the enqueue continuation at most once: the terminal contract represents one submitted operation.
 
+Middleware placement also defines an observation boundary. Enqueue middleware outside a short-circuiting registration observes every submission. Execution and completion middleware inside that registration observes only work that reaches the terminal. For a future shared-work policy, followers may therefore be visible to outer admission metrics while inner execution metrics run once for the shared producer.
+
 `context.CallerCancellationToken` is always the token supplied by the caller. `context.CancellationToken` is the effective producer token currently flowing toward the terminal. To transform only the producer token, pass a copied context onward:
 
 ```csharp
@@ -243,6 +245,18 @@ public sealed class TimingMiddleware :
 The slot is isolated per scheduled operation and per registration. `GetOrCreateLocalState<TState>` creates its value atomically. A different state type cannot later occupy the same registration slot. Registering the same middleware object twice creates two independent slots; registering its phases separately also creates separate slots.
 
 Middleware objects themselves are shared by all operations and must therefore keep any mutable registration-wide state thread-safe. Put operation-specific mutable state in the context slot rather than in middleware instance fields.
+
+### Middleware author invariants
+
+Custom middleware should preserve these composition rules:
+
+- Treat scheduler configuration and contexts as immutable; return a new scheduler snapshot or pass a copied context instead of mutating shared data.
+- Invoke an enqueue continuation zero or one time. A zero-call path must return an explicit result, cancellation, rejection, or shared task.
+- Document execution middleware that invokes its continuation more than once. Every invocation may run all downstream execution middleware and the user operation again within the same terminal queue turn.
+- Pass one final outcome through completion middleware. Forward an existing outcome unchanged unless intentionally replacing its result or exception.
+- Keep registration-wide shared state concurrency-safe and operation-specific state in the registration-local context slot.
+- Do not dispose the terminal scheduler, coordinators, lanes, or other collaborators unless a separate API explicitly transfers their ownership.
+- Preserve the distinction between caller-wait cancellation and producer cancellation when sharing work between callers.
 
 ### Forward-scoped annotations
 
