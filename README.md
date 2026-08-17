@@ -78,6 +78,7 @@ Read [Concepts and lifecycle](https://dombrovsky.github.io/TaskFlow/concepts-and
 
 ## Documentation
 
+- [Choosing TaskFlow](https://dombrovsky.github.io/TaskFlow/choosing-taskflow/)
 - [Getting started](https://dombrovsky.github.io/TaskFlow/getting-started/)
 - [Recipes](https://dombrovsky.github.io/TaskFlow/recipes/)
 - [Extensions](https://dombrovsky.github.io/TaskFlow/extensions/)

@@ -6,6 +6,8 @@ permalink: /semantics-and-pitfalls/
 
 # Semantics and pitfalls
 
+For a first-pass decision on whether these tradeoffs match your scenario, see [Choosing TaskFlow](choosing-taskflow.md).
+
 ## Canceled queued delegates are still invoked
 
 The built-in `TaskFlow`, `DedicatedThreadTaskFlow`, and `CurrentThreadTaskFlow` implementations preserve queue progression by invoking every accepted delegate after its predecessor finishes. If cancellation happened while the operation waited, the delegate receives an already-canceled token.

@@ -8,6 +8,8 @@ permalink: /execution-models/
 
 TaskFlow separates the scheduling contract from the lifetime-owning execution lane. Choose the smallest model that supplies the ordering and thread behavior your component actually needs.
 
+If you are still deciding whether TaskFlow is the right primitive at all, start with [Choosing TaskFlow](choosing-taskflow.md).
+
 ## Standard TaskFlow
 
 `TaskFlow` is the default choice. It serializes operations in FIFO order and schedules them through `TaskFlowOptions.TaskScheduler`, which defaults to `TaskScheduler.Default`.

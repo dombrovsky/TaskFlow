@@ -8,6 +8,8 @@ permalink: /recipes/
 
 These examples use both caller-observed operation tasks and deliberate fire-and-forget submissions whose lifetime is owned by a flow.
 
+If you are choosing between TaskFlow and other primitives, read [Choosing TaskFlow](choosing-taskflow.md) first.
+
 ## Serialize a non-thread-safe resource
 
 ```csharp
