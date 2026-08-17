@@ -36,6 +36,7 @@ Use TaskFlow to:
 
 | Goal | Read |
 |---|---|
+| Decide whether TaskFlow is the right primitive for this problem | [Choosing TaskFlow](choosing-taskflow.md) |
 | Create and dispose a first FIFO lane | [Getting started](getting-started.md) |
 | Understand operation completion and ownership | [Concepts and lifecycle](concepts-and-lifecycle.md) |
 | Avoid cancellation, timeout, and disposal surprises | [Semantics and pitfalls](semantics-and-pitfalls.md) |

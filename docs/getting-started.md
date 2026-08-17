@@ -79,6 +79,7 @@ For built-in flows, cancellation does not remove a queued delegate. When it reac
 
 ## Next steps
 
+- Decide whether TaskFlow fits your case in [Choosing TaskFlow](choosing-taskflow.md).
 - Start from a complete application pattern in [Recipes](recipes.md).
 - Add cancellation and reliability policies through [Extensions](extensions/index.md).
 - Select a different thread or scheduler in [Execution models](execution-models.md).
