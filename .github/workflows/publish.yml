@@ -7,6 +7,7 @@ permissions:
   # Settings > Actions > General must allow GitHub Actions to create pull requests.
   contents: write
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: publish
@@ -87,13 +88,20 @@ jobs:
 
           echo "Validated release tag/version metadata for $VERSION."
 
+      - name: NuGet login (trusted publishing)
+        id: nuget_login
+        uses: NuGet/login@v1
+        with:
+          # nuget.org profile name (not email) used to request the temporary API key.
+          user: ${{ secrets.NUGET_USER }}
+
       - name: Publish packages
         shell: bash
         run: |
           for package in "${{ steps.package.outputs.directory }}"/*.nupkg "${{ steps.package.outputs.directory }}"/*.snupkg; do
             dotnet nuget push "$package" \
               --source "https://api.nuget.org/v3/index.json" \
-              --api-key "${{ secrets.NUGET_API_KEY }}" \
+              --api-key "${{ steps.nuget_login.outputs.NUGET_API_KEY }}" \
               --skip-duplicate
           done
 
