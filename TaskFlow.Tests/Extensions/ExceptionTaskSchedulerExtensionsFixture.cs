@@ -2,6 +2,7 @@ namespace TaskFlow.Tests.Extensions
 {
     using NUnit.Framework;
     using System.Threading.Tasks.Flow;
+    using System.Threading.Tasks.Flow.Annotations;
 
     [TestFixture]
     internal sealed class ExceptionTaskSchedulerExtensionsFixture
@@ -9,6 +10,8 @@ namespace TaskFlow.Tests.Extensions
         private static readonly string[] FooAndGeneric = ["foo", "generic"];
         private static readonly string[] BarAndGeneric = ["bar", "generic"];
         private static readonly string[] Generic = ["generic"];
+        private static readonly string[] InnerAndOuter = ["inner", "outer"];
+        private static readonly string[] InterceptorInnerAndOuter = ["interceptor", "finally", "inner", "outer"];
         private ITaskFlow? _taskFlow;
 
         [TearDown]
@@ -137,6 +140,61 @@ namespace TaskFlow.Tests.Extensions
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Enqueue_InterleavedHandlers_ShouldExecuteInRegistrationOrder(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var handlers = new List<string>();
+            var scheduler = taskFlow
+                .OnError<InvalidOperationException>(_ => handlers.Add("inner"))
+                .WithOperationName("failing-operation")
+                .OnError<Exception>(_ => handlers.Add("outer"));
+
+            var task = scheduler.Enqueue(() => throw new InvalidOperationException("Expected test failure"));
+
+            Assert.That(async () => await task.ConfigureAwait(false), Throws.InvalidOperationException);
+            Assert.That(handlers, Is.EqualTo(InnerAndOuter));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Enqueue_HandlersInterleavedWithInterceptor_ShouldExecuteAfterInterceptorInRegistrationOrder(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var events = new List<string>();
+            var scheduler = taskFlow
+                .OnError<InvalidOperationException>(_ => events.Add("inner"))
+                .Intercept(new ErrorRecordingInterceptor(events))
+                .OnError<Exception>(_ => events.Add("outer"));
+
+            var task = scheduler.Enqueue(() => throw new InvalidOperationException("Expected test failure"));
+
+            Assert.That(async () => await task.ConfigureAwait(false), Throws.InvalidOperationException);
+            Assert.That(events, Is.EqualTo(InterceptorInnerAndOuter));
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Enqueue_AsynchronouslyFailingOperation_ShouldExecuteHandlerAndPropagateOriginalException(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            var expectedException = new InvalidOperationException("Expected test failure");
+            Exception? handledException = null;
+
+            var task = taskFlow
+                .OnError<InvalidOperationException>(exception => handledException = exception)
+                .Enqueue(FailAsync);
+
+            var actualException = Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await task.ConfigureAwait(false));
+            Assert.That(actualException, Is.SameAs(expectedException));
+            Assert.That(handledException, Is.SameAs(expectedException));
+
+            async Task FailAsync()
+            {
+                await Task.Yield();
+                throw expectedException;
+            }
+        }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
         public void OnError_CallbackFailureBecomesOutcomeForLaterHandlers(ITaskFlow taskFlow)
         {
             _taskFlow = taskFlow;
@@ -159,5 +217,49 @@ namespace TaskFlow.Tests.Extensions
             public void OnError(TaskSchedulerInterceptionContext context, Exception exception) { }
             public void OnFinally(TaskSchedulerInterceptionContext context) { }
         }
+
+        [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+        public void Enqueue_Handler_ShouldReceiveOperationAnnotation(ITaskFlow taskFlow)
+        {
+            _taskFlow = taskFlow;
+            OperationNameAnnotation? handledAnnotation = null;
+
+            var task = taskFlow
+                .WithOperationName("failing-operation")
+                .OnError<InvalidOperationException>((_, _, annotation) => handledAnnotation = annotation)
+                .Enqueue(() => throw new InvalidOperationException("Expected test failure"));
+
+            Assert.That(async () => await task.ConfigureAwait(false), Throws.InvalidOperationException);
+            Assert.That(handledAnnotation?.OperationName, Is.EqualTo("failing-operation"));
+        }
+
+        private readonly struct ErrorRecordingInterceptor : ITaskSchedulerInterceptor
+        {
+            private readonly IList<string> _events;
+
+            public ErrorRecordingInterceptor(IList<string> events)
+            {
+                _events = events;
+            }
+
+            public void OnBefore(TaskSchedulerInterceptionContext context)
+            {
+            }
+
+            public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result)
+            {
+            }
+
+            public void OnError(TaskSchedulerInterceptionContext context, Exception exception)
+            {
+                _events.Add("interceptor");
+            }
+
+            public void OnFinally(TaskSchedulerInterceptionContext context)
+            {
+                _events.Add("finally");
+            }
+        }
+
     }
 }
