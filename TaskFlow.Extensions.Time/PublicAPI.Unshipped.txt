@@ -1,3 +1,1 @@
 #nullable enable
-*REMOVED*static System.Threading.Tasks.Flow.ThrottlingTaskSchedulerExtensions.WithDebounce(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.TimeSpan interval, System.TimeProvider? timeProvider = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ThrottlingTaskSchedulerExtensions.WithThrottle(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.TimeSpan interval, System.TimeProvider? timeProvider = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
