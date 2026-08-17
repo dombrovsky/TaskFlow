@@ -137,26 +137,23 @@ namespace System.Threading.Tasks.Flow
         /// </example>
         public static ITaskScheduler CreateCancellationScope(this ITaskScheduler taskScheduler, CancellationToken scopeCancellationToken)
         {
-            return new CancellationScopeTaskSchedulerWrapper(taskScheduler, scopeCancellationToken);
+            Argument.NotNull(taskScheduler);
+            return taskScheduler.UseMiddleware(new CancellationScopeMiddleware(scopeCancellationToken));
         }
 
-        private sealed class CancellationScopeTaskSchedulerWrapper : ITaskScheduler
+        private sealed class CancellationScopeMiddleware : ITaskSchedulerEnqueueMiddleware
         {
-            private readonly ITaskScheduler _baseTaskScheduler;
             private readonly CancellationToken _scopedCancellationToken;
 
-            public CancellationScopeTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, CancellationToken scopedCancellationToken)
+            public CancellationScopeMiddleware(CancellationToken scopedCancellationToken)
             {
-                Argument.NotNull(baseTaskScheduler);
-
-                _baseTaskScheduler = baseTaskScheduler;
                 _scopedCancellationToken = scopedCancellationToken;
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
-                using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _scopedCancellationToken);
-                return await _baseTaskScheduler.Enqueue(taskFunc, state, linkedToken.Token).ConfigureAwait(false);
+                using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _scopedCancellationToken);
+                return await continuation(context.WithCancellationToken(linkedToken.Token)).ConfigureAwait(false);
             }
         }
     }

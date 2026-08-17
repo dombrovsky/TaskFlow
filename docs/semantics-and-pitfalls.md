@@ -58,18 +58,20 @@ Disposal waits for lane completion and suppresses operation failures internally.
 
 Disposal does not propagate an ignored operation's exception. Await or return the task when its outcome belongs to a caller. For intentionally discarded work, handle failures inside the delegate or use a decorator such as `OnError` to report them. `OnError` observes and rethrows, so its diagnostic side effect still runs even when the returned task is deliberately ignored.
 
-## Decorator order changes what a policy sees
+## Middleware order and forward metadata
 
-Decorators wrap from left to right. In this chain, `WithOperationName` is outermost, so its annotation reaches the logging decorator:
+Metadata configures registrations to its right. In this chain, both logging and timeout capture the operation name:
 
 ```csharp
 ITaskScheduler operations = flow
+    .WithOperationName("orders.persist")
     .WithLogging(logger)
-    .WithTimeout(TimeSpan.FromSeconds(10))
-    .WithOperationName("orders.persist");
+    .WithTimeout(TimeSpan.FromSeconds(10));
 ```
 
-Moving `WithOperationName` inside `WithLogging` prevents that logging wrapper from seeing the annotation. Cancellation and error wrappers can likewise observe different failures depending on their order.
+Moving `WithOperationName` after `WithLogging` does not retroactively rename that logging registration. Enqueue middleware is entered newest-first, execution middleware is entered in registration order, and completion middleware processes outcomes in registration order.
+
+Opaque third-party scheduler wrappers remain supported, but each wrapper is a pipeline boundary. Use the public middleware interfaces when cross-decorator phase ordering is required.
 
 ## Value-returning async lambdas can be ambiguous
 

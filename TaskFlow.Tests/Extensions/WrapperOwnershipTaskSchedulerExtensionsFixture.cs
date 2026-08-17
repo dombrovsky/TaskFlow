@@ -24,6 +24,8 @@ namespace TaskFlow.Tests.Extensions
             var cancelPrevious = taskFlow.CreateCancelPrevious();
             var cancellationScope = taskFlow.CreateCancellationScope(CancellationToken.None);
             var intercepted = taskFlow.Intercept(new NoOpAsyncInterceptorFactory());
+            var annotated = taskFlow.WithOperationName("non-owning");
+            var middleware = taskFlow.UseMiddleware(new NoOpMiddleware());
 
             Assert.That(timeout, Is.Not.InstanceOf<IDisposable>());
             Assert.That(timeout, Is.Not.InstanceOf<IAsyncDisposable>());
@@ -39,6 +41,12 @@ namespace TaskFlow.Tests.Extensions
 
             Assert.That(intercepted, Is.Not.InstanceOf<IDisposable>());
             Assert.That(intercepted, Is.Not.InstanceOf<IAsyncDisposable>());
+
+            Assert.That(annotated, Is.Not.InstanceOf<IDisposable>());
+            Assert.That(annotated, Is.Not.InstanceOf<IAsyncDisposable>());
+
+            Assert.That(middleware, Is.Not.InstanceOf<IDisposable>());
+            Assert.That(middleware, Is.Not.InstanceOf<IAsyncDisposable>());
         }
 
         private sealed class NoOpAsyncInterceptorFactory : IAsyncTaskSchedulerInterceptor
@@ -69,6 +77,14 @@ namespace TaskFlow.Tests.Extensions
             public ValueTask OnSuccessAsync<TResult>(TaskSchedulerInterceptionContext context, TResult result)
             {
                 return default;
+            }
+        }
+
+        private sealed class NoOpMiddleware : ITaskSchedulerExecutionMiddleware
+        {
+            public ValueTask<TResult> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerExecutionDelegate<TResult> continuation)
+            {
+                return continuation(context);
             }
         }
     }

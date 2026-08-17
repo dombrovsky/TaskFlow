@@ -8,19 +8,19 @@ permalink: /extensions/observability/
 
 ## Operation names
 
-`WithOperationName` attaches an `OperationNameAnnotation` to submissions. Place it outside consumers such as logging or timeout so they can read the annotation.
+`WithOperationName` adds forward-scoped metadata. Place it before consumers such as logging or timeout so those registrations capture the name.
 
 ```csharp
 ITaskScheduler named = flow
-    .WithLogging(logger)
-    .WithOperationName("orders.persist");
+    .WithOperationName("orders.persist")
+    .WithLogging(logger);
 
 await named.Enqueue(token => PersistAsync(token));
 
 static Task PersistAsync(CancellationToken token) => Task.CompletedTask;
 ```
 
-Decorator order is observable: `flow.WithOperationName(...).WithLogging(logger)` places logging outside the annotation and therefore does not provide that name to the logging wrapper.
+Later annotations never change middleware that is already registered. Replacing an annotation type affects subsequent registrations and the final operation only, so immutable branches can carry independent metadata.
 
 ## Microsoft logging
 
@@ -32,6 +32,7 @@ dotnet add package TaskFlow.Microsoft.Extensions.Logging
 
 ```csharp
 ITaskScheduler logged = flow
+    .WithOperationName("imports.run")
     .WithLogging(logger, options =>
     {
         options.EnqueuedLogLevel = LogLevel.Debug;
@@ -39,8 +40,7 @@ ITaskScheduler logged = flow
         options.SucceededLogLevel = LogLevel.Information;
         options.FailedLogLevel = LogLevel.Error;
         options.FinishedLogLevel = LogLevel.Debug;
-    })
-    .WithOperationName("imports.run");
+    });
 
 await logged.Enqueue(token => ImportAsync(token));
 
@@ -67,3 +67,7 @@ Callbacks run inside the selected scheduler context. A callback failure faults t
 ## Ownership
 
 Annotations, interception, and logging are scheduler decorators. They neither own nor dispose the underlying flow. Keep the original `ITaskFlow` and dispose it at the component boundary.
+
+## Middleware ordering
+
+TaskFlow registrations have distinct phases. Enqueue middleware handles admission, timeout, and cancellation before the terminal scheduler. Execution middleware surrounds the operation on the selected scheduler context. Completion middleware processes the resulting success or failure in registration order. An execution failure therefore reaches interception error/finally callbacks before `OnError` completion callbacks.

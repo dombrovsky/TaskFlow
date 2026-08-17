@@ -183,30 +183,27 @@ namespace System.Threading.Tasks.Flow
         /// </example>
         public static ITaskScheduler CreateCancelPrevious(this ITaskScheduler taskScheduler)
         {
-            return new CancelPreviousTaskSchedulerWrapper(taskScheduler);
+            Argument.NotNull(taskScheduler);
+            return taskScheduler.UseMiddleware(new CancelPreviousMiddleware());
         }
 
-        private sealed class CancelPreviousTaskSchedulerWrapper : ITaskScheduler
+        private sealed class CancelPreviousMiddleware : ITaskSchedulerEnqueueMiddleware
         {
-            private readonly ITaskScheduler _baseTaskScheduler;
             private readonly CancelAllTokensAllocator _cancelAllTokensAllocator;
 
-            public CancelPreviousTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler)
+            public CancelPreviousMiddleware()
             {
-                Argument.NotNull(baseTaskScheduler);
-
-                _baseTaskScheduler = baseTaskScheduler;
                 _cancelAllTokensAllocator = new CancelAllTokensAllocator();
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
                 _cancelAllTokensAllocator.Cancel();
 
                 using (_cancelAllTokensAllocator.AllocateCancellationToken(out var allocatedToken))
                 {
-                    using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, allocatedToken);
-                    return await _baseTaskScheduler.Enqueue(taskFunc, state, linkedToken.Token).ConfigureAwait(false);
+                    using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, allocatedToken);
+                    return await continuation(context.WithCancellationToken(linkedToken.Token)).ConfigureAwait(false);
                 }
             }
         }

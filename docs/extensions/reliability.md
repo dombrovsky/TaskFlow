@@ -6,6 +6,8 @@ permalink: /extensions/reliability/
 
 # Reliability extensions
 
+Timeout and throttle run in the enqueue phase, so timeout still includes queue waiting and throttle still rejects before a terminal queue turn is consumed. Failures produced before scheduled execution pass through completion middleware once, but no terminal thread or synchronization-context affinity can be promised for those admission failures.
+
 ## Timeout
 
 `WithTimeout` applies one budget to queue waiting and delegate execution. It throws `TimeoutException` when the timer wins and requests cancellation of the underlying operation.

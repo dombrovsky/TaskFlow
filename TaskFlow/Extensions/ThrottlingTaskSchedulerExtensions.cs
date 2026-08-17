@@ -126,12 +126,12 @@ namespace System.Threading.Tasks.Flow
         /// </example>
         public static ITaskScheduler WithThrottle(this ITaskScheduler taskScheduler, TimeSpan interval, TimeProvider? timeProvider = null)
         {
-            return new ThrottleTaskSchedulerWrapper(taskScheduler, timeProvider ?? TimeProvider.System, interval);
+            Argument.NotNull(taskScheduler);
+            return taskScheduler.UseMiddleware(new ThrottleMiddleware(timeProvider ?? TimeProvider.System, interval));
         }
 
-        private sealed class ThrottleTaskSchedulerWrapper : ITaskScheduler
+        private sealed class ThrottleMiddleware : ITaskSchedulerEnqueueMiddleware
         {
-            private readonly ITaskScheduler _baseTaskScheduler;
             private readonly TimeProvider _timeProvider;
             private readonly TimeSpan _interval;
             private readonly object _lastAdmissionLock;
@@ -139,19 +139,17 @@ namespace System.Threading.Tasks.Flow
             private long _lastAdmissionTimestamp;
             private bool _hasAdmission;
 
-            public ThrottleTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, TimeProvider timeProvider, TimeSpan interval)
+            public ThrottleMiddleware(TimeProvider timeProvider, TimeSpan interval)
             {
-                Argument.NotNull(baseTaskScheduler);
                 Argument.NotNull(timeProvider);
                 Argument.Assert(interval, ts => ts > TimeSpan.Zero, "Interval should be greater than zero");
 
-                _baseTaskScheduler = baseTaskScheduler;
                 _interval = interval;
                 _timeProvider = timeProvider;
                 _lastAdmissionLock = new object();
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
                 lock (_lastAdmissionLock)
                 {
@@ -166,7 +164,7 @@ namespace System.Threading.Tasks.Flow
                     _hasAdmission = true;
                 }
 
-                return await _baseTaskScheduler.Enqueue(taskFunc, state, cancellationToken).ConfigureAwait(false);
+                return continuation(context);
             }
         }
     }

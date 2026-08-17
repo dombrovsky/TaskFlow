@@ -212,43 +212,38 @@ namespace System.Threading.Tasks.Flow
         /// </example>
         public static ITaskScheduler WithTimeout(this ITaskScheduler taskScheduler, TimeSpan timeout)
         {
-            return new TimeoutTaskSchedulerWrapper(taskScheduler, timeout);
+            Argument.NotNull(taskScheduler);
+            return taskScheduler.UseMiddleware(new TimeoutMiddleware(timeout));
         }
 
-        private sealed class TimeoutTaskSchedulerWrapper : ITaskScheduler
+        private sealed class TimeoutMiddleware : ITaskSchedulerEnqueueMiddleware
         {
-            private readonly ITaskScheduler _baseTaskScheduler;
             private readonly TimeSpan _timeout;
 
-            public TimeoutTaskSchedulerWrapper(ITaskScheduler baseTaskScheduler, TimeSpan timeout)
+            public TimeoutMiddleware(TimeSpan timeout)
             {
-                Argument.NotNull(baseTaskScheduler);
                 Argument.Assert(timeout, t => t > TimeSpan.Zero && t.TotalMilliseconds <= int.MaxValue || t == Timeout.InfiniteTimeSpan, "Wrong timeout value");
-
-                _baseTaskScheduler = baseTaskScheduler;
                 _timeout = timeout;
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
-                return await Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, cancellationToken).ConfigureAwait(false);
+                return await Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, context.CancellationToken).ConfigureAwait(false);
 
-                async Task<T> TimeoutAsync(CancellationToken token)
+                async Task<TResult> TimeoutAsync(CancellationToken token)
                 {
                     await Task.Delay(_timeout, token).ConfigureAwait(false);
                     throw new TimeoutException(FormatExceptionMessage());
                 }
 
-                async Task<T> EnqueueInternalAsync(CancellationToken token)
+                Task<TResult> EnqueueInternalAsync(CancellationToken token)
                 {
-                    return await _baseTaskScheduler.Enqueue(taskFunc, state, token).ConfigureAwait(false);
+                    return continuation(context.WithCancellationToken(token));
                 }
 
                 string FormatExceptionMessage()
                 {
-                    var operationName = (state as ExtendedState)
-                        .Unwrap<OperationNameAnnotation>()
-                        .FirstOrDefault()?.OperationName;
+                    var operationName = context.GetAnnotation<OperationNameAnnotation>()?.OperationName;
 
                     return operationName == null
                         ? string.Format(CultureInfo.InvariantCulture, "Operation has timed out in {0}", _timeout)

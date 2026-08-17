@@ -111,7 +111,7 @@ namespace System.Threading.Tasks.Flow
         {
             Argument.NotEmpty(operationName);
 
-            return taskScheduler.WithExtendedState(new OperationNameAnnotation( operationName));
+            return taskScheduler.WithAnnotation(new OperationNameAnnotation(operationName));
         }
 
         /// <summary>
@@ -180,11 +180,10 @@ namespace System.Threading.Tasks.Flow
             Argument.NotNull(taskScheduler);
             Argument.NotNull(taskFunc);
 
-            var annotation = (state as ExtendedState)
-                .Unwrap<TAnnotation>()
-                .FirstOrDefault();
-
-            return taskScheduler.Enqueue((s, c) => taskFunc(s, annotation, c), state, cancellationToken);
+            return taskScheduler.EnqueueWithContext(
+                context => taskFunc(context.State, context.GetAnnotation<TAnnotation>(), context.CancellationToken),
+                state,
+                cancellationToken);
         }
     }
 }

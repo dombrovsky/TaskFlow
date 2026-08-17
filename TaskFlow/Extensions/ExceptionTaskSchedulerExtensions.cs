@@ -120,7 +120,7 @@ namespace System.Threading.Tasks.Flow
         public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException> errorAction, Func<TException, bool>? errorFilter = null)
             where TException : Exception
         {
-            return new AnnotatedExceptionTaskSchedulerWrapper<TException, IOperationAnnotation>(taskScheduler, errorFilter ?? DefaultErrorFilter, (scheduler, exception, _) => errorAction(scheduler, exception));
+            return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, IOperationAnnotation>(errorFilter ?? DefaultErrorFilter, (scheduler, exception, _) => errorAction(scheduler, exception)));
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace System.Threading.Tasks.Flow
         {
             Argument.NotNull(errorAction);
 
-            return new AnnotatedExceptionTaskSchedulerWrapper<TException, IOperationAnnotation>(taskScheduler, errorFilter ?? DefaultErrorFilter, (_, exception, _) => errorAction(exception));
+            return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, IOperationAnnotation>(errorFilter ?? DefaultErrorFilter, (_, exception, _) => errorAction(exception)));
         }
 
         /// <summary>
@@ -192,7 +192,7 @@ namespace System.Threading.Tasks.Flow
         public static ITaskScheduler OnError<TException>(this ITaskScheduler taskScheduler, Action<ITaskScheduler, TException, OperationNameAnnotation?> errorAction, Func<TException, bool>? errorFilter = null)
             where TException : Exception
         {
-            return new AnnotatedExceptionTaskSchedulerWrapper<TException, OperationNameAnnotation>(taskScheduler, errorFilter ?? DefaultErrorFilter, errorAction);
+            return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, OperationNameAnnotation>(errorFilter ?? DefaultErrorFilter, errorAction));
         }
 
         /// <summary>
@@ -214,7 +214,7 @@ namespace System.Threading.Tasks.Flow
             where TException : Exception
             where TAnnotation : IOperationAnnotation
         {
-            return new AnnotatedExceptionTaskSchedulerWrapper<TException, TAnnotation>(taskScheduler, errorFilter ?? DefaultErrorFilter, errorAction);
+            return taskScheduler.UseMiddleware(new AnnotatedExceptionMiddleware<TException, TAnnotation>(errorFilter ?? DefaultErrorFilter, errorAction));
         }
 
         private static bool DefaultErrorFilter<TException>(TException _)
@@ -223,47 +223,45 @@ namespace System.Threading.Tasks.Flow
             return true;
         }
 
-        private sealed class AnnotatedExceptionTaskSchedulerWrapper<TException, TAnnotation> : ITaskScheduler
+        private sealed class AnnotatedExceptionMiddleware<TException, TAnnotation> : ITaskSchedulerCompletionMiddleware
             where TException : Exception
             where TAnnotation : IOperationAnnotation
         {
-            private readonly ITaskScheduler _baseTaskScheduler;
             private readonly Func<TException, bool> _errorFilter;
             private readonly Action<ITaskScheduler, TException, TAnnotation?> _errorAction;
 
-            public AnnotatedExceptionTaskSchedulerWrapper(
-                ITaskScheduler baseTaskScheduler,
+            public AnnotatedExceptionMiddleware(
                 Func<TException, bool> errorFilter,
                 Action<ITaskScheduler, TException, TAnnotation?> errorAction)
             {
-                Argument.NotNull(baseTaskScheduler);
                 Argument.NotNull(errorFilter);
                 Argument.NotNull(errorAction);
 
-                _baseTaskScheduler = baseTaskScheduler;
                 _errorFilter = errorFilter;
                 _errorAction = errorAction;
             }
 
-            public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+            public async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
+                TaskSchedulerOperationContext context,
+                TaskSchedulerOperationOutcome<TResult> outcome,
+                TaskSchedulerCompletionDelegate<TResult> continuation)
             {
                 TAnnotation? annotation = default;
                 if (!typeof(TAnnotation).IsInterface)
                 {
-                    annotation = (state as ExtendedState)
-                        .Unwrap<TAnnotation>()
-                        .FirstOrDefault();
+                    var value = context.GetAnnotation(typeof(TAnnotation));
+                    if (value != null)
+                    {
+                        annotation = (TAnnotation)value;
+                    }
                 }
 
-                try
+                if (outcome.Exception is TException exception && _errorFilter(exception))
                 {
-                    return await _baseTaskScheduler.Enqueue(taskFunc, state, cancellationToken).ConfigureAwait(false);
+                    _errorAction(context.Scheduler, exception, annotation);
                 }
-                catch (TException exception) when (_errorFilter(exception))
-                {
-                    _errorAction(this, exception, annotation);
-                    throw;
-                }
+
+                return await continuation(context, outcome).ConfigureAwait(true);
             }
         }
     }

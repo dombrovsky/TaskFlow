@@ -75,8 +75,8 @@ namespace TaskFlow.Tests.Extensions
             _taskFlow = taskFlow;
 
             var task = taskFlow
-                .WithTimeout(TimeSpan.FromMilliseconds(100))
                 .WithOperationName("inner")
+                .WithTimeout(TimeSpan.FromMilliseconds(100))
                 .CreateCancelPrevious()
                 .WithOperationName("outer")
                 .Enqueue(
@@ -88,7 +88,7 @@ namespace TaskFlow.Tests.Extensions
                     42,
                     CancellationToken.None);
 
-            Assert.That(async () => await task.ConfigureAwait(false), Throws.InstanceOf<TimeoutException>().With.Message.Contain("outer"));
+            Assert.That(async () => await task.ConfigureAwait(false), Throws.InstanceOf<TimeoutException>().With.Message.Contain("inner"));
         }
 
         [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
