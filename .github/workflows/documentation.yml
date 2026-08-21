@@ -48,6 +48,9 @@ jobs:
           source: ./docs
           destination: ./_site
 
+      - name: Verify analytics is included
+        run: grep -Fq 'data-goatcounter="https://dombrovsky.goatcounter.com/count"' ./_site/index.html
+
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
