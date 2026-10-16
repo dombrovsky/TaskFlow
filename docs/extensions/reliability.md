@@ -32,6 +32,14 @@ static Task RefreshAsync(CancellationToken token) => Task.CompletedTask;
 
 The clock starts when `Enqueue` reaches the timeout wrapper, not when the delegate starts. On a busy built-in flow, the returned task can time out while waiting. The queued delegate is then invoked later with an already-canceled token. If it ignores cancellation, it can continue and hold the lane even though the caller already received `TimeoutException`.
 
+On .NET 8 and .NET 10, pass a `TimeProvider` to control timeout delays, for example with `FakeTimeProvider` in tests:
+
+```csharp
+ITaskScheduler bounded = flow.WithTimeout(TimeSpan.FromSeconds(30), timeProvider);
+```
+
+Omitting the provider or passing `null` uses `TimeProvider.System`. The `netstandard2.0` asset retains `WithTimeout(TimeSpan)` with system-clock delays; the provider overload is available only on .NET 8 and later.
+
 ## Error observation
 
 `OnError<TException>` runs an action for matching exceptions and then rethrows so the returned task preserves failure.

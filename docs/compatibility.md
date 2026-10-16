@@ -17,6 +17,8 @@ permalink: /compatibility/
 
 The core package includes `WithThrottle` when targeting .NET 8 or .NET 10. Its `netstandard2.0` asset omits that source because `TimeProvider` is not part of the target framework. Install `TaskFlow.Extensions.Time` in a `netstandard2.0` consumer to receive the same public API through `Microsoft.Bcl.TimeProvider`.
 
+The `WithTimeout(TimeSpan, TimeProvider?)` overload is available in the core package on .NET 8 and .NET 10. The existing `WithTimeout(TimeSpan)` overload remains available on all targets.
+
 ## Language and runtime use
 
 The packages can be consumed from compatible target frameworks regardless of the repository's build SDK. Repository builds currently use the .NET 10 SDK, and the test projects execute against .NET 8 and .NET 10.
