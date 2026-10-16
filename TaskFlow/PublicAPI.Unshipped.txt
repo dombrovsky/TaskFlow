@@ -1,1 +1,68 @@
 #nullable enable
+System.Threading.Tasks.Flow.AdmissionRejectedException
+System.Threading.Tasks.Flow.AdmissionRejectedException.AdmissionRejectedException() -> void
+System.Threading.Tasks.Flow.AdmissionRejectedException.AdmissionRejectedException(System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult result) -> void
+System.Threading.Tasks.Flow.AdmissionRejectedException.AdmissionRejectedException(string! message) -> void
+System.Threading.Tasks.Flow.AdmissionRejectedException.AdmissionRejectedException(string! message, System.Exception! innerException) -> void
+System.Threading.Tasks.Flow.AdmissionRejectedException.Result.get -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.BoundedAdmissionController
+System.Threading.Tasks.Flow.BoundedAdmissionController.BoundedAdmissionController(System.Threading.Tasks.Flow.BoundedAdmissionOptions! options) -> void
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Action! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Action! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.Task!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.Task!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.ValueTask>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.ValueTask>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<T>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<T>! taskFunc, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionController.Submit<T>(System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode admissionMode, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>!
+System.Threading.Tasks.Flow.BoundedAdmissionOptions
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.AdmissionMode.get -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.AdmissionMode.set -> void
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.BoundedAdmissionOptions() -> void
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.Capacity.get -> int
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.Capacity.set -> void
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.CapacityMode.get -> System.Threading.Tasks.Flow.TaskSchedulerCapacityMode
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.CapacityMode.set -> void
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.MaxAdmissionWaiters.get -> int?
+System.Threading.Tasks.Flow.BoundedAdmissionOptions.MaxAdmissionWaiters.set -> void
+System.Threading.Tasks.Flow.BoundedAdmissionTaskSchedulerExtensions
+System.Threading.Tasks.Flow.ITaskSchedulerMiddlewareFactory
+System.Threading.Tasks.Flow.ITaskSchedulerMiddlewareFactory.Create(System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime! lifetime) -> System.Threading.Tasks.Flow.ITaskSchedulerMiddleware!
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode.Reject = 1 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode.Wait = 0 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionMode
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult.Accepted = 0 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult.Closed = 3 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult.Full = 1 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult.WaiterLimitReached = 2 -> System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult
+System.Threading.Tasks.Flow.TaskSchedulerCapacityMode
+System.Threading.Tasks.Flow.TaskSchedulerCapacityMode.Outstanding = 0 -> System.Threading.Tasks.Flow.TaskSchedulerCapacityMode
+System.Threading.Tasks.Flow.TaskSchedulerCapacityMode.Pending = 1 -> System.Threading.Tasks.Flow.TaskSchedulerCapacityMode
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.DisposeAsync() -> System.Threading.Tasks.ValueTask
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.StoppingToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.TaskSchedulerMiddlewareLifetime() -> void
+System.Threading.Tasks.Flow.TaskSchedulerSubmission
+System.Threading.Tasks.Flow.TaskSchedulerSubmission.Admission.get -> System.Threading.Tasks.Task<System.Threading.Tasks.Flow.TaskSchedulerAdmissionResult>!
+System.Threading.Tasks.Flow.TaskSchedulerSubmission.Completion.get -> System.Threading.Tasks.Task!
+System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>
+System.Threading.Tasks.Flow.TaskSchedulerSubmission<T>.Completion.get -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.BoundedAdmissionTaskSchedulerExtensions.WithBoundedAdmission(this System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Threading.Tasks.Flow.BoundedAdmissionController! admission) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.BoundedAdmissionTaskSchedulerExtensions.WithBoundedAdmission(this System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Threading.Tasks.Flow.BoundedAdmissionController! admission, System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime! lifetime) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.BoundedAdmissionTaskSchedulerExtensions.WithBoundedAdmission(this System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Threading.Tasks.Flow.BoundedAdmissionOptions! options) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.UseMiddleware(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.ITaskSchedulerMiddlewareFactory! factory) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.UseMiddleware(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.ITaskSchedulerMiddlewareFactory! factory, System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime! lifetime) -> System.Threading.Tasks.Flow.ITaskScheduler!

@@ -12,6 +12,7 @@ Extensions return `ITaskScheduler` decorators. They do not own or dispose the sc
 |---|---|---|---|
 | `CreateCancelPrevious` | `TaskFlow`; all targets | Cancels older unfinished submissions | [Cancellation](cancellation.md) |
 | `CreateCancellationScope` | `TaskFlow`; all targets | Links a shared lifetime token | [Cancellation](cancellation.md) |
+| `WithBoundedAdmission` | `TaskFlow`; all targets | Limits pending or outstanding operations with waiting or rejection | [Bounded admission](admission.md) |
 | `WithTimeout` | `TaskFlow`; all targets | Adds a queue-and-execution timeout | [Reliability](reliability.md) |
 | `WithThrottle` | `TaskFlow` on .NET 8/10; `TaskFlow.Extensions.Time` on `netstandard2.0` | Rejects submissions inside an admission interval | [Reliability](reliability.md) |
 | `OnError` | `TaskFlow`; all targets | Observes matching failures and rethrows | [Reliability](reliability.md) |
