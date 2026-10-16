@@ -1,38 +1,37 @@
-namespace System.Threading.Tasks.Flow.Internal
+namespace System.Threading.Tasks.Flow.Internal;
+
+using System.Threading.Tasks.Flow.Annotations;
+
+internal sealed class TaskFlowWrapper : ITaskFlow
 {
-    using System.Threading.Tasks.Flow.Annotations;
+    private readonly ITaskFlow _taskFlow;
 
-    internal sealed class TaskFlowWrapper : ITaskFlow
+    public TaskFlowWrapper(ITaskFlow taskFlow)
     {
-        private readonly ITaskFlow _taskFlow;
+        Argument.NotNull(taskFlow);
 
-        public TaskFlowWrapper(ITaskFlow taskFlow)
-        {
-            Argument.NotNull(taskFlow);
+        _taskFlow = taskFlow;
+    }
 
-            _taskFlow = taskFlow;
-        }
+    public TaskFlowOptions Options => _taskFlow.Options;
 
-        public TaskFlowOptions Options => _taskFlow.Options;
+    public ValueTask DisposeAsync()
+    {
+        return _taskFlow.DisposeAsync();
+    }
 
-        public ValueTask DisposeAsync()
-        {
-            return _taskFlow.DisposeAsync();
-        }
+    public void Dispose()
+    {
+        _taskFlow.Dispose();
+    }
 
-        public void Dispose()
-        {
-            _taskFlow.Dispose();
-        }
+    public bool Dispose(TimeSpan timeout)
+    {
+        return _taskFlow.Dispose(timeout);
+    }
 
-        public bool Dispose(TimeSpan timeout)
-        {
-            return _taskFlow.Dispose(timeout);
-        }
-
-        public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
-        {
-            return _taskFlow.Enqueue(taskFunc, state, cancellationToken);
-        }
+    public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+    {
+        return _taskFlow.Enqueue(taskFunc, state, cancellationToken);
     }
 }

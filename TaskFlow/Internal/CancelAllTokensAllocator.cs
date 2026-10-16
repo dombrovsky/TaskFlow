@@ -1,49 +1,48 @@
-namespace System.Threading.Tasks.Flow.Internal
+namespace System.Threading.Tasks.Flow.Internal;
+
+using System.Collections.Generic;
+using System.Linq;
+
+internal sealed class CancelAllTokensAllocator
 {
-    using System.Collections.Generic;
-    using System.Linq;
+    private readonly object _allocatedTokensLock;
+    private readonly HashSet<CancellationTokenSource> _allocatedCancellationTokenSources;
 
-    internal sealed class CancelAllTokensAllocator
+    public CancelAllTokensAllocator()
     {
-        private readonly object _allocatedTokensLock;
-        private readonly HashSet<CancellationTokenSource> _allocatedCancellationTokenSources;
+        _allocatedTokensLock = new object();
+        _allocatedCancellationTokenSources = new HashSet<CancellationTokenSource>();
+    }
 
-        public CancelAllTokensAllocator()
+    public IDisposable AllocateCancellationToken(out CancellationToken token)
+    {
+        var cts = new CancellationTokenSource();
+        token = cts.Token;
+
+        lock (_allocatedTokensLock)
         {
-            _allocatedTokensLock = new object();
-            _allocatedCancellationTokenSources = new HashSet<CancellationTokenSource>();
+            _allocatedCancellationTokenSources.Add(cts);
         }
 
-        public IDisposable AllocateCancellationToken(out CancellationToken token)
+        return Disposable.Create(() =>
         {
-            var cts = new CancellationTokenSource();
-            token = cts.Token;
-
             lock (_allocatedTokensLock)
             {
-                _allocatedCancellationTokenSources.Add(cts);
+                cts.Dispose();
+                _allocatedCancellationTokenSources.Remove(cts);
             }
+        });
+    }
 
-            return Disposable.Create(() =>
-            {
-                lock (_allocatedTokensLock)
-                {
-                    cts.Dispose();
-                    _allocatedCancellationTokenSources.Remove(cts);
-                }
-            });
-        }
-
-        public void Cancel()
+    public void Cancel()
+    {
+        lock (_allocatedTokensLock)
         {
-            lock (_allocatedTokensLock)
-            {
-                var tokenSourcesCopy = _allocatedCancellationTokenSources.ToArray();
+            var tokenSourcesCopy = _allocatedCancellationTokenSources.ToArray();
 
-                foreach (var tokenSource in tokenSourcesCopy)
-                {
-                    tokenSource.Cancel();
-                }
+            foreach (var tokenSource in tokenSourcesCopy)
+            {
+                tokenSource.Cancel();
             }
         }
     }
