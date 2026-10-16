@@ -1,5 +1,6 @@
 namespace TaskFlow.Tests.Extensions;
 
+using Microsoft.Extensions.Time.Testing;
 using NUnit.Framework;
 using System.Threading.Tasks.Flow;
 
@@ -8,7 +9,6 @@ internal sealed class TimeoutTaskSchedulerExtensionsFixture
 {
     private static readonly string[] CompletionBoundaryOutcomes = ["success", "timeout"];
     private static readonly string[] CancellationBoundaryOutcomes = ["canceled", "timeout"];
-
     private ITaskFlow? _taskFlow;
 
     [TearDown]
@@ -156,6 +156,84 @@ internal sealed class TimeoutTaskSchedulerExtensionsFixture
 
         Assert.That(outcomes, Is.Not.Empty);
         Assert.That(outcomes, Is.SubsetOf(CancellationBoundaryOutcomes));
+    }
+
+    [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+    public async Task Timeout_WithFakeTime_ShouldExpireAndCancelOperation(ITaskFlow taskFlow)
+    {
+        _taskFlow = taskFlow;
+        var clock = new FakeTimeProvider();
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = taskFlow.WithOperationName("fake-clock").WithTimeout(TimeSpan.FromSeconds(30), clock)
+            .Enqueue(token =>
+            {
+                started.SetResult(token);
+                return Task.Delay(Timeout.InfiniteTimeSpan, token);
+            });
+        var operationToken = await started.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        clock.Advance(TimeSpan.FromSeconds(29));
+        Assert.That(task.IsCompleted, Is.False);
+        clock.Advance(TimeSpan.FromSeconds(1));
+
+        await Assert.ThatAsync(async () => await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false),
+            Throws.TypeOf<TimeoutException>().With.Message.Contain("fake-clock")).ConfigureAwait(false);
+        Assert.That(operationToken.IsCancellationRequested, Is.True);
+    }
+
+    [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+    public async Task Timeout_WithFakeTime_ShouldPreserveExternalCancellation(ITaskFlow taskFlow)
+    {
+        _taskFlow = taskFlow;
+        var clock = new FakeTimeProvider();
+        using var cts = new CancellationTokenSource();
+        var task = taskFlow.WithTimeout(TimeSpan.FromSeconds(30), clock)
+            .Enqueue(token => Task.Delay(Timeout.InfiniteTimeSpan, token), cts.Token);
+
+        await cts.CancelAsync().ConfigureAwait(false);
+        await Assert.ThatAsync(async () => await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false),
+            Throws.InstanceOf<OperationCanceledException>()).ConfigureAwait(false);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.That(task.IsCanceled, Is.True);
+    }
+
+    [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+    public async Task InfiniteTimeout_WithFakeTime_ShouldAllowCompletion(ITaskFlow taskFlow)
+    {
+        _taskFlow = taskFlow;
+        var clock = new FakeTimeProvider();
+        var completion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = taskFlow.WithTimeout(Timeout.InfiniteTimeSpan, clock).Enqueue(() => completion.Task);
+
+        clock.Advance(TimeSpan.FromDays(365));
+        Assert.That(task.IsCompleted, Is.False);
+        completion.SetResult(42);
+        Assert.That(await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false), Is.EqualTo(42));
+    }
+
+    [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+    public async Task Timeout_WithNullProvider_ShouldAllowCompletion(ITaskFlow taskFlow)
+    {
+        _taskFlow = taskFlow;
+        var task = taskFlow.WithTimeout(TimeSpan.FromSeconds(30), null).Enqueue(() => 42);
+        Assert.That(await task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false), Is.EqualTo(42));
+    }
+
+    [TestCaseSource(typeof(TaskFlows), nameof(TaskFlows.CreateTaskFlows))]
+    public async Task Timeout_WithFakeTime_ShouldPreserveCompletedResultsAndExceptions(ITaskFlow taskFlow)
+    {
+        _taskFlow = taskFlow;
+        var clock = new FakeTimeProvider();
+        var scheduler = taskFlow.WithTimeout(TimeSpan.FromSeconds(30), clock);
+        var result = await scheduler.Enqueue(() => 42).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        var error = new InvalidOperationException("operation failed");
+        var failed = scheduler.Enqueue(() => Task.FromException<int>(error));
+
+        await Assert.ThatAsync(async () => await failed.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false),
+            Throws.Exception.SameAs(error)).ConfigureAwait(false);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        Assert.That(result, Is.EqualTo(42));
+        Assert.That(failed.IsFaulted, Is.True);
     }
 
     private static async Task<string> ClassifyBoundaryResult<T>(Task<T> task)

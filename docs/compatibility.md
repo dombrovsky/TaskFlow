@@ -11,11 +11,13 @@ permalink: /compatibility/
 | Package | Target frameworks | Purpose |
 |---|---|---|
 | `TaskFlow` | `netstandard2.0`, `net8.0`, `net10.0` | Core flows, scheduler contracts, cancellation, timeout, error observation, annotations, and interception |
-| `TaskFlow.Extensions.Time` | `netstandard2.0` | `WithThrottle` for older targets using `Microsoft.Bcl.TimeProvider` |
+| `TaskFlow.Extensions.Time` | `netstandard2.0` | `WithThrottle` and `WithTimeout(TimeSpan, TimeProvider?)` for older targets using `Microsoft.Bcl.TimeProvider` |
 | `TaskFlow.Microsoft.Extensions.DependencyInjection` | `netstandard2.0`, `net8.0`, `net10.0` | Scoped and named flow registration and factories |
 | `TaskFlow.Microsoft.Extensions.Logging` | `netstandard2.0`, `net8.0`, `net10.0` | Structured operation lifecycle logging |
 
 The core package includes `WithThrottle` when targeting .NET 8 or .NET 10. Its `netstandard2.0` asset omits that source because `TimeProvider` is not part of the target framework. Install `TaskFlow.Extensions.Time` in a `netstandard2.0` consumer to receive the same public API through `Microsoft.Bcl.TimeProvider`.
+
+The `WithTimeout(TimeSpan, TimeProvider?)` overload follows the same package split as `WithThrottle`: the core package supplies it on .NET 8 and .NET 10, and `TaskFlow.Extensions.Time` supplies it for `netstandard2.0` using `Microsoft.Bcl.TimeProvider`. The existing `WithTimeout(TimeSpan)` overload remains in the core package on all targets.
 
 ## Language and runtime use
 

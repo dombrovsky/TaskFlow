@@ -1,1 +1,3 @@
 #nullable enable
+System.Threading.Tasks.Flow.TimeProviderTimeoutTaskSchedulerExtensions
+static System.Threading.Tasks.Flow.TimeProviderTimeoutTaskSchedulerExtensions.WithTimeout(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.TimeSpan timeout, System.TimeProvider? timeProvider) -> System.Threading.Tasks.Flow.ITaskScheduler!

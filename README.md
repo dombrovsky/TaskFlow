@@ -63,7 +63,7 @@ Callers receive a task instead of blocking on `Save`. The wrapped synchronous me
 | Package | Purpose |
 |---|---|
 | [`TaskFlow`](https://www.nuget.org/packages/TaskFlow/) | FIFO execution lanes, built-in execution models, and core scheduler policies. |
-| [`TaskFlow.Extensions.Time`](https://www.nuget.org/packages/TaskFlow.Extensions.Time/) | Compatibility package for the `WithThrottle` time-based policy. |
+| [`TaskFlow.Extensions.Time`](https://www.nuget.org/packages/TaskFlow.Extensions.Time/) | Compatibility package for `WithThrottle` and `TimeProvider`-based `WithTimeout`. |
 | [`TaskFlow.Microsoft.Extensions.DependencyInjection`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.DependencyInjection/) | Scoped, named, and customizable TaskFlow registrations. |
 | [`TaskFlow.Microsoft.Extensions.Logging`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.Logging/) | Structured operation-lifecycle logging through `Microsoft.Extensions.Logging`. |
 

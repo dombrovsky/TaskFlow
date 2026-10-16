@@ -213,9 +213,14 @@ public static class TimeoutTaskSchedulerExtensions
     public static ITaskScheduler WithTimeout(this ITaskScheduler taskScheduler, TimeSpan timeout)
     {
         Argument.NotNull(taskScheduler);
+#if NET8_0_OR_GREATER
+        return TimeProviderTimeoutTaskSchedulerExtensions.WithTimeout(taskScheduler, timeout, TimeProvider.System);
+#else
         return taskScheduler.UseMiddleware(new TimeoutMiddleware(timeout));
+#endif
     }
 
+#if !NET8_0_OR_GREATER
     private sealed class TimeoutMiddleware : ITaskSchedulerEnqueueMiddleware
     {
         private readonly TimeSpan _timeout;
@@ -251,4 +256,5 @@ public static class TimeoutTaskSchedulerExtensions
             }
         }
     }
+#endif
 }
