@@ -109,3 +109,7 @@ await scheduler.Enqueue(() => Save());
 ```
 
 Dispose the explicit lifetime before disposing its terminal. TaskFlow does not infer ownership through opaque wrappers or permit replacing an existing pipeline lifetime. Custom terminal schedulers must accurately represent the work they schedule through their delegate and task contracts.
+
+## Keyed and concurrent branches
+
+Configure keyed/concurrent execution before bounded admission to combine all capacity budgets atomically. `WithPerKeyBoundedAdmission` reuses the same controller/options within each key scope; keyed `Submit` reports the combined decision. See [Keyed scheduling](keyed-scheduling.md) for setup, fairness, timeout placement, and shutdown behavior.

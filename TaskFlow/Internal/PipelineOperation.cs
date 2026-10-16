@@ -19,6 +19,7 @@ internal abstract class PipelineOperation
     public Action? LifetimeExit { get; set; }
 
     public AdmissionRequest? AdmissionRequest { get; set; }
+    public bool Coordinated { get; set; }
 
     public void AddActivity()
     {
@@ -149,7 +150,7 @@ internal abstract class PipelineOperation
     public bool TryClaimCompletion() => Interlocked.CompareExchange(ref _completionClaimed, 1, 0) == 0;
 }
 
-internal sealed class PipelineOperation<TResult> : PipelineOperation
+internal class PipelineOperation<TResult> : PipelineOperation
 {
     public PipelineOperation(
         Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
@@ -165,4 +166,23 @@ internal sealed class PipelineOperation<TResult> : PipelineOperation
 
     public Func<object?, CancellationToken, ValueTask<TResult>> TaskFunc { get; }
     public AnnotationScope? FinalAnnotations { get; }
+}
+
+internal interface IKeyedOperation<TKey> where TKey : notnull
+{
+    TKey Key { get; }
+}
+
+internal sealed class KeyedPipelineOperation<TKey, TResult> : PipelineOperation<TResult>, IKeyedOperation<TKey>
+    where TKey : notnull
+{
+    public KeyedPipelineOperation(TKey key,
+        Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state,
+        int registrationCount, AnnotationScope? finalAnnotations, CancellationToken callerCancellationToken)
+        : base(taskFunc, state, registrationCount, finalAnnotations, callerCancellationToken)
+    {
+        Key = key;
+    }
+
+    public TKey Key { get; }
 }

@@ -14,6 +14,8 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     {
         Argument.NotNull(scheduler);
         Argument.NotNull(admission);
+        if (scheduler is Internal.PipelineTaskScheduler pipeline && pipeline.Coordinator != null)
+            return pipeline.Append(new Internal.AdmissionPolicy(admission, perKey: false));
         return scheduler.UseMiddleware(admission);
     }
 
