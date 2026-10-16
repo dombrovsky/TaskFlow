@@ -68,6 +68,53 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         return count;
     }
 
+    internal void ValidateTrySubmit()
+    {
+        if (_terminal is not (TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow or TaskFlowSchedulerAdapter))
+            throw new NotSupportedException("TrySubmit requires a built-in terminal scheduler.");
+        var budgets = 0;
+        foreach (var registration in _registrations)
+        {
+            if (registration.Middleware is BoundedAdmissionMiddleware)
+                budgets++;
+            else if (registration.Middleware is ITaskSchedulerEnqueueMiddleware && registration.Middleware is not CoordinatedPolicy)
+                throw new NotSupportedException("TrySubmit does not support enqueue middleware other than built-in admission and coordinated scheduling policies. Use Submit with Reject instead.");
+        }
+        if (Coordinator == null && budgets != 1)
+            throw new NotSupportedException("TrySubmit with multiple budgets requires keyed scheduling or a concurrent branch. Configure scheduling before bounded admission.");
+    }
+
+    internal static TaskSchedulerTrySubmission<TResult> FinishTrySubmit<TResult>(AdmissionRequest request, Task<TResult> completion)
+    {
+        var decision = request.Decision;
+        // Capability validation guarantees a settled decision; never wait on an incomplete task.
+        if (!decision.IsCompleted)
+        {
+            ObserveUnreturned(decision);
+            ObserveUnreturned(completion);
+            throw new InvalidOperationException("The pipeline did not make a synchronous admission decision.");
+        }
+        try
+        {
+            var result = decision.GetAwaiter().GetResult();
+            if (result == TaskSchedulerAdmissionResult.Accepted)
+                return new TaskSchedulerTrySubmission<TResult>(result, completion);
+            ObserveUnreturned(completion);
+            return new TaskSchedulerTrySubmission<TResult>(result, null);
+        }
+        catch
+        {
+            ObserveUnreturned(completion);
+            throw;
+        }
+    }
+
+    private static void ObserveUnreturned(Task task)
+    {
+        _ = task.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
     public PipelineTaskScheduler Append(object middleware)
     {
         Lifetime?.CheckRegistrationOpen();
@@ -160,9 +207,19 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             }
             catch (Exception exception)
             {
-                if ((Lifetime != null && operation.Lifetime == null) || !operation.TryClaimCompletion())
+                if (Lifetime != null && operation.Lifetime == null)
+                {
+                    if (operation.AdmissionRequest?.Synchronous == true && exception is ObjectDisposedException)
+                        operation.AdmissionRequest.Decide(TaskSchedulerAdmissionResult.Closed);
                     throw;
-                var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
+                }
+                if (!operation.TryClaimCompletion())
+                    throw;
+                // Rejection/cancellation may settle inline. Keep user completion middleware off TrySubmit's stack.
+                var outcome = operation.AdmissionRequest?.Synchronous == true
+                    ? await Task.Run(async () =>
+                        await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false), CancellationToken.None).ConfigureAwait(false)
+                    : await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
                 result = outcome.GetResultOrThrow();
             }
             operation.AdmissionRequest?.RecordCallerOutcome(null);
