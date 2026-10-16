@@ -1,22 +1,21 @@
-namespace System.Threading.Tasks.Flow.Internal
+namespace System.Threading.Tasks.Flow.Internal;
+
+internal sealed class DelegateNamedConfigureTaskFlowOptions : INamedConfigureTaskFlowOptions
 {
-    internal sealed class DelegateNamedConfigureTaskFlowOptions : INamedConfigureTaskFlowOptions
+    private readonly IServiceProvider _serviceProvider;
+    private readonly Func<IServiceProvider, TaskFlowOptions> _configureOptions;
+
+    public DelegateNamedConfigureTaskFlowOptions(IServiceProvider serviceProvider, string name, Func<IServiceProvider, TaskFlowOptions> configureOptions)
     {
-        private readonly IServiceProvider _serviceProvider;
-        private readonly Func<IServiceProvider, TaskFlowOptions> _configureOptions;
+        _serviceProvider = serviceProvider;
+        _configureOptions = configureOptions;
+        Name = name;
+    }
 
-        public DelegateNamedConfigureTaskFlowOptions(IServiceProvider serviceProvider, string name, Func<IServiceProvider, TaskFlowOptions> configureOptions)
-        {
-            _serviceProvider = serviceProvider;
-            _configureOptions = configureOptions;
-            Name = name;
-        }
+    public string Name { get; }
 
-        public string Name { get; }
-
-        public TaskFlowOptions Configure()
-        {
-            return _configureOptions(_serviceProvider);
-        }
+    public TaskFlowOptions Configure()
+    {
+        return _configureOptions(_serviceProvider);
     }
 }

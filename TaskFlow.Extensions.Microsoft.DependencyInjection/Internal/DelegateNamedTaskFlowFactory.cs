@@ -1,26 +1,25 @@
-namespace System.Threading.Tasks.Flow.Internal
+namespace System.Threading.Tasks.Flow.Internal;
+
+using System.Threading.Tasks.Flow.Annotations;
+
+internal sealed class DelegateNamedTaskFlowFactory : INamedTaskFlowFactory
 {
-    using System.Threading.Tasks.Flow.Annotations;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly Func<IServiceProvider, TaskFlowOptions, ITaskFlow> _taskFlowFactory;
 
-    internal sealed class DelegateNamedTaskFlowFactory : INamedTaskFlowFactory
+    public DelegateNamedTaskFlowFactory(IServiceProvider serviceProvider, string name, Func<IServiceProvider, TaskFlowOptions, ITaskFlow> taskFlowFactory)
     {
-        private readonly IServiceProvider _serviceProvider;
-        private readonly Func<IServiceProvider, TaskFlowOptions, ITaskFlow> _taskFlowFactory;
+        Name = name;
+        _serviceProvider = serviceProvider;
+        _taskFlowFactory = taskFlowFactory;
+    }
 
-        public DelegateNamedTaskFlowFactory(IServiceProvider serviceProvider, string name, Func<IServiceProvider, TaskFlowOptions, ITaskFlow> taskFlowFactory)
-        {
-            Name = name;
-            _serviceProvider = serviceProvider;
-            _taskFlowFactory = taskFlowFactory;
-        }
+    public string Name { get; }
 
-        public string Name { get; }
+    public ITaskFlow Create(TaskFlowOptions options)
+    {
+        Argument.NotNull(options);
 
-        public ITaskFlow Create(TaskFlowOptions options)
-        {
-            Argument.NotNull(options);
-
-            return _taskFlowFactory(_serviceProvider, options);
-        }
+        return _taskFlowFactory(_serviceProvider, options);
     }
 }

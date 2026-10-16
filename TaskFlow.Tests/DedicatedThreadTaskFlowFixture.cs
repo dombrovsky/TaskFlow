@@ -1,14 +1,13 @@
-namespace TaskFlow.Tests
-{
-    using NUnit.Framework;
-    using System.Threading.Tasks.Flow;
+namespace TaskFlow.Tests;
 
-    [TestFixture]
-    internal sealed class DedicatedThreadTaskFlowFixture : TaskFlowBaseFixture<DedicatedThreadTaskFlow>
+using NUnit.Framework;
+using System.Threading.Tasks.Flow;
+
+[TestFixture]
+internal sealed class DedicatedThreadTaskFlowFixture : TaskFlowBaseFixture<DedicatedThreadTaskFlow>
+{
+    protected override DedicatedThreadTaskFlow CreateSut()
     {
-        protected override DedicatedThreadTaskFlow CreateSut()
-        {
-            return new DedicatedThreadTaskFlow();
-        }
+        return new DedicatedThreadTaskFlow();
     }
 }

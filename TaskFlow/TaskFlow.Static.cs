@@ -1,6 +1,5 @@
-namespace System.Threading.Tasks.Flow
+namespace System.Threading.Tasks.Flow;
+
+public partial class TaskFlow
 {
-    public partial class TaskFlow
-    {
-    }
 }

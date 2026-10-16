@@ -16,3 +16,4 @@ Never include personal email addresses in commit metadata or coauthor trailers.
 - Run `dotnet restore TaskFlow.sln`, then `dotnet format whitespace TaskFlow.sln --no-restore` to fix formatting before completing changes.
 - Verify formatting with `dotnet format whitespace TaskFlow.sln --verify-no-changes --no-restore`, matching the main build pipeline.
 - Separate groups of private static fields (including static readonly fields), private instance readonly fields, and private mutable instance fields with one empty line. Keep consecutive fields in the same group together. Check this grouping manually; `dotnet format` does not enforce it.
+- Use file-scoped namespaces, as required by `.editorconfig`. Verify with `dotnet format style TaskFlow.sln --diagnostics IDE0161 --verify-no-changes --no-restore`.

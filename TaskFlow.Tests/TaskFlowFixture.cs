@@ -1,14 +1,13 @@
-namespace TaskFlow.Tests
-{
-    using NUnit.Framework;
-    using System.Threading.Tasks.Flow;
+namespace TaskFlow.Tests;
 
-    [TestFixture]
-    internal sealed class TaskFlowFixture : TaskFlowBaseFixture<TaskFlow>
+using NUnit.Framework;
+using System.Threading.Tasks.Flow;
+
+[TestFixture]
+internal sealed class TaskFlowFixture : TaskFlowBaseFixture<TaskFlow>
+{
+    protected override TaskFlow CreateSut()
     {
-        protected override TaskFlow CreateSut()
-        {
-            return new TaskFlow();
-        }
+        return new TaskFlow();
     }
 }
