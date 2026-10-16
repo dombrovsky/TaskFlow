@@ -45,6 +45,8 @@ Outstanding capacity does not bound unlimited admission waiters. Await submissio
 
 ## Admission separately from completion
 
+`Admission` and `Completion` remain reusable `Task` handles, including for synchronous decisions. Retaining them, awaiting them multiple times, and combining them with `Task.WhenAll` is supported.
+
 `Enqueue` uses the registration's configured default mode and returns the caller-facing operation task. `BoundedAdmissionController.Submit` traverses the same pipeline and gate, overrides the mode for that controller's registration, and exposes two tasks:
 
 ```csharp

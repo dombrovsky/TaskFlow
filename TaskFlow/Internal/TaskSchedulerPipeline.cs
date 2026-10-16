@@ -89,7 +89,7 @@ namespace System.Threading.Tasks.Flow.Internal
             finally { operation.ReleaseActivity(); }
         }
 
-        private async Task<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
+        private async ValueTask<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
         {
             try
             {
