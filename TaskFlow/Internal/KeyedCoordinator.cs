@@ -361,6 +361,7 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
     {
         private readonly TaskCompletionSource<T> _completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         private CancellationTokenSource? _linked;
+        private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();
         public Task<T> Task => _completion.Task;
         public override void Reject(TaskSchedulerAdmissionResult result) => _completion.TrySetException(new AdmissionRejectedException(result));
         public override void Cancel()
@@ -369,7 +370,19 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
                 Request?.Cancel();
             _completion.TrySetCanceled();
         }
-        public override void Dispatch(CancellationToken stopping) => _ = ExecuteAsync(stopping);
+        public override void Dispatch(CancellationToken stopping)
+        {
+            if (_executionContext != null)
+                ExecutionContext.Run(_executionContext, state => { _ = ExecuteAsync(stopping); }, null);
+            else if (ExecutionContext.IsFlowSuppressed())
+                _ = ExecuteAsync(stopping);
+            else
+            {
+                // A caller that suppressed flow must not inherit the preceding operation's context.
+                using var suppression = ExecutionContext.SuppressFlow();
+                _ = ExecuteAsync(stopping);
+            }
+        }
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Operation failures are returned to the submitting caller.")]
         private async Task ExecuteAsync(CancellationToken stopping)
         {
@@ -382,7 +395,11 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
             catch (Exception exception) { _completion.TrySetException(exception); }
         }
         public CancellationToken CallerToken { get; set; }
-        public override void Cleanup() => _linked?.Dispose();
+        public override void Cleanup()
+        {
+            _linked?.Dispose();
+            _executionContext?.Dispose();
+        }
     }
 
     internal sealed class Factory(Type? keyType, IEqualityComparer<object> comparer) : ITaskSchedulerMiddlewareFactory

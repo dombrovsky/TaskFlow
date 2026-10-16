@@ -473,6 +473,61 @@ internal sealed class KeyedSchedulingFixture
         finally { release.TrySetResult(0); }
     }
 
+    [Test]
+    public async Task QueuedWork_PreservesSubmittingExecutionContextAndConfiguredScheduler()
+    {
+        var backend = new SwitchableScheduler();
+        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        var scheduler = flow.WithKeyedScheduling<string>();
+        var ambient = new AsyncLocal<string?> { Value = "first" };
+        var release = Gate(); var started = Gate();
+        var first = Hold(scheduler, "A", started, release);
+        try
+        {
+            await started.Task;
+            ambient.Value = "second";
+            async Task<(string?, TaskScheduler)> Read(string key, CancellationToken token)
+            {
+                await Task.Yield();
+                return (ambient.Value, TaskScheduler.Current);
+            }
+            var second = scheduler.Enqueue("A", Read);
+            ambient.Value = "releaser";
+            release.SetResult(0);
+            var result = await second;
+            Assert.That(result.Item1, Is.EqualTo("second"));
+            Assert.That(result.Item2, Is.SameAs(backend));
+            await first;
+        }
+        finally { release.TrySetResult(0); }
+    }
+
+    [Test]
+    public async Task SuppressedContext_DoesNotInheritPredecessor_AndStillGuardsSelfDisposal()
+    {
+        await using var flow = new TaskFlow();
+        var scheduler = flow.WithKeyedScheduling<string>();
+        var ambient = new AsyncLocal<string?> { Value = "predecessor" };
+        var release = Gate(); var started = Gate();
+        var first = Hold(scheduler, "A", started, release);
+        try
+        {
+            await started.Task;
+            async Task<string?> Probe(string key, CancellationToken token)
+            {
+                var value = ambient.Value;
+                await Assert.ThatAsync(async () => await flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
+                return value;
+            }
+            Task<string?> second;
+            using (ExecutionContext.SuppressFlow()) second = scheduler.Enqueue("A", Probe);
+            release.SetResult(0);
+            Assert.That(await second, Is.Null);
+            await first;
+        }
+        finally { release.TrySetResult(0); }
+    }
+
     private sealed class SwitchableScheduler : TaskScheduler
     {
         private int _scheduled;

@@ -206,6 +206,8 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The pipeline converts every operation failure into a completion outcome.")]
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
+        // Reestablish ownership even when the submitting caller suppressed ExecutionContext flow.
+        using var executionContext = Coordinator != null ? Lifetime?.EnterContext() : null;
         TaskSchedulerOperationOutcome<TResult> outcome;
         try
         {
