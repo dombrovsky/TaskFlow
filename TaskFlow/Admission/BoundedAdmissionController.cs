@@ -5,7 +5,7 @@ using System.Threading.Tasks.Flow.Internal;
 
 /// <summary>Defines bounded admission and identifies the registration targeted by explicit submissions.</summary>
 /// <remarks>Each registration has independent capacity. Descendant pipeline snapshots share an existing registration.</remarks>
-public sealed partial class BoundedAdmissionController : ITaskSchedulerMiddlewareFactory
+public sealed class BoundedAdmissionController : ITaskSchedulerMiddlewareFactory
 {
     internal int Capacity { get; }
     internal int? MaxAdmissionWaiters { get; }
@@ -42,7 +42,7 @@ public sealed partial class BoundedAdmissionController : ITaskSchedulerMiddlewar
         if (!(scheduler is PipelineTaskScheduler pipeline) || pipeline.CountController(this) != 1)
             throw new ArgumentException("The scheduler must be a native pipeline containing exactly one registration of this controller.", nameof(scheduler));
         var request = new AdmissionRequest(this, admissionMode);
-        var completion = pipeline.Submit(taskFunc, state, request, null, cancellationToken);
+        var completion = pipeline.Submit(taskFunc, state, request, cancellationToken);
         return new TaskSchedulerSubmission<T>(request.Decision, completion);
     }
 

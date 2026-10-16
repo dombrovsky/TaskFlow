@@ -43,7 +43,7 @@ await submission.Completion;
 
 ## Keys and delegates
 
-Key-first `Enqueue` and controller `Submit` overloads supply immutable submission metadata. A delegate can receive the key, or omit it when it already has everything it needs. Typed-state overloads keep the original state reference visible to middleware:
+Key-first `Enqueue` and `Submit` extension methods supply immutable submission metadata. The admission controller remains nongeneric; keyed convenience methods live in `KeyedBoundedAdmissionExtensions`. A delegate can receive the key, or omit it when it already has everything it needs. Typed-state overloads keep the original state reference visible to middleware:
 
 ```csharp
 await scheduler.Enqueue(
@@ -53,6 +53,8 @@ await scheduler.Enqueue(
     repository,
     cancellationToken);
 ```
+
+The generic coordinator uses `Dictionary<TKey, ...>` and typed operation envelopes, so value-type keys are not boxed for routing or storage. Native capability checks validate the key type without reflection or runtime generic construction. Submission envelopes still allocate; typed caller state continues to use the existing object-valued middleware state contract.
 
 The delegate receives the original submitted key, even when a custom comparer considers it equivalent to another key. The configured key type must match the overload's `TKey` exactly. Keys must be non-null and keep stable equality/hash behavior while work is retained.
 

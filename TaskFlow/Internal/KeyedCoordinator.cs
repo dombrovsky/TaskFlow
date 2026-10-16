@@ -23,35 +23,59 @@ internal sealed class AdmissionPolicy(BoundedAdmissionController controller, boo
     public int Waiters { get; set; }
 }
 
-internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
+internal abstract class SchedulingCoordinator : CoordinatedPolicy, IDisposable
+{
+    public abstract bool RequiresKey { get; }
+    internal abstract int KeyCount { get; }
+    public abstract Task<T> Schedule<T>(PipelineOperation<T> operation, CoordinatedPolicy[] policies,
+        Func<CancellationToken, Task<T>> next, CancellationToken cancellationToken);
+    public abstract void Dispose();
+}
+
+internal interface IKeyedCoordinator<TKey> where TKey : notnull
+{
+    void ValidateKey(TKey key);
+}
+
+internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator<TKey> where TKey : notnull
 {
     private readonly object _sync = new object();
-    private readonly Dictionary<object, KeyState> _keys;
+    private readonly Dictionary<TKey, KeyState> _keys;
     private readonly LinkedList<KeyState> _ready = new LinkedList<KeyState>();
     private readonly LinkedList<Submission> _waiters = new LinkedList<Submission>();
     private readonly CancellationToken _stopping;
     private readonly CancellationTokenRegistration _stoppingRegistration;
+
     private bool _closed;
     private bool _pumping;
 
-    public KeyedCoordinator(Type? keyType, IEqualityComparer<object> comparer, TaskSchedulerMiddlewareLifetime lifetime)
+    public KeyedCoordinator(IEqualityComparer<TKey> comparer, TaskSchedulerMiddlewareLifetime lifetime)
     {
-        KeyType = keyType;
-        _keys = new Dictionary<object, KeyState>(comparer);
+        _keys = new Dictionary<TKey, KeyState>(comparer);
         _stopping = lifetime.StoppingToken;
         _stoppingRegistration = _stopping.Register(Close);
     }
 
-    public Type? KeyType { get; }
-    internal int KeyCount { get { lock (_sync) return _keys.Count; } }
+    public override bool RequiresKey => true;
+    internal override int KeyCount { get { lock (_sync) return _keys.Count; } }
 
-    public async Task<T> Schedule<T>(PipelineOperation<T> operation, CoordinatedPolicy[] policies,
+    public void ValidateKey(TKey key)
+    {
+        if (key is null)
+            throw new ArgumentNullException(nameof(key));
+    }
+
+    protected virtual TKey GetKey(PipelineOperation operation)
+        => operation is IKeyedOperation<TKey> keyed ? keyed.Key
+            : throw new InvalidOperationException("A matching typed keyed operation is required.");
+
+    public override async Task<T> Schedule<T>(PipelineOperation<T> operation, CoordinatedPolicy[] policies,
         Func<CancellationToken, Task<T>> next, CancellationToken cancellationToken)
     {
         Submission<T> submission;
         lock (_sync)
         {
-            var key = operation.Key ?? new object();
+            var key = GetKey(operation);
             if (!_keys.TryGetValue(key, out var state))
             {
                 state = new KeyState(key);
@@ -328,11 +352,11 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
             _ready.Clear();
         }
     }
-    public void Dispose() => _stoppingRegistration.Dispose();
+    public override void Dispose() => _stoppingRegistration.Dispose();
 
-    private sealed class KeyState(object value)
+    private sealed class KeyState(TKey value)
     {
-        public object Value { get; } = value;
+        public TKey Value { get; } = value;
         public int References { get; set; }
         public bool Busy { get; set; }
         public LinkedList<Submission> Queue { get; } = new LinkedList<Submission>();
@@ -360,8 +384,9 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
         AdmissionRequest? request, Func<CancellationToken, Task<T>> next) : Submission(key, policies, request)
     {
         private readonly TaskCompletionSource<T> _completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        private CancellationTokenSource? _linked;
         private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();
+
+        private CancellationTokenSource? _linked;
         public Task<T> Task => _completion.Task;
         public override void Reject(TaskSchedulerAdmissionResult result) => _completion.TrySetException(new AdmissionRejectedException(result));
         public override void Cancel()
@@ -402,8 +427,22 @@ internal sealed class KeyedCoordinator : CoordinatedPolicy, IDisposable
         }
     }
 
-    internal sealed class Factory(Type? keyType, IEqualityComparer<object> comparer) : ITaskSchedulerMiddlewareFactory
+    internal sealed class Factory(IEqualityComparer<TKey> comparer) : ITaskSchedulerMiddlewareFactory
     {
-        public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => new KeyedCoordinator(keyType, comparer, lifetime);
+        public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => new KeyedCoordinator<TKey>(comparer, lifetime);
+    }
+}
+
+// Unkeyed operations need independent lanes, but no object-valued routing or per-operation key allocation.
+internal sealed class ConcurrentCoordinator(TaskSchedulerMiddlewareLifetime lifetime)
+    : KeyedCoordinator<long>(EqualityComparer<long>.Default, lifetime)
+{
+    private long _nextKey;
+    public override bool RequiresKey => false;
+    protected override long GetKey(PipelineOperation operation) => unchecked(_nextKey++);
+
+    internal new sealed class Factory : ITaskSchedulerMiddlewareFactory
+    {
+        public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => new ConcurrentCoordinator(lifetime);
     }
 }

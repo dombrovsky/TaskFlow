@@ -12,7 +12,7 @@ public static class KeyedTaskSchedulerEnqueueExtensions
         where TKey : notnull
     {
         Argument.NotNull(taskFunc);
-        return KeyedTaskSchedulerExtensions.Validate(scheduler, key).Submit((s, token) => taskFunc(key, (TState)s!, token), state, null, key, cancellationToken);
+        return KeyedTaskSchedulerExtensions.Validate(scheduler, key).SubmitKeyed(key, (s, token) => taskFunc(key, (TState)s!, token), state, null, cancellationToken);
     }
 
     /// <summary>Enqueues a keyed operation with typed state and the original scheduling key.</summary>

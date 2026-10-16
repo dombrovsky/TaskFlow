@@ -7,6 +7,7 @@ using System.Threading.Tasks.Flow.Internal;
 [CancelAfter(15000)]
 internal sealed class KeyedSchedulingFixture
 {
+    private static readonly int[] StructKeyOrder = [10, 20, 30, 40];
     private static readonly string[] RoundRobinOrder = ["A1", "B1", "C1", "A2", "B2", "A3"];
     private static TaskCompletionSource<int> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     private static BoundedAdmissionController Budget(int capacity, TaskSchedulerCapacityMode mode = TaskSchedulerCapacityMode.Pending, int? waiters = null)
@@ -458,7 +459,8 @@ internal sealed class KeyedSchedulingFixture
         var backend = new SwitchableScheduler();
         await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
         var core = flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1);
-        var release = Gate(); var started = Gate();
+        var release = Gate();
+        var started = Gate();
         var first = Hold(core.WithTimeout(TimeSpan.FromMilliseconds(100)), "A", started, release);
         try
         {
@@ -480,7 +482,8 @@ internal sealed class KeyedSchedulingFixture
         await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
         var scheduler = flow.WithKeyedScheduling<string>();
         var ambient = new AsyncLocal<string?> { Value = "first" };
-        var release = Gate(); var started = Gate();
+        var release = Gate();
+        var started = Gate();
         var first = Hold(scheduler, "A", started, release);
         try
         {
@@ -508,7 +511,8 @@ internal sealed class KeyedSchedulingFixture
         await using var flow = new TaskFlow();
         var scheduler = flow.WithKeyedScheduling<string>();
         var ambient = new AsyncLocal<string?> { Value = "predecessor" };
-        var release = Gate(); var started = Gate();
+        var release = Gate();
+        var started = Gate();
         var first = Hold(scheduler, "A", started, release);
         try
         {
@@ -520,12 +524,105 @@ internal sealed class KeyedSchedulingFixture
                 return value;
             }
             Task<string?> second;
-            using (ExecutionContext.SuppressFlow()) second = scheduler.Enqueue("A", Probe);
+            using (ExecutionContext.SuppressFlow())
+                second = scheduler.Enqueue("A", Probe);
             release.SetResult(0);
             Assert.That(await second, Is.Null);
             await first;
         }
         finally { release.TrySetResult(0); }
+    }
+
+    [Test]
+    public async Task StructKeys_StayTyped_AndSharePerKeyAdmissionByTypedEquality()
+    {
+        await using var flow = new TaskFlow();
+        var admission = Budget(1);
+        var objectEqualityCalls = RoutingKey.ObjectEqualityCalls;
+        var observer = new TypedKeyObserver<RoutingKey>();
+        var scheduler = flow.WithKeyedScheduling<RoutingKey>().WithConcurrencyLimit(2)
+            .WithPerKeyBoundedAdmission(admission).UseMiddleware(observer);
+        Assert.That(((PipelineTaskScheduler)scheduler).Coordinator is KeyedCoordinator<RoutingKey>, Is.True);
+        var release = Gate();
+        var started = Gate();
+        Task<int> HoldKey(RoutingKey key, CancellationToken token)
+        {
+            started.TrySetResult(0);
+            return release.Task;
+        }
+        var first = scheduler.Enqueue(new RoutingKey(1, 10), HoldKey);
+        try
+        {
+            await started.Task;
+            var queued = admission.Submit(scheduler, new RoutingKey(1, 20), (Func<RoutingKey, int>)(key => key.Original), TaskSchedulerAdmissionMode.Reject);
+            Assert.That(await queued.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
+            Assert.That(queued.Completion.IsCompleted, Is.False);
+            var full = admission.Submit(scheduler, new RoutingKey(1, 30), () => 30, TaskSchedulerAdmissionMode.Reject);
+            Assert.That(await full.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
+            await Assert.ThatAsync(async () => await full.Completion, Throws.TypeOf<AdmissionRejectedException>());
+            var other = admission.Submit(scheduler, new RoutingKey(2, 40), (Func<RoutingKey, int>)(key => key.Original), TaskSchedulerAdmissionMode.Reject);
+            Assert.That(await other.Completion, Is.EqualTo(40));
+            release.SetResult(10);
+            Assert.That(await queued.Completion, Is.EqualTo(20));
+            await first;
+            Assert.That(observer.Seen.Select(key => key.Original), Is.EqualTo(StructKeyOrder));
+            Assert.That(RoutingKey.ObjectEqualityCalls, Is.EqualTo(objectEqualityCalls));
+        }
+        finally { release.TrySetResult(0); }
+        await flow.DisposeAsync();
+        Assert.That(((PipelineTaskScheduler)scheduler).Coordinator!.KeyCount, Is.Zero);
+    }
+
+    [Test]
+    public async Task GenericSubmission_RoundTripsIntGuidAndEnumKeys()
+    {
+        await Verify(42);
+        await Verify(Guid.Parse("11c57948-8696-4c49-966f-6f6d4381d89e"));
+        await Verify(TaskSchedulerCapacityMode.Pending);
+
+        static async Task Verify<TKey>(TKey key) where TKey : notnull
+        {
+            await using var flow = new TaskFlow();
+            var admission = Budget(2);
+            var observer = new TypedKeyObserver<TKey>();
+            var scheduler = flow.WithKeyedScheduling<TKey>().WithBoundedAdmission(admission).UseMiddleware(observer);
+            Func<TKey, TKey> identity = static value => value;
+            var enqueued = await scheduler.Enqueue(key, identity);
+            var submitted = admission.Submit(scheduler, key, identity, TaskSchedulerAdmissionMode.Reject);
+            Assert.That(await submitted.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
+            Assert.That(EqualityComparer<TKey>.Default.Equals(enqueued, key), Is.True);
+            Assert.That(EqualityComparer<TKey>.Default.Equals(await submitted.Completion, key), Is.True);
+            Assert.That(observer.Seen.Count, Is.EqualTo(2));
+            Assert.That(((PipelineTaskScheduler)scheduler).Coordinator is IKeyedCoordinator<TKey>, Is.True);
+        }
+    }
+
+    private readonly struct RoutingKey(int lane, int original) : IEquatable<RoutingKey>
+    {
+        private static int _objectEqualityCalls;
+
+        public static int ObjectEqualityCalls => Volatile.Read(ref _objectEqualityCalls);
+        public int Original { get; } = original;
+        private int Lane { get; } = lane;
+        public bool Equals(RoutingKey other) => Lane == other.Lane;
+        public override bool Equals(object? obj)
+        {
+            Interlocked.Increment(ref _objectEqualityCalls);
+            return obj is RoutingKey other && Equals(other);
+        }
+        public override int GetHashCode() => Lane;
+    }
+
+    private sealed class TypedKeyObserver<TKey> : ITaskSchedulerEnqueueMiddleware where TKey : notnull
+    {
+        public List<TKey> Seen { get; } = new();
+        public Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
+        {
+            if (context.Operation is not KeyedPipelineOperation<TKey, T> operation)
+                throw new AssertionException("The pipeline must retain a reference envelope with a typed key field.");
+            Seen.Add(operation.Key);
+            return next(context);
+        }
     }
 
     private sealed class SwitchableScheduler : TaskScheduler

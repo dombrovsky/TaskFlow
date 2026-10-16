@@ -11,7 +11,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly MiddlewareRegistration[] _registrations;
     private readonly AnnotationScope? _annotations;
     private readonly CoordinatedPolicy[] _policies;
-    internal KeyedCoordinator? Coordinator { get; }
+    internal SchedulingCoordinator? Coordinator { get; }
     internal TaskFlow? TerminalFlow => _terminal as TaskFlow;
 
     public PipelineTaskScheduler(ITaskScheduler terminal)
@@ -19,7 +19,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     {
     }
 
-    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations, TaskSchedulerMiddlewareLifetime? lifetime, KeyedCoordinator? coordinator = null)
+    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations, TaskSchedulerMiddlewareLifetime? lifetime, SchedulingCoordinator? coordinator = null)
     {
         Lifetime = lifetime;
         Coordinator = coordinator;
@@ -39,7 +39,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         return new PipelineTaskScheduler(_terminal, _registrations, _annotations, lifetime, Coordinator);
     }
 
-    internal PipelineTaskScheduler WithKeyedScheduling(KeyedCoordinator coordinator, ITaskScheduler terminal)
+    internal PipelineTaskScheduler WithKeyedScheduling(SchedulingCoordinator coordinator, ITaskScheduler terminal)
     {
         if (Coordinator != null)
             throw new InvalidOperationException("Keyed scheduling is already configured.");
@@ -51,10 +51,9 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
     internal void ValidateKey<TKey>(TKey key) where TKey : notnull
     {
-        if (key is null)
-            throw new ArgumentNullException(nameof(key));
-        if (Coordinator == null || Coordinator.KeyType != typeof(TKey))
+        if (Coordinator is not IKeyedCoordinator<TKey> typed || !Coordinator.RequiresKey)
             throw new InvalidOperationException("A matching keyed scheduling registration is required.");
+        typed.ValidateKey(key);
     }
 
     internal CoordinatedPolicy[] GetPolicies() => _policies;
@@ -88,19 +87,29 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
     public Task<TResult> Enqueue<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, CancellationToken cancellationToken)
     {
-        return Submit(taskFunc, state, null, null, cancellationToken);
+        return Submit(taskFunc, state, null, cancellationToken);
     }
 
-    internal Task<TResult> Submit<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, AdmissionRequest? request, object? key, CancellationToken cancellationToken)
+    internal Task<TResult> Submit<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state,
+        AdmissionRequest? request, CancellationToken cancellationToken)
     {
         Annotations.Argument.NotNull(taskFunc);
-        if (Coordinator?.KeyType != null && key == null)
+        if (Coordinator?.RequiresKey == true)
             throw new InvalidOperationException("A keyed pipeline requires a keyed Enqueue or Submit overload.");
-        var operation = new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken)
-        {
-            AdmissionRequest = request,
-            Key = key
-        };
+        return SubmitOperation(new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken), request);
+    }
+
+    internal Task<TResult> SubmitKeyed<TKey, TResult>(TKey key, Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
+        object? state, AdmissionRequest? request, CancellationToken cancellationToken) where TKey : notnull
+    {
+        Annotations.Argument.NotNull(taskFunc);
+        ValidateKey(key);
+        return SubmitOperation(new KeyedPipelineOperation<TKey, TResult>(key, taskFunc, state, _registrations.Length, _annotations, cancellationToken), request);
+    }
+
+    private Task<TResult> SubmitOperation<TResult>(PipelineOperation<TResult> operation, AdmissionRequest? request)
+    {
+        operation.AdmissionRequest = request;
         if (request != null)
             operation.OnQuiesced(request.OnQuiesced);
         return EnqueueCore(operation);

@@ -18,7 +18,7 @@ public static class KeyedTaskSchedulerExtensions
         if (pipeline.Coordinator != null)
             throw new InvalidOperationException("A scheduling coordinator is already configured.");
         var flow = pipeline.TerminalFlow ?? throw new NotSupportedException("Keyed execution branches require a TaskFlow owner.");
-        var coordinator = (KeyedCoordinator)pipeline.Lifetime!.Register(new KeyedCoordinator.Factory(typeof(TKey), new KeyComparer<TKey>(comparer ?? EqualityComparer<TKey>.Default)));
+        var coordinator = (KeyedCoordinator<TKey>)pipeline.Lifetime!.Register(new KeyedCoordinator<TKey>.Factory(comparer ?? EqualityComparer<TKey>.Default));
         return pipeline.WithKeyedScheduling(coordinator, new TaskFlowSchedulerAdapter(flow.Options.TaskScheduler));
     }
 
@@ -38,7 +38,7 @@ public static class KeyedTaskSchedulerExtensions
         if (pipeline.Coordinator == null)
         {
             var flow = pipeline.TerminalFlow ?? throw new NotSupportedException("Concurrent execution branches require a TaskFlow owner.");
-            var coordinator = (KeyedCoordinator)pipeline.Lifetime!.Register(new KeyedCoordinator.Factory(null, EqualityComparer<object>.Default));
+            var coordinator = (ConcurrentCoordinator)pipeline.Lifetime!.Register(new ConcurrentCoordinator.Factory());
             pipeline = pipeline.WithKeyedScheduling(coordinator, new TaskFlowSchedulerAdapter(flow.Options.TaskScheduler));
         }
         return pipeline.Append(new ExecutionPolicy(maxConcurrency));
@@ -53,7 +53,7 @@ public static class KeyedTaskSchedulerExtensions
     {
         Argument.NotNull(scheduler);
         Argument.NotNull(admission);
-        if (!(scheduler is PipelineTaskScheduler pipeline) || pipeline.Coordinator?.KeyType == null)
+        if (!(scheduler is PipelineTaskScheduler pipeline) || pipeline.Coordinator?.RequiresKey != true)
             throw new InvalidOperationException("Per-key admission requires keyed scheduling.");
         return pipeline.Append(new AdmissionPolicy(admission, perKey: true));
     }
@@ -67,9 +67,4 @@ public static class KeyedTaskSchedulerExtensions
         return pipeline;
     }
 
-    private sealed class KeyComparer<TKey>(IEqualityComparer<TKey> comparer) : IEqualityComparer<object> where TKey : notnull
-    {
-        public new bool Equals(object? x, object? y) => comparer.Equals((TKey)x!, (TKey)y!);
-        public int GetHashCode(object obj) => comparer.GetHashCode((TKey)obj);
-    }
 }
