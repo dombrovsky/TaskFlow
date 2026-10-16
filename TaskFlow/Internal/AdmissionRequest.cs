@@ -28,18 +28,12 @@ namespace System.Threading.Tasks.Flow.Internal
             else _decision.TrySetException(_failure ?? new InvalidOperationException("The pipeline completed without reaching the selected admission registration."));
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Settles an unreached admission decision and observes caller completion failures.")]
-        public async Task ObserveCompletionAsync(Task completion)
+        public void RecordCallerOutcome(Exception? failure)
         {
-            Exception? failure = null;
-            var canceled = false;
-            try { await completion.ConfigureAwait(false); }
-            catch (OperationCanceledException) { canceled = true; }
-            catch (Exception exception) { failure = exception; }
             lock (_sync)
             {
                 _failure = failure;
-                _canceled = canceled;
+                _canceled = failure is OperationCanceledException;
                 _callerCompleted = true;
                 SettleUnreached();
             }

@@ -41,7 +41,6 @@ namespace System.Threading.Tasks.Flow
                 throw new ArgumentException("The scheduler must be a native pipeline containing exactly one registration of this controller.", nameof(scheduler));
             var request = new AdmissionRequest(this, admissionMode);
             var completion = pipeline.Submit(taskFunc, state, request, cancellationToken);
-            _ = request.ObserveCompletionAsync(completion);
             return new TaskSchedulerSubmission<T>(request.Decision, completion);
         }
 

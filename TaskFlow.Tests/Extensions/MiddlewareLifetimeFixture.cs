@@ -307,6 +307,140 @@ namespace TaskFlow.Tests.Extensions
             Assert.That(() => scheduler.UseMiddleware(observer), Throws.TypeOf<ObjectDisposedException>());
         }
 
+        [TestCase("success")]
+        [TestCase("failure")]
+        [TestCase("cancellation")]
+        public async Task UnreachedAdmission_IsSettledAtQuiescenceBeforeShutdownCompletes(string outcome)
+        {
+            await using var flow = new TaskFlow();
+            var admission = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
+            Exception? failure = outcome switch
+            {
+                "failure" => new FormatException("Short circuit failure"),
+                "cancellation" => new OperationCanceledException(),
+                _ => null
+            };
+            var middleware = new QuiescingShortCircuit(failure);
+            var scheduler = flow.WithBoundedAdmission(admission).UseMiddleware(middleware);
+            var submission = admission.Submit(scheduler, () => 42, TaskSchedulerAdmissionMode.Wait);
+            var shutdown = flow.DisposeAsync().AsTask();
+            try
+            {
+                Assert.That(shutdown.IsCompleted, Is.False);
+                middleware.Release.SetResult(true);
+                await shutdown;
+                Assert.That(await middleware.DecisionAtQuiescence.Task, Is.True);
+                Assert.That(submission.Admission.IsCompleted, Is.True);
+                if (failure == null)
+                {
+                    Assert.That(await submission.Completion, Is.EqualTo(17));
+                    await Assert.ThatAsync(async () => await submission.Admission, Throws.TypeOf<InvalidOperationException>());
+                }
+                else if (failure is OperationCanceledException)
+                {
+                    await Assert.ThatAsync(async () => await submission.Completion, Throws.InstanceOf<OperationCanceledException>());
+                    await Assert.ThatAsync(async () => await submission.Admission, Throws.InstanceOf<OperationCanceledException>());
+                    Assert.That(submission.Completion.IsCanceled, Is.True);
+                    Assert.That(submission.Admission.IsCanceled, Is.True);
+                }
+                else
+                {
+                    await Assert.ThatAsync(async () => await submission.Completion, Throws.Exception.SameAs(failure));
+                    await Assert.ThatAsync(async () => await submission.Admission, Throws.Exception.SameAs(failure));
+                }
+            }
+            finally { middleware.Release.TrySetResult(true); }
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task UnreachedAdmission_RecordsTheOutcomeAfterCompletionMiddleware(bool recover)
+        {
+            await using var flow = new TaskFlow();
+            var admission = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
+            var original = new FormatException("Original failure");
+            var replacement = new FormatException("Replacement failure");
+            var middleware = new QuiescingShortCircuit(original);
+            var scheduler = flow.WithBoundedAdmission(admission)
+                .UseMiddleware(middleware)
+                .UseMiddleware(new TransformCompletion(recover, replacement));
+            var submission = admission.Submit(scheduler, () => 42, TaskSchedulerAdmissionMode.Wait);
+            try
+            {
+                middleware.Release.SetResult(true);
+                if (recover)
+                {
+                    Assert.That(await submission.Completion, Is.EqualTo(23));
+                    await Assert.ThatAsync(async () => await submission.Admission, Throws.TypeOf<InvalidOperationException>());
+                }
+                else
+                {
+                    await Assert.ThatAsync(async () => await submission.Completion, Throws.Exception.SameAs(replacement));
+                    await Assert.ThatAsync(async () => await submission.Admission, Throws.Exception.SameAs(replacement));
+                }
+                Assert.That(await middleware.DecisionAtQuiescence.Task, Is.True);
+            }
+            finally { middleware.Release.TrySetResult(true); }
+        }
+
+        [Test]
+        public async Task CallerTimeout_UnreachedAdmissionWaitsForUnderlyingQuiescenceAndKeepsCallerFailure()
+        {
+            await using var flow = new TaskFlow();
+            var admission = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
+            var middleware = new QuiescingShortCircuit(null);
+            var scheduler = flow.WithBoundedAdmission(admission).UseMiddleware(middleware).WithTimeout(TimeSpan.FromMilliseconds(100));
+            var submission = admission.Submit(scheduler, () => 42, TaskSchedulerAdmissionMode.Wait);
+            try
+            {
+                await Assert.ThatAsync(async () => await submission.Completion, Throws.TypeOf<TimeoutException>());
+                Assert.That(submission.Admission.IsCompleted, Is.False);
+                var shutdown = flow.DisposeAsync().AsTask();
+                Assert.That(shutdown.IsCompleted, Is.False);
+                middleware.Release.SetResult(true);
+                await shutdown;
+                Assert.That(await middleware.DecisionAtQuiescence.Task, Is.True);
+                await Assert.ThatAsync(async () => await submission.Admission, Throws.TypeOf<TimeoutException>());
+            }
+            finally { middleware.Release.TrySetResult(true); }
+        }
+
+        [Test]
+        public async Task ClosedEntry_SettlesExplicitAdmissionWithoutInvokingCompletionMiddleware()
+        {
+            var flow = new TaskFlow();
+            var admission = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
+            var observer = new CompletionObserver();
+            var scheduler = flow.WithBoundedAdmission(admission).UseMiddleware(observer);
+            await flow.DisposeAsync();
+            var submission = admission.Submit(scheduler, () => 42, TaskSchedulerAdmissionMode.Wait);
+            Assert.That(submission.Admission.IsCompleted, Is.True);
+            await Assert.ThatAsync(async () => await submission.Admission, Throws.TypeOf<ObjectDisposedException>());
+            await Assert.ThatAsync(async () => await submission.Completion, Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(observer.Invocations, Is.Zero);
+        }
+
+        private sealed class QuiescingShortCircuit(Exception? failure) : ITaskSchedulerEnqueueMiddleware
+        {
+            public TaskCompletionSource<bool> Release { get; } = Gate();
+            public TaskCompletionSource<bool> DecisionAtQuiescence { get; } = Gate();
+            public async Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
+            {
+                context.Operation.OnQuiesced(() => DecisionAtQuiescence.TrySetResult(context.Operation.AdmissionRequest!.Decision.IsCompleted));
+                await Release.Task;
+                if (failure != null) throw failure;
+                return (T)(object)17;
+            }
+        }
+
+        private sealed class TransformCompletion(bool recover, Exception replacement) : ITaskSchedulerCompletionMiddleware
+        {
+            public ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
+                => next(context, recover
+                    ? TaskSchedulerOperationOutcome<T>.FromResult((T)(object)23)
+                    : TaskSchedulerOperationOutcome<T>.FromException(replacement));
+        }
+
         private sealed class CompletionObserver : ITaskSchedulerCompletionMiddleware
         {
             public int Invocations { get; private set; }

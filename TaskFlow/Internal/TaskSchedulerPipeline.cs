@@ -77,6 +77,22 @@ namespace System.Threading.Tasks.Flow.Internal
             using var context = Lifetime?.EnterContext();
             try
             {
+                var result = await EnqueueWithCompletion(operation).ConfigureAwait(false);
+                operation.AdmissionRequest?.RecordCallerOutcome(null);
+                return result;
+            }
+            catch (Exception exception)
+            {
+                operation.AdmissionRequest?.RecordCallerOutcome(exception);
+                throw;
+            }
+            finally { operation.ReleaseActivity(); }
+        }
+
+        private async Task<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
+        {
+            try
+            {
                 if (Lifetime != null)
                 {
                     Lifetime.Enter();
@@ -96,7 +112,6 @@ namespace System.Threading.Tasks.Flow.Internal
                 var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.CallerCancellationToken).ConfigureAwait(false);
                 return outcome.GetResultOrThrow();
             }
-            finally { operation.ReleaseActivity(); }
         }
 
         private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
