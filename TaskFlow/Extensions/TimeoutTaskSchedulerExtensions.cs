@@ -214,47 +214,21 @@ namespace System.Threading.Tasks.Flow
         {
             Argument.NotNull(taskScheduler);
 #if NET8_0_OR_GREATER
-            return WithTimeout(taskScheduler, timeout, TimeProvider.System);
+            return TimeProviderTimeoutTaskSchedulerExtensions.WithTimeout(taskScheduler, timeout, TimeProvider.System);
 #else
             return taskScheduler.UseMiddleware(new TimeoutMiddleware(timeout));
 #endif
         }
 
-#if NET8_0_OR_GREATER
-        /// <summary>
-        /// Creates a scheduler wrapper with a queue-and-execution timeout measured by the specified time provider.
-        /// </summary>
-        /// <param name="taskScheduler">The scheduler to wrap.</param>
-        /// <param name="timeout">The timeout budget, or <see cref="Timeout.InfiniteTimeSpan"/>.</param>
-        /// <param name="timeProvider">The provider used for timeout delays. If <c>null</c>, <see cref="TimeProvider.System"/> is used.</param>
-        /// <returns>A scheduler that cancels operations and throws <see cref="TimeoutException"/> when the budget expires.</returns>
-        /// <exception cref="ArgumentNullException">The scheduler is <c>null</c>.</exception>
-        /// <exception cref="ArgumentException">The timeout is not positive or infinite, or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0016:Add public types and members to the declared API", Justification = "This overload is conditionally available on net8.0 and later; the shared API baseline also targets netstandard2.0.")]
-        public static ITaskScheduler WithTimeout(this ITaskScheduler taskScheduler, TimeSpan timeout, TimeProvider? timeProvider)
-        {
-            Argument.NotNull(taskScheduler);
-            return taskScheduler.UseMiddleware(new TimeoutMiddleware(timeout, timeProvider ?? TimeProvider.System));
-        }
-#endif
-
+#if !NET8_0_OR_GREATER
         private sealed class TimeoutMiddleware : ITaskSchedulerEnqueueMiddleware
         {
             private readonly TimeSpan _timeout;
 
-#if NET8_0_OR_GREATER
-            private readonly TimeProvider _timeProvider;
-
-            public TimeoutMiddleware(TimeSpan timeout, TimeProvider timeProvider)
-#else
             public TimeoutMiddleware(TimeSpan timeout)
-#endif
             {
                 Argument.Assert(timeout, t => t > TimeSpan.Zero && t.TotalMilliseconds <= int.MaxValue || t == Timeout.InfiniteTimeSpan, "Wrong timeout value");
                 _timeout = timeout;
-#if NET8_0_OR_GREATER
-                _timeProvider = timeProvider;
-#endif
             }
 
             public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
@@ -263,11 +237,7 @@ namespace System.Threading.Tasks.Flow
 
                 async Task<TResult> TimeoutAsync(CancellationToken token)
                 {
-#if NET8_0_OR_GREATER
-                    await Task.Delay(_timeout, _timeProvider, token).ConfigureAwait(false);
-#else
                     await Task.Delay(_timeout, token).ConfigureAwait(false);
-#endif
                     throw new TimeoutException(FormatExceptionMessage());
                 }
 
@@ -286,5 +256,6 @@ namespace System.Threading.Tasks.Flow
                 }
             }
         }
+#endif
     }
 }

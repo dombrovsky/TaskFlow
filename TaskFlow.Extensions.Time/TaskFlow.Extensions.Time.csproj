@@ -4,7 +4,7 @@
     <DefineConstants>$(DefineConstants);TASKFLOW_EXTENSIONS_TIME</DefineConstants>
     <RootNamespace>System.Threading.Tasks.Flow</RootNamespace>
     <PackageId>TaskFlow.Extensions.Time</PackageId>
-    <Description>Leading-edge admission throttling for TaskFlow on netstandard2.0 with TimeProvider-based deterministic timing.</Description>
+    <Description>Timeouts and leading-edge admission throttling for TaskFlow on netstandard2.0 with TimeProvider-based deterministic timing.</Description>
     <PackageTags>async;task-scheduler;task-queue;concurrency;throttling;time-provider;netstandard</PackageTags>
   </PropertyGroup>
 
@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <Compile Include="..\TaskFlow\Extensions\ThrottlingTaskSchedulerExtensions.cs" Link="ThrottlingTaskSchedulerExtensions.cs" />
+    <Compile Include="..\TaskFlow\Extensions\TimeProviderTimeoutTaskSchedulerExtensions.cs" Link="TimeProviderTimeoutTaskSchedulerExtensions.cs" />
+    <Compile Include="..\TaskFlow\Internal\TaskExtensions.cs" Link="Internal\TaskExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>
