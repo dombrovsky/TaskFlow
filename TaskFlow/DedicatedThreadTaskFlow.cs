@@ -30,11 +30,11 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Create a task flow with a dedicated thread named "MyBackgroundThread"
     /// using var taskFlow = new DedicatedThreadTaskFlow("MyBackgroundThread");
-    /// 
+    ///
     /// // Enqueue tasks for execution on the dedicated thread
     /// var task1 = taskFlow.Enqueue(() => Console.WriteLine("Task 1"));
     /// var task2 = taskFlow.Enqueue(() => Console.WriteLine("Task 2"));
-    /// 
+    ///
     /// // Wait for tasks to complete
     /// await Task.WhenAll(task1, task2);
     /// </code>

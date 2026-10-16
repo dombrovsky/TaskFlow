@@ -30,7 +30,8 @@ namespace TaskFlow.Tests.Extensions
             var result = await scheduler.Enqueue(() =>
             {
                 attempts++;
-                if (attempts < 3) throw new InvalidOperationException("retryable");
+                if (attempts < 3)
+                    throw new InvalidOperationException("retryable");
                 return 42;
             });
 
@@ -231,7 +232,8 @@ namespace TaskFlow.Tests.Extensions
 
             public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
-                if (typeof(TResult) != typeof(int)) throw new NotSupportedException("This test prototype supports Int32 results only.");
+                if (typeof(TResult) != typeof(int))
+                    throw new NotSupportedException("This test prototype supports Int32 results only.");
                 var key = (string)context.State!;
                 var candidate = new Producer();
                 var producer = _producers.GetOrAdd(key, candidate);
@@ -284,7 +286,8 @@ namespace TaskFlow.Tests.Extensions
             public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
                 var key = (string)context.State!;
-                if (!_active.TryAdd(key, null)) throw new InvalidOperationException("An equivalent operation is already active.");
+                if (!_active.TryAdd(key, null))
+                    throw new InvalidOperationException("An equivalent operation is already active.");
                 _accepted.TrySetResult(null);
                 try
                 {
@@ -310,6 +313,7 @@ namespace TaskFlow.Tests.Extensions
             private readonly object _sync = new object();
             private readonly Dictionary<string, Lane> _lanes = new Dictionary<string, Lane>();
             private readonly TaskCompletionSource<object?> _firstEntered = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
             private int _maximumSameKeyConcurrency;
             private bool _isDisposed;
 
@@ -318,7 +322,8 @@ namespace TaskFlow.Tests.Extensions
             {
                 get
                 {
-                    lock (_sync) return _lanes.Count;
+                    lock (_sync)
+                        return _lanes.Count;
                 }
             }
             public int MaximumSameKeyConcurrency => _maximumSameKeyConcurrency;
@@ -364,7 +369,8 @@ namespace TaskFlow.Tests.Extensions
 
             public void Dispose()
             {
-                lock (_sync) _isDisposed = true;
+                lock (_sync)
+                    _isDisposed = true;
             }
 
             private void UpdateMaximum(int value)
@@ -373,7 +379,8 @@ namespace TaskFlow.Tests.Extensions
                 do
                 {
                     current = _maximumSameKeyConcurrency;
-                    if (current >= value) return;
+                    if (current >= value)
+                        return;
                 }
                 while (Interlocked.CompareExchange(ref _maximumSameKeyConcurrency, value, current) != current);
             }
@@ -389,6 +396,7 @@ namespace TaskFlow.Tests.Extensions
         private sealed class LocalOperationScope : ITaskScheduler
         {
             private readonly ITaskScheduler _sharedLane;
+
             private int _activeCount;
             public LocalOperationScope(ITaskScheduler sharedLane) => _sharedLane = sharedLane;
             public int ActiveCount => Volatile.Read(ref _activeCount);
@@ -429,7 +437,8 @@ namespace TaskFlow.Tests.Extensions
 
             public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
             {
-                if (typeof(TResult) != typeof(int)) throw new NotSupportedException("This test prototype supports Int32 results only.");
+                if (typeof(TResult) != typeof(int))
+                    throw new NotSupportedException("This test prototype supports Int32 results only.");
                 var key = (string)context.State!;
                 var candidate = new OwnedProducer();
                 var producer = _producers.GetOrAdd(key, candidate);

@@ -62,12 +62,12 @@ namespace System.Threading.Tasks.Flow
     ///     await SomeLongRunningOperationAsync(token);
     ///     return "completed";
     /// }
-    /// 
-    /// try 
+    ///
+    /// try
     /// {
     ///     // Queue wait and delegate execution share the same 30-second budget
     ///     var result = await timeoutScheduler.Enqueue(RunAsync);
-    ///     
+    ///
     ///     Console.WriteLine($"Operation completed: {result}");
     /// }
     /// catch (TimeoutException ex)
@@ -80,8 +80,8 @@ namespace System.Threading.Tasks.Flow
     /// var namedTimeoutScheduler = scheduler
     ///     .WithOperationName("DatabaseQuery")
     ///     .WithTimeout(TimeSpan.FromSeconds(15));
-    /// 
-    /// try 
+    ///
+    /// try
     /// {
     ///     var data = await namedTimeoutScheduler.Enqueue(() => QueryDatabaseAsync());
     /// }
@@ -97,13 +97,13 @@ namespace System.Threading.Tasks.Flow
     ///     .WithOperationName("ExternalApiCall")
     ///     .WithTimeout(TimeSpan.FromSeconds(10))
     ///     .OnError&lt;TimeoutException&gt;((sched, ex, name) => {
-    ///         _metrics.IncrementCounter("api.timeout", 
+    ///         _metrics.IncrementCounter("api.timeout",
     ///             new { operation = name?.OperationName ?? "unknown" });
     ///     })
     ///     .OnError&lt;HttpRequestException&gt;(ex => {
     ///         _logger.LogWarning(ex, "HTTP error in API call");
     ///     });
-    /// 
+    ///
     /// // This operation has comprehensive error handling and timeout protection
     /// var result = await robustScheduler.Enqueue(() => CallExternalApiAsync());
     /// </code>
@@ -111,13 +111,13 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Short timeout for quick operations
     /// var quickScheduler = scheduler.WithTimeout(TimeSpan.FromSeconds(5));
-    /// 
-    /// // Longer timeout for complex operations  
+    ///
+    /// // Longer timeout for complex operations
     /// var complexScheduler = scheduler.WithTimeout(TimeSpan.FromMinutes(2));
-    /// 
+    ///
     /// // Infinite timeout (effectively disables timeout)
     /// var infiniteScheduler = scheduler.WithTimeout(Timeout.InfiniteTimeSpan);
-    /// 
+    ///
     /// // Very precise timeout
     /// var preciseScheduler = scheduler.WithTimeout(TimeSpan.FromMilliseconds(500));
     /// </code>
@@ -182,7 +182,7 @@ namespace System.Threading.Tasks.Flow
         /// <example>
         /// <code>
         /// ITaskScheduler baseScheduler = new TaskFlow();
-        /// 
+        ///
         /// // Create scheduler with a 30-second queue-and-execution budget
         /// var timeoutScheduler = baseScheduler.WithTimeout(TimeSpan.FromSeconds(30));
         ///
@@ -195,8 +195,8 @@ namespace System.Threading.Tasks.Flow
         ///     }
         ///     return "completed";
         /// }
-        /// 
-        /// try 
+        ///
+        /// try
         /// {
         ///     var result = await timeoutScheduler.Enqueue(RunAsync);
         /// }

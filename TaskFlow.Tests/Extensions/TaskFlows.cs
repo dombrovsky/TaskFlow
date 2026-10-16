@@ -1,4 +1,4 @@
-﻿namespace TaskFlow.Tests.Extensions
+namespace TaskFlow.Tests.Extensions
 {
     using System.Threading.Tasks.Flow;
 

@@ -159,7 +159,7 @@ namespace TaskFlow.Tests
             var failedTask = sut.Enqueue(_ => Task.FromException(new InvalidOperationException("Failure")));
 
             Assert.That(sut.Dispose, Throws.Nothing);
-            Assert.That(() => failedTask.IsFaulted, Is.True.After(100 ,10), failedTask.Status.ToString);
+            Assert.That(() => failedTask.IsFaulted, Is.True.After(100, 10), failedTask.Status.ToString);
         }
 
         [Test]

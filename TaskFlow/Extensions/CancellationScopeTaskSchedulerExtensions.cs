@@ -35,33 +35,33 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// using var cts = new CancellationTokenSource();
     /// ITaskScheduler scheduler = // ... obtain scheduler
-    /// 
+    ///
     /// // Create a cancellation scope
     /// var scopedScheduler = scheduler.CreateCancellationScope(cts.Token);
-    /// 
+    ///
     /// // All operations on scopedScheduler will be cancelled if cts is cancelled
     /// var task1 = scopedScheduler.Enqueue(() => LongRunningOperation1());
     /// var task2 = scopedScheduler.Enqueue(() => LongRunningOperation2());
-    /// 
+    ///
     /// // Cancel all operations in the scope
     /// cts.Cancel();
-    /// 
+    ///
     /// // Both task1 and task2 will be cancelled
     /// </code>
     /// <para>Hierarchical cancellation with multiple scopes:</para>
     /// <code>
     /// using var parentCts = new CancellationTokenSource();
     /// using var childCts = new CancellationTokenSource();
-    /// 
+    ///
     /// ITaskScheduler baseScheduler = // ... obtain scheduler
-    /// 
+    ///
     /// // Create nested cancellation scopes
     /// var parentScope = baseScheduler.CreateCancellationScope(parentCts.Token);
     /// var childScope = parentScope.CreateCancellationScope(childCts.Token);
-    /// 
+    ///
     /// // Operations in child scope are affected by both parent and child cancellation
     /// var childTask = childScope.Enqueue(() => SomeOperation());
-    /// 
+    ///
     /// // Cancelling either parentCts or childCts will cancel childTask
     /// parentCts.Cancel(); // This will cancel childTask
     /// </code>
@@ -71,11 +71,11 @@ namespace System.Threading.Tasks.Flow
     /// {
     ///     // Use request cancellation token to create scope
     ///     var requestScopedScheduler = _scheduler.CreateCancellationScope(context.RequestAborted);
-    ///     
+    ///
     ///     // All operations will be automatically cancelled if request is aborted
     ///     await requestScopedScheduler.Enqueue(() => ProcessDataAsync());
     ///     await requestScopedScheduler.Enqueue(() => SaveResultsAsync());
-    ///     
+    ///
     ///     // No need to manually pass context.RequestAborted to each operation
     /// }
     /// </code>
@@ -91,9 +91,9 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <remarks>
         /// <para>
-        /// This method creates a wrapper around the base task scheduler that intercepts all 
+        /// This method creates a wrapper around the base task scheduler that intercepts all
         /// <see cref="ITaskScheduler.Enqueue{T}(Func{object?, CancellationToken, ValueTask{T}}, object?, CancellationToken)"/>
-        /// calls and creates a linked cancellation token combining the operation's cancellation token 
+        /// calls and creates a linked cancellation token combining the operation's cancellation token
         /// with the scope cancellation token.
         /// </para>
         /// <para>
@@ -118,10 +118,10 @@ namespace System.Threading.Tasks.Flow
         /// <code>
         /// ITaskScheduler baseScheduler = // ... obtain scheduler
         /// using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        /// 
+        ///
         /// // Create scope that cancels all operations after 5 minutes
         /// var scopedScheduler = baseScheduler.CreateCancellationScope(cts.Token);
-        /// 
+        ///
         /// // This operation will be cancelled if either:
         /// // 1. The individual operation token is cancelled, OR
         /// // 2. The scope token (cts.Token) is cancelled after 5 minutes
@@ -131,7 +131,7 @@ namespace System.Threading.Tasks.Flow
         ///         // token is linked: will be cancelled by either operationCts or cts
         ///         await SomeAsyncOperation(token);
         ///         return "completed";
-        ///     }, 
+        ///     },
         ///     operationCts.Token);
         /// </code>
         /// </example>

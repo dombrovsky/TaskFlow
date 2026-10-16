@@ -123,7 +123,8 @@ namespace System.Threading.Tasks.Flow
 
             public async ValueTask<T> InvokeAsync<T>(TaskSchedulerOperationContext context, TaskSchedulerExecutionDelegate<T> next)
             {
-                if (typeof(T) != typeof(TResult)) return await next(context).ConfigureAwait(true);
+                if (typeof(T) != typeof(TResult))
+                    return await next(context).ConfigureAwait(true);
                 var result = await _taskFunc(context).ConfigureAwait(true);
                 return (T)(object?)result!;
             }

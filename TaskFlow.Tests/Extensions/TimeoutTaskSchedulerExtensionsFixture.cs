@@ -8,6 +8,7 @@ namespace TaskFlow.Tests.Extensions
     {
         private static readonly string[] CompletionBoundaryOutcomes = ["success", "timeout"];
         private static readonly string[] CancellationBoundaryOutcomes = ["canceled", "timeout"];
+
         private ITaskFlow? _taskFlow;
 
         [TearDown]

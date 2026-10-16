@@ -11,6 +11,7 @@ namespace TaskFlow.Tests.Extensions
         private static readonly int[] SuccessfulResults = [1, 2];
         private static readonly string[] SuccessfulHookLifecycle = ["before", "success:42", "finally"];
         private static readonly string[] FailedBeforeLifecycle = ["before", "finally"];
+
         private ITaskFlow? _taskFlow;
         [TearDown]
         public async Task TearDown()
@@ -270,6 +271,7 @@ namespace TaskFlow.Tests.Extensions
         private sealed class PerOperationAsyncInterceptorFactory : IAsyncTaskSchedulerInterceptor
         {
             private readonly IList<string> _events;
+
             private int _createdCount;
 
             public PerOperationAsyncInterceptorFactory(IList<string> events) => _events = events;
@@ -321,6 +323,7 @@ namespace TaskFlow.Tests.Extensions
         private struct SynchronousRecordingInterceptor : ITaskSchedulerInterceptor
         {
             private readonly IList<string> _events;
+
             private int _stage;
 
             public SynchronousRecordingInterceptor(IList<string> events)
@@ -362,14 +365,16 @@ namespace TaskFlow.Tests.Extensions
                 _recorder.Context = context;
                 _recorder.BeforeContext = SynchronizationContext.Current;
                 _recorder.Events.Add("before");
-                if (_recorder.ThrowOnBefore) throw new InvalidOperationException();
+                if (_recorder.ThrowOnBefore)
+                    throw new InvalidOperationException();
             }
 
             public void OnSuccess<TResult>(TaskSchedulerInterceptionContext context, TResult result)
             {
                 _recorder.SuccessContext = SynchronizationContext.Current;
                 _recorder.Events.Add($"success:{result}");
-                if (_recorder.ThrowOnSuccess) throw new NotSupportedException();
+                if (_recorder.ThrowOnSuccess)
+                    throw new NotSupportedException();
             }
 
             public void OnError(TaskSchedulerInterceptionContext context, Exception exception) => _recorder.Events.Add($"error:{exception.Message}");
@@ -394,7 +399,8 @@ namespace TaskFlow.Tests.Extensions
             public ValueTask OnFinallyAsync(TaskSchedulerInterceptionContext context) => RecordAsync("finally");
             private ValueTask RecordAsync(string value)
             {
-                if (!_asynchronous) { _events.Add(value); return default; }
+                if (!_asynchronous)
+                { _events.Add(value); return default; }
                 return new ValueTask(RecordLaterAsync(value));
             }
             private async Task RecordLaterAsync(string value) { await Task.Yield(); _events.Add(value); }

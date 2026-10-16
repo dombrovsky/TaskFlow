@@ -65,7 +65,7 @@ namespace System.Threading.Tasks.Flow
         /// the execution thread is created or obtained in the derived class.
         /// </remarks>
         public abstract int ThreadId { get; }
-        
+
         /// <summary>
         /// Enqueues a task function for execution on the designated thread.
         /// </summary>
@@ -319,7 +319,7 @@ namespace System.Threading.Tasks.Flow
         /// <summary>
         /// A synchronization context that uses a blocking collection to marshal calls to a specific thread.
         /// </summary>
-        private sealed class BlockingCollectionSynchronizationContext  : SynchronizationContext
+        private sealed class BlockingCollectionSynchronizationContext : SynchronizationContext
         {
             private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _blockingCollection;
             private readonly SynchronizationContext? _fallbackSynchronizationContext;

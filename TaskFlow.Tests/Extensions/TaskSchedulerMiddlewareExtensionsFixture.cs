@@ -342,7 +342,8 @@ namespace TaskFlow.Tests.Extensions
 
             public async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<TResult> outcome, TaskSchedulerCompletionDelegate<TResult> continuation)
             {
-                if (!_throwAfterContinuation) throw _exception;
+                if (!_throwAfterContinuation)
+                    throw _exception;
                 _ = await continuation(context, outcome);
                 throw _exception;
             }

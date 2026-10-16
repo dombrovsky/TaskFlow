@@ -8,6 +8,7 @@ namespace System.Threading.Tasks.Flow.Internal
     {
         private readonly object?[] _localStates;
         private readonly object _localStatesLock = new object();
+
         private int _completionClaimed;
 
         protected PipelineOperation(object? state, int registrationCount, CancellationToken callerCancellationToken)

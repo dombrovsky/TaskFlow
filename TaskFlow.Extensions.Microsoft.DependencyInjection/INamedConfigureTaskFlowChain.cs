@@ -52,23 +52,23 @@ namespace System.Threading.Tasks.Flow
     /// {
     ///     private readonly ILogger&lt;ApiTaskFlowChain&gt; _logger;
     ///     private readonly IMetrics _metrics;
-    ///     
+    ///
     ///     public ApiTaskFlowChain(ILogger&lt;ApiTaskFlowChain&gt; logger, IMetrics metrics)
     ///     {
     ///         _logger = logger;
     ///         _metrics = metrics;
     ///     }
-    ///     
+    ///
     ///     public string Name =&gt; "api";
-    ///     
+    ///
     ///     public ITaskScheduler ConfigureChain(ITaskScheduler taskScheduler)
     ///     {
     ///         return taskScheduler
     ///             .WithOperationName("ApiOperation")
     ///             .WithTimeout(TimeSpan.FromSeconds(30))
-    ///             .OnError&lt;HttpRequestException&gt;((sched, ex, name) =&gt; 
+    ///             .OnError&lt;HttpRequestException&gt;((sched, ex, name) =&gt;
     ///                 _logger.LogWarning(ex, "HTTP error in {Operation}", name?.OperationName))
-    ///             .OnError&lt;TimeoutException&gt;((sched, ex, name) =&gt; 
+    ///             .OnError&lt;TimeoutException&gt;((sched, ex, name) =&gt;
     ///                 _metrics.IncrementCounter("api.timeout", new { operation = name?.OperationName }));
     ///     }
     /// }
@@ -77,9 +77,9 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Register using implementation
     /// services.AddSingleton&lt;INamedConfigureTaskFlowChain, ApiTaskFlowChain&gt;();
-    /// 
+    ///
     /// // Register using delegate
-    /// services.AddTaskFlow("background", 
+    /// services.AddTaskFlow("background",
     ///     configureSchedulerChain: (scheduler, provider) =&gt; {
     ///         var logger = provider.GetRequiredService&lt;ILogger&gt;();
     ///         return scheduler
@@ -94,7 +94,7 @@ namespace System.Threading.Tasks.Flow
     ///     var baseScheduler = taskScheduler
     ///         .WithOperationName($"{Name}Operation")
     ///         .WithTimeout(TimeSpan.FromMinutes(5));
-    ///     
+    ///
     ///     // Add environment-specific behavior
     ///     if (_environment.IsProduction())
     ///     {
@@ -107,7 +107,7 @@ namespace System.Threading.Tasks.Flow
     ///         baseScheduler = baseScheduler
     ///             .OnError&lt;Exception&gt;(ex =&gt; _console.WriteLine($"Error: {ex}"));
     ///     }
-    ///     
+    ///
     ///     return baseScheduler;
     /// }
     /// </code>
@@ -149,7 +149,7 @@ namespace System.Threading.Tasks.Flow
         /// {
         ///     // This chain will be applied when CreateTaskFlow("database") is called
         ///     public string Name =&gt; "database";
-        ///     
+        ///
         ///     public ITaskScheduler ConfigureChain(ITaskScheduler taskScheduler)
         ///     {
         ///         return taskScheduler
@@ -210,26 +210,26 @@ namespace System.Threading.Tasks.Flow
         /// {
         ///     if (taskScheduler == null)
         ///         throw new ArgumentNullException(nameof(taskScheduler));
-        ///     
+        ///
         ///     // Build a comprehensive chain for this named instance
         ///     var chain = taskScheduler
         ///         .WithOperationName(Name) // Add operation naming
         ///         .WithTimeout(TimeSpan.FromMinutes(2)); // Add timeout protection
-        ///     
+        ///
         ///     // Add environment-specific extensions
         ///     if (_configuration.GetValue&lt;bool&gt;("EnableThrottling"))
         ///     {
         ///         var interval = _configuration.GetValue&lt;TimeSpan&gt;("ThrottleInterval");
         ///         chain = chain.WithThrottle(interval);
         ///     }
-        ///     
+        ///
         ///     // Add error handling
         ///     chain = chain
-        ///         .OnError&lt;TimeoutException&gt;((sched, ex, name) =&gt; 
+        ///         .OnError&lt;TimeoutException&gt;((sched, ex, name) =&gt;
         ///             _metrics.IncrementCounter("timeout", new { operation = name?.OperationName }))
-        ///         .OnError&lt;Exception&gt;(ex =&gt; 
+        ///         .OnError&lt;Exception&gt;(ex =&gt;
         ///             _logger.LogError(ex, "Error in {Name} operation", Name));
-        ///     
+        ///
         ///     return chain;
         /// }
         /// </code>

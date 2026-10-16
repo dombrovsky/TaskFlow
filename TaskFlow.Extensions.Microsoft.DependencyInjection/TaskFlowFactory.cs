@@ -45,17 +45,17 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Register TaskFlow services in dependency injection
     /// services.AddTaskFlow();
-    /// 
+    ///
     /// // Use the factory
     /// public class DocumentProcessor
     /// {
     ///     private readonly ITaskFlowFactory _factory;
-    ///     
+    ///
     ///     public DocumentProcessor(ITaskFlowFactory factory)
     ///     {
     ///         _factory = factory;
     ///     }
-    ///     
+    ///
     ///     public async Task ProcessDocumentAsync()
     ///     {
     ///         using var taskFlow = _factory.CreateTaskFlow();
@@ -68,10 +68,10 @@ namespace System.Threading.Tasks.Flow
     /// // Register multiple named configurations
     /// services.AddTaskFlow("database", new TaskFlowOptions { ... });
     /// services.AddTaskFlow("api", new TaskFlowOptions { ... });
-    /// services.AddTaskFlow("background", 
-    ///     configureSchedulerChain: (scheduler, provider) =&gt; 
+    /// services.AddTaskFlow("background",
+    ///     configureSchedulerChain: (scheduler, provider) =&gt;
     ///         scheduler.WithTimeout(TimeSpan.FromMinutes(30)));
-    /// 
+    ///
     /// // Use named configurations
     /// var databaseFlow = factory.CreateTaskFlow("database");
     /// var apiFlow = factory.CreateTaskFlow("api");
@@ -85,7 +85,7 @@ namespace System.Threading.Tasks.Flow
     ///     public string Name =&gt; "ui";
     ///     public ITaskFlow Create(TaskFlowOptions options) =&gt; new CurrentThreadTaskFlow(options);
     /// }
-    /// 
+    ///
     /// // Custom chain configuration
     /// public class LoggingChain : INamedConfigureTaskFlowChain
     /// {
@@ -93,11 +93,11 @@ namespace System.Threading.Tasks.Flow
     ///     public ITaskScheduler ConfigureChain(ITaskScheduler scheduler) =&gt;
     ///         scheduler.OnError(ex =&gt; _logger.LogError(ex, "UI operation failed"));
     /// }
-    /// 
+    ///
     /// // Registration
     /// services.AddSingleton&lt;INamedTaskFlowFactory, UiTaskFlowFactory&gt;();
     /// services.AddSingleton&lt;INamedConfigureTaskFlowChain, LoggingChain&gt;();
-    /// 
+    ///
     /// // Usage creates CurrentThreadTaskFlow with error logging
     /// var uiFlow = factory.CreateTaskFlow("ui");
     /// </code>
@@ -157,7 +157,7 @@ namespace System.Threading.Tasks.Flow
         /// Creates a new <see cref="ITaskFlow"/> instance using the configuration associated with the specified name.
         /// </summary>
         /// <param name="name">
-        /// The optional name identifying which configuration to use. If <c>null</c> or empty, 
+        /// The optional name identifying which configuration to use. If <c>null</c> or empty,
         /// the default configuration is used.
         /// </param>
         /// <returns>
@@ -200,11 +200,11 @@ namespace System.Threading.Tasks.Flow
         /// var defaultFlow = factory.CreateTaskFlow();
         /// var alsoDefaultFlow = factory.CreateTaskFlow("");
         /// var nullDefaultFlow = factory.CreateTaskFlow(null);
-        /// 
+        ///
         /// // Create with named configuration
         /// var databaseFlow = factory.CreateTaskFlow("database");
         /// var apiFlow = factory.CreateTaskFlow("api");
-        /// 
+        ///
         /// // All instances should be disposed when done
         /// using var flow = factory.CreateTaskFlow("background");
         /// await flow.Enqueue(() =&gt; DoWorkAsync());

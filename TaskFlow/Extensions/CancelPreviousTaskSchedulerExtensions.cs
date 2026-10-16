@@ -41,23 +41,23 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
     /// var cancelPreviousScheduler = scheduler.CreateCancelPrevious();
-    /// 
+    ///
     /// // User types "a" - starts search
     /// var search1 = cancelPreviousScheduler.Enqueue(() => SearchAsync("a"));
-    /// 
+    ///
     /// // User types "ab" - cancels previous search and starts new one
     /// var search2 = cancelPreviousScheduler.Enqueue(() => SearchAsync("ab"));
-    /// 
+    ///
     /// // User types "abc" - cancels previous search and starts new one
     /// var search3 = cancelPreviousScheduler.Enqueue(() => SearchAsync("abc"));
-    /// 
+    ///
     /// // Only search3 will typically complete; search1 and search2 will be cancelled
     /// var results = await search3;
     /// </code>
     /// <para>Auto-save with cancellation:</para>
     /// <code>
     /// var autoSaveScheduler = documentScheduler.CreateCancelPrevious();
-    /// 
+    ///
     /// void OnDocumentChanged()
     /// {
     ///     // Cancel any pending save and start a new one
@@ -67,17 +67,17 @@ namespace System.Threading.Tasks.Flow
     ///         await SaveDocumentAsync(token);
     ///     });
     /// }
-    /// 
+    ///
     /// // Multiple rapid changes will cancel previous saves
     /// OnDocumentChanged(); // Save 1 started
-    /// OnDocumentChanged(); // Save 1 cancelled, Save 2 started  
+    /// OnDocumentChanged(); // Save 1 cancelled, Save 2 started
     /// OnDocumentChanged(); // Save 2 cancelled, Save 3 started
     /// // Only Save 3 will complete
     /// </code>
     /// <para>Real-time data updates:</para>
     /// <code>
     /// var dataUpdateScheduler = scheduler.CreateCancelPrevious();
-    /// 
+    ///
     /// async Task RefreshDataAsync()
     /// {
     ///     async Task&lt;Data&gt; FetchAsync(CancellationToken token)
@@ -87,11 +87,11 @@ namespace System.Threading.Tasks.Flow
     ///         return freshData;
     ///     }
     ///
-    ///     try 
+    ///     try
     ///     {
     ///         // This will be canceled if another refresh is triggered
     ///         var data = await dataUpdateScheduler.Enqueue(FetchAsync);
-    ///         
+    ///
     ///         UpdateUI(data);
     ///     }
     ///     catch (OperationCanceledException)
@@ -152,32 +152,32 @@ namespace System.Threading.Tasks.Flow
         ///     await Task.Delay(1000, token);
         ///     return result;
         /// }
-        /// 
+        ///
         /// // Enqueue multiple operations rapidly
         /// var task1 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 1", token));
-        /// 
+        ///
         /// var task2 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 2", token));
-        /// 
+        ///
         /// var task3 = cancelPreviousScheduler.Enqueue(token => RunAsync("Task 3", token));
-        /// 
-        /// try 
+        ///
+        /// try
         /// {
         ///     var result1 = await task1; // Will likely throw OperationCanceledException
         /// }
-        /// catch (OperationCanceledException) 
+        /// catch (OperationCanceledException)
         /// {
         ///     // Expected - task1 was cancelled by task2
         /// }
-        /// 
-        /// try 
+        ///
+        /// try
         /// {
         ///     var result2 = await task2; // Will likely throw OperationCanceledException
         /// }
-        /// catch (OperationCanceledException) 
+        /// catch (OperationCanceledException)
         /// {
         ///     // Expected - task2 was cancelled by task3
         /// }
-        /// 
+        ///
         /// var result3 = await task3; // Should complete successfully with "Task 3"
         /// </code>
         /// </example>

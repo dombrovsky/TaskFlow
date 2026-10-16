@@ -33,6 +33,8 @@ jobs:
       run: dotnet --version
     - name: Restore dependencies
       run: dotnet restore
+    - name: Verify formatting
+      run: dotnet format whitespace TaskFlow.sln --verify-no-changes --no-restore
     - name: Build
       run: dotnet build --configuration Release --no-restore
     - name: Test

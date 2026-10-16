@@ -36,8 +36,8 @@ namespace System.Threading.Tasks.Flow
     /// <para>Handling an admission-throttled operation:</para>
     /// <code>
     /// var throttledScheduler = scheduler.WithThrottle(TimeSpan.FromSeconds(1));
-    /// 
-    /// try 
+    ///
+    /// try
     /// {
     ///     // These operations are enqueued too quickly
     ///     await throttledScheduler.Enqueue(() => SaveDocumentAsync());
@@ -47,7 +47,7 @@ namespace System.Threading.Tasks.Flow
     /// {
     ///     // Handle throttling - maybe show user feedback or retry later
     ///     _logger.LogInformation("Save operation throttled: {Message}", ex.Message);
-    ///     
+    ///
     ///     // Could implement retry logic
     ///     await Task.Delay(TimeSpan.FromSeconds(1));
     ///     await throttledScheduler.Enqueue(() => SaveDocumentAsync());
@@ -60,7 +60,7 @@ namespace System.Threading.Tasks.Flow
     /// </code>
     /// <para>Differentiating throttling from other cancellations:</para>
     /// <code>
-    /// try 
+    /// try
     /// {
     ///     await throttledScheduler.Enqueue(() => SomeOperationAsync());
     /// }

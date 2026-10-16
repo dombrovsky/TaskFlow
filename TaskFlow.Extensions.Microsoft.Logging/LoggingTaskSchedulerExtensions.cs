@@ -71,6 +71,7 @@ namespace System.Threading.Tasks.Flow
         {
             private readonly ILogger _logger;
             private readonly TaskFlowLoggingOptions _options;
+
             private long _lastOperationId;
 
             public LoggingMiddleware(ILogger logger, TaskFlowLoggingOptions options)

@@ -40,22 +40,22 @@ namespace System.Threading.Tasks.Flow
     /// public class CustomDefaultTaskFlowFactory : IDefaultTaskFlowFactory
     /// {
     ///     private readonly ILogger&lt;CustomDefaultTaskFlowFactory&gt; _logger;
-    ///     
+    ///
     ///     public CustomDefaultTaskFlowFactory(ILogger&lt;CustomDefaultTaskFlowFactory&gt; logger)
     ///     {
     ///         _logger = logger;
     ///     }
-    ///     
+    ///
     ///     public ITaskFlow Create(TaskFlowOptions options)
     ///     {
     ///         _logger.LogInformation("Creating TaskFlow with options: {Options}", options);
-    ///         
+    ///
     ///         // Create a custom task flow or wrap the standard one
     ///         var taskFlow = new TaskFlow(options);
     ///         return new LoggingTaskFlowWrapper(taskFlow, _logger);
     ///     }
     /// }
-    /// 
+    ///
     /// // Register the custom factory
     /// services.AddSingleton&lt;IDefaultTaskFlowFactory, CustomDefaultTaskFlowFactory&gt;();
     /// </code>
@@ -64,16 +64,16 @@ namespace System.Threading.Tasks.Flow
     /// public class TaskFlowFactory : ITaskFlowFactory
     /// {
     ///     private readonly IDefaultTaskFlowFactory _defaultFactory;
-    ///     
+    ///
     ///     public TaskFlowFactory(IDefaultTaskFlowFactory defaultFactory)
     ///     {
     ///         _defaultFactory = defaultFactory;
     ///     }
-    ///     
+    ///
     ///     public ITaskFlow CreateTaskFlow(string? name = null)
     ///     {
     ///         var options = ResolveOptions(name);
-    ///         
+    ///
     ///         // Use default factory for creation
     ///         return _defaultFactory.Create(options);
     ///     }
@@ -124,16 +124,16 @@ namespace System.Threading.Tasks.Flow
         ///     // Validate options
         ///     if (options == null)
         ///         throw new ArgumentNullException(nameof(options));
-        ///     
+        ///
         ///     // Create the core task flow
         ///     var taskFlow = new TaskFlow(options);
-        ///     
+        ///
         ///     // Optionally add wrappers or decorators
         ///     if (options.EnableLogging)
         ///     {
         ///         taskFlow = new LoggingTaskFlowWrapper(taskFlow);
         ///     }
-        ///     
+        ///
         ///     return taskFlow;
         /// }
         /// </code>

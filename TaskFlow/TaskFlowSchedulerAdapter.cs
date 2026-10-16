@@ -7,7 +7,7 @@ namespace System.Threading.Tasks.Flow
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The <see cref="TaskFlowSchedulerAdapter"/> class bridges the gap between the standard .NET 
+    /// The <see cref="TaskFlowSchedulerAdapter"/> class bridges the gap between the standard .NET
     /// <see cref="TaskScheduler"/> and the TaskFlow <see cref="ITaskScheduler"/> interface. This enables
     /// existing .NET task schedulers to be used within the TaskFlow ecosystem.
     /// </para>
@@ -31,7 +31,7 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Wrap the default task scheduler
     /// ITaskScheduler taskFlowScheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default);
-    /// 
+    ///
     /// // A named Task&lt;T&gt; return type selects the intended overload
     /// async Task&lt;string&gt; RunAsync()
     /// {
@@ -45,7 +45,7 @@ namespace System.Threading.Tasks.Flow
     /// // Create a limited concurrency scheduler
     /// var limitedScheduler = new LimitedConcurrencyLevelTaskScheduler(2);
     /// var adapter = new TaskFlowSchedulerAdapter(limitedScheduler);
-    /// 
+    ///
     /// // Tasks will be limited to 2 concurrent executions
     /// await adapter.Enqueue(() => DoWork());
     /// </code>

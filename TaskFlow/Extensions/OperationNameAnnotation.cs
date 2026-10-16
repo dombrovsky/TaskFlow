@@ -5,13 +5,13 @@ namespace System.Threading.Tasks.Flow
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The <see cref="OperationNameAnnotation"/> class implements <see cref="IOperationAnnotation"/> 
+    /// The <see cref="OperationNameAnnotation"/> class implements <see cref="IOperationAnnotation"/>
     /// to provide a simple way to name and identify operations within the TaskFlow system. This annotation
     /// is commonly used for logging, debugging, error reporting, and monitoring purposes.
     /// </para>
     /// <para>
-    /// The operation name annotation is typically created through the 
-    /// <see cref="AnnotatingTaskSchedulerExtensions.WithOperationName(ITaskScheduler, string)"/> 
+    /// The operation name annotation is typically created through the
+    /// <see cref="AnnotatingTaskSchedulerExtensions.WithOperationName(ITaskScheduler, string)"/>
     /// extension method, which automatically wraps the scheduler with this annotation.
     /// </para>
     /// <para>
@@ -36,13 +36,13 @@ namespace System.Threading.Tasks.Flow
     /// <para>Basic usage with operation naming:</para>
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
-    /// 
+    ///
     /// // Create named scheduler - this creates an OperationNameAnnotation internally
     /// var namedScheduler = scheduler.WithOperationName("ProcessPayment");
-    /// 
+    ///
     /// // The operation name is available to error handlers
     /// var result = await namedScheduler
-    ///     .OnError&lt;InvalidOperationException&gt;((sched, ex, nameAnnotation) => 
+    ///     .OnError&lt;InvalidOperationException&gt;((sched, ex, nameAnnotation) =>
     ///         Console.WriteLine($"Error in operation '{nameAnnotation?.OperationName}': {ex.Message}"))
     ///     .Enqueue(() => ProcessPaymentAsync());
     /// </code>
@@ -52,7 +52,7 @@ namespace System.Threading.Tasks.Flow
     ///     (state, nameAnnotation, token) => {
     ///         var operationName = nameAnnotation?.OperationName ?? "Unknown";
     ///         Console.WriteLine($"Starting operation: {operationName}");
-    ///         
+    ///
     ///         // Perform the actual work
     ///         return ValueTask.FromResult("completed");
     ///     },
@@ -65,7 +65,7 @@ namespace System.Threading.Tasks.Flow
     ///     .WithOperationName("DatabaseQuery")
     ///     .WithTimeout(TimeSpan.FromSeconds(30))
     ///     .Enqueue(() => QueryDatabaseAsync());
-    /// 
+    ///
     /// // If timeout occurs, the exception message will include "Operation `DatabaseQuery` has timed out in 00:00:30"
     /// </code>
     /// </example>

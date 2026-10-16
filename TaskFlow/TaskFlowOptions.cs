@@ -20,7 +20,7 @@ namespace System.Threading.Tasks.Flow
     ///     TaskScheduler = TaskScheduler.FromCurrentSynchronizationContext(),
     ///     SynchronousDisposeTimeout = TimeSpan.FromSeconds(5)
     /// };
-    /// 
+    ///
     /// var taskFlow = new TaskFlow(options);
     /// </code>
     /// </example>

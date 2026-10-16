@@ -19,7 +19,8 @@ namespace System.Threading.Tasks.Flow.Internal
         {
             for (var current = this; current != null; current = current._parent)
             {
-                if (current._type == typeof(T)) return (T)current._annotation;
+                if (current._type == typeof(T))
+                    return (T)current._annotation;
             }
 
             return null;
@@ -29,7 +30,8 @@ namespace System.Threading.Tasks.Flow.Internal
         {
             for (var current = this; current != null; current = current._parent)
             {
-                if (current._type == type) return current._annotation;
+                if (current._type == type)
+                    return current._annotation;
             }
 
             return null;

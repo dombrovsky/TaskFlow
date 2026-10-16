@@ -12,6 +12,7 @@ namespace TaskFlow.Tests.Extensions
         private static readonly string[] Generic = ["generic"];
         private static readonly string[] InnerAndOuter = ["inner", "outer"];
         private static readonly string[] InterceptorInnerAndOuter = ["interceptor", "finally", "inner", "outer"];
+
         private ITaskFlow? _taskFlow;
 
         [TearDown]

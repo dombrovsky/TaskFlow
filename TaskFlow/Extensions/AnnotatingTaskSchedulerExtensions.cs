@@ -8,8 +8,8 @@ namespace System.Threading.Tasks.Flow
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This class enables annotating task scheduler operations with metadata that can be used for 
-    /// monitoring, debugging, error handling, and other cross-cutting concerns. Annotations are 
+    /// This class enables annotating task scheduler operations with metadata that can be used for
+    /// monitoring, debugging, error handling, and other cross-cutting concerns. Annotations are
     /// attached to operations through extended state and can be retrieved by other extension methods
     /// in the TaskFlow pipeline.
     /// </para>
@@ -35,10 +35,10 @@ namespace System.Threading.Tasks.Flow
     /// <para>Basic operation naming:</para>
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
-    /// 
+    ///
     /// // Add operation name annotation
     /// var namedScheduler = scheduler.WithOperationName("ProcessUserData");
-    /// 
+    ///
     /// // Enqueue operation with annotation access
     /// await namedScheduler.AnnotatedEnqueue&lt;string, OperationNameAnnotation&gt;(
     ///     (state, annotation, token) => {
@@ -55,13 +55,13 @@ namespace System.Threading.Tasks.Flow
     ///     public string UserId { get; set; }
     ///     public string Role { get; set; }
     /// }
-    /// 
-    /// var contextScheduler = scheduler.WithExtendedState(new UserContextAnnotation 
-    /// { 
-    ///     UserId = "user123", 
-    ///     Role = "admin" 
+    ///
+    /// var contextScheduler = scheduler.WithExtendedState(new UserContextAnnotation
+    /// {
+    ///     UserId = "user123",
+    ///     Role = "admin"
     /// });
-    /// 
+    ///
     /// await contextScheduler.AnnotatedEnqueue&lt;void, UserContextAnnotation&gt;(
     ///     (state, context, token) => {
     ///         if (context?.Role == "admin") {
@@ -96,13 +96,13 @@ namespace System.Threading.Tasks.Flow
         /// <example>
         /// <code>
         /// ITaskScheduler scheduler = // ... obtain scheduler
-        /// 
+        ///
         /// var namedScheduler = scheduler.WithOperationName("DataProcessing");
-        /// 
+        ///
         /// // The operation name will be available to error handlers, timeout handlers, etc.
         /// var result = await namedScheduler
         ///     .WithTimeout(TimeSpan.FromSeconds(30))
-        ///     .OnError&lt;TimeoutException&gt;((sched, ex, name) => 
+        ///     .OnError&lt;TimeoutException&gt;((sched, ex, name) =>
         ///         Console.WriteLine($"Operation '{name?.OperationName}' timed out"))
         ///     .Enqueue(() => ProcessDataAsync());
         /// </code>
@@ -129,7 +129,7 @@ namespace System.Threading.Tasks.Flow
         /// <remarks>
         /// <para>
         /// This method provides a convenient way to enqueue operations that need access to annotation metadata.
-        /// The method automatically extracts the first annotation of type <typeparamref name="TAnnotation"/> 
+        /// The method automatically extracts the first annotation of type <typeparamref name="TAnnotation"/>
         /// from the scheduler's extended state and passes it to the task function.
         /// </para>
         /// <para>
@@ -152,7 +152,7 @@ namespace System.Threading.Tasks.Flow
         /// var scheduler = taskFlow
         ///     .WithOperationName("UserOperation")
         ///     .WithExtendedState(new CustomAnnotation { Priority = "High" });
-        /// 
+        ///
         /// // Access operation name annotation
         /// await scheduler.AnnotatedEnqueue&lt;string, OperationNameAnnotation&gt;(
         ///     (state, nameAnnotation, token) => {
@@ -162,7 +162,7 @@ namespace System.Threading.Tasks.Flow
         ///     },
         ///     state: null,
         ///     CancellationToken.None);
-        /// 
+        ///
         /// // Access custom annotation
         /// await scheduler.AnnotatedEnqueue&lt;void, CustomAnnotation&gt;(
         ///     (state, customAnnotation, token) => {

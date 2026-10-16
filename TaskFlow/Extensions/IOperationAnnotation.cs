@@ -5,7 +5,7 @@ namespace System.Threading.Tasks.Flow
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The <see cref="IOperationAnnotation"/> interface serves as a marker interface for objects that 
+    /// The <see cref="IOperationAnnotation"/> interface serves as a marker interface for objects that
     /// provide metadata about task scheduler operations. Annotations implementing this interface can be
     /// attached to task schedulers through extension methods and retrieved by other components in the
     /// TaskFlow pipeline.
@@ -38,7 +38,7 @@ namespace System.Threading.Tasks.Flow
     ///     public string Role { get; set; }
     ///     public string TenantId { get; set; }
     /// }
-    /// 
+    ///
     /// public class CorrelationAnnotation : IOperationAnnotation
     /// {
     ///     public string CorrelationId { get; set; }
@@ -52,7 +52,7 @@ namespace System.Threading.Tasks.Flow
     ///     .WithOperationName("ProcessOrder")
     ///     .WithExtendedState(new UserContextAnnotation { UserId = "user123", Role = "customer" })
     ///     .WithExtendedState(new CorrelationAnnotation { CorrelationId = Guid.NewGuid().ToString() });
-    /// 
+    ///
     /// // Access annotations in operations
     /// await scheduler.AnnotatedEnqueue&lt;void, UserContextAnnotation&gt;(
     ///     (state, userContext, token) => {

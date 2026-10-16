@@ -284,7 +284,7 @@ namespace System.Threading.Tasks.Flow
         /// <summary>
         /// Checks if the task flow has been disposed and throws an <see cref="ObjectDisposedException"/> if it has.
         /// </summary>
-        /// <exception cref="ObjectDisposedException">Thrown if the task flow is in the <see cref="TaskFlowState.Disposing"/> 
+        /// <exception cref="ObjectDisposedException">Thrown if the task flow is in the <see cref="TaskFlowState.Disposing"/>
         /// or <see cref="TaskFlowState.Disposed"/> state.</exception>
         protected void CheckDisposed()
         {

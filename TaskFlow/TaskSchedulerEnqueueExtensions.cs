@@ -12,7 +12,7 @@ namespace System.Threading.Tasks.Flow
     /// <para>
     /// This class provides a comprehensive set of extension methods that allow scheduling various types of operations
     /// on an <see cref="ITaskScheduler"/> without having to manually adapt function signatures and handle state passing.
-    /// The methods handle conversion between different task types (<see cref="Task"/>, <see cref="ValueTask"/>, 
+    /// The methods handle conversion between different task types (<see cref="Task"/>, <see cref="ValueTask"/>,
     /// synchronous functions, and actions) and provide convenient overloads for common scenarios.
     /// </para>
     /// <para>
@@ -38,10 +38,10 @@ namespace System.Threading.Tasks.Flow
     /// <example>
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
-    /// 
+    ///
     /// // Enqueue a function that returns a value
     /// var result = await scheduler.Enqueue(() => 42);
-    /// 
+    ///
     /// // A named return type avoids Task&lt;T&gt;/ValueTask&lt;T&gt; overload ambiguity
     /// async Task&lt;string&gt; RunAsync(CancellationToken token)
     /// {
@@ -58,7 +58,7 @@ namespace System.Threading.Tasks.Flow
     ///         return "completed";
     ///     }),
     ///     cancellationToken);
-    /// 
+    ///
     /// // Enqueue an action
     /// await scheduler.Enqueue(() => Console.WriteLine("Hello World"));
     /// </code>
@@ -161,7 +161,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a 
+        /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a
         /// <see cref="Unit"/> result to match the scheduler's signature requirement.
         /// </remarks>
         public static Task Enqueue<TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken)
@@ -242,7 +242,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method wraps the non-generic <see cref="Task"/> in a <see cref="ValueTask{TResult}"/> with a 
+        /// This method wraps the non-generic <see cref="Task"/> in a <see cref="ValueTask{TResult}"/> with a
         /// <see cref="Unit"/> result to match the scheduler's signature requirement.
         /// </remarks>
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
@@ -286,7 +286,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the 
+        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the
         /// <see cref="Task{TResult}"/> in a <see cref="ValueTask{TResult}"/>.
         /// A direct value-returning <c>async</c> lambda may be ambiguous with the corresponding
         /// <see cref="ValueTask{TResult}"/> overload; use a named function or an explicit delegate cast.
@@ -348,7 +348,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a 
+        /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a
         /// <see cref="Unit"/> result to match the scheduler's signature requirement. The dummy parameter is used
         /// to avoid method signature conflicts with other overloads.
         /// </remarks>
@@ -376,7 +376,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter 
+        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter
         /// is used to avoid method signature conflicts with other overloads.
         /// A direct <c>async</c> lambda may be ambiguous with the corresponding
         /// <see cref="Task"/> overload; use a named function or an explicit delegate cast.
@@ -400,7 +400,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter 
+        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter
         /// is used to avoid method signature conflicts with other overloads.
         /// </remarks>
         [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
@@ -492,7 +492,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the 
+        /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the
         /// synchronous action in a <see cref="ValueTask"/>.
         /// </remarks>
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
@@ -545,7 +545,7 @@ namespace System.Threading.Tasks.Flow
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
         /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
         /// <remarks>
-        /// This method ignores the cancellation token parameter when calling the action and wraps the 
+        /// This method ignores the cancellation token parameter when calling the action and wraps the
         /// synchronous action in a <see cref="ValueTask"/>.
         /// </remarks>
         public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)

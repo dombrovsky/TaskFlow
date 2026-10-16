@@ -49,18 +49,18 @@ namespace System.Threading.Tasks.Flow
     /// <para>Basic error handling with logging:</para>
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
-    /// 
+    ///
     /// var errorHandlingScheduler = scheduler
     ///     .WithOperationName("DatabaseOperation")
     ///     .OnError&lt;SqlException&gt;((sched, ex, operationName) => {
-    ///         _logger.LogError(ex, "Database error in operation {OperationName}", 
+    ///         _logger.LogError(ex, "Database error in operation {OperationName}",
     ///             operationName?.OperationName ?? "Unknown");
     ///     })
     ///     .OnError&lt;TimeoutException&gt;(ex => {
     ///         _metrics.IncrementCounter("operation.timeout");
     ///     });
-    /// 
-    /// try 
+    ///
+    /// try
     /// {
     ///     await errorHandlingScheduler.Enqueue(() => DatabaseQueryAsync());
     /// }
@@ -77,7 +77,7 @@ namespace System.Threading.Tasks.Flow
     ///     public string UserId { get; set; }
     ///     public string Role { get; set; }
     /// }
-    /// 
+    ///
     /// var contextualErrorScheduler = scheduler
     ///     .WithExtendedState(new UserContextAnnotation { UserId = "user123", Role = "admin" })
     ///     .OnError&lt;SecurityException, UserContextAnnotation&gt;((sched, ex, userContext) => {

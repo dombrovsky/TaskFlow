@@ -22,11 +22,11 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// ITaskScheduler scheduler = // ... obtain scheduler
     /// var throttledScheduler = scheduler.WithThrottle(TimeSpan.FromSeconds(2));
-    /// 
+    ///
     /// // Simulate rapid document changes
     /// for (int i = 0; i &lt; 5; i++)
     /// {
-    ///     try 
+    ///     try
     ///     {
     ///         await throttledScheduler.Enqueue(() => SaveDocumentAsync());
     ///         Console.WriteLine($"Save {i + 1} completed");
@@ -35,7 +35,7 @@ namespace System.Threading.Tasks.Flow
     ///     {
     ///         Console.WriteLine($"Save {i + 1} throttled: {ex.Message}");
     ///     }
-    ///     
+    ///
     ///     await Task.Delay(500); // Wait 500ms between attempts
     /// }
     /// // Only the first submission and submissions after 2+ second intervals are admitted
@@ -45,15 +45,15 @@ namespace System.Threading.Tasks.Flow
     /// // Using FakeTimeProvider for unit testing
     /// var fakeTimeProvider = new FakeTimeProvider();
     /// var testScheduler = scheduler.WithThrottle(TimeSpan.FromMinutes(5), fakeTimeProvider);
-    /// 
+    ///
     /// // First operation should succeed
     /// await testScheduler.Enqueue(() => SomeOperation());
-    /// 
+    ///
     /// // Advance time by 4 minutes - next operation should be throttled
     /// fakeTimeProvider.Advance(TimeSpan.FromMinutes(4));
-    /// await Assert.ThrowsAsync&lt;OperationThrottledException&gt;(() => 
+    /// await Assert.ThrowsAsync&lt;OperationThrottledException&gt;(() =>
     ///     testScheduler.Enqueue(() => SomeOperation()));
-    /// 
+    ///
     /// // Advance time by 2 more minutes (6 minutes total) - next operation should succeed
     /// fakeTimeProvider.Advance(TimeSpan.FromMinutes(2));
     /// await testScheduler.Enqueue(() => SomeOperation()); // Should succeed
@@ -104,14 +104,14 @@ namespace System.Threading.Tasks.Flow
         /// <example>
         /// <code>
         /// ITaskScheduler baseScheduler = new TaskFlow();
-        /// 
+        ///
         /// // Create a leading-edge throttle with a 1-second admission interval
         /// var throttledScheduler = baseScheduler.WithThrottle(TimeSpan.FromSeconds(1));
-        /// 
+        ///
         /// // First operation executes immediately
         /// await throttledScheduler.Enqueue(() => Console.WriteLine("Operation 1"));
-        /// 
-        /// try 
+        ///
+        /// try
         /// {
         ///     // This will be throttled since less than 1 second has passed
         ///     await throttledScheduler.Enqueue(() => Console.WriteLine("Operation 2"));
@@ -120,10 +120,10 @@ namespace System.Threading.Tasks.Flow
         /// {
         ///     Console.WriteLine($"Throttled: {ex.Message}");
         /// }
-        /// 
+        ///
         /// // Wait for interval to pass
         /// await Task.Delay(TimeSpan.FromSeconds(1.1));
-        /// 
+        ///
         /// // This operation will execute since interval has elapsed
         /// await throttledScheduler.Enqueue(() => Console.WriteLine("Operation 3"));
         /// </code>

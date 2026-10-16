@@ -80,19 +80,19 @@ namespace System.Threading.Tasks.Flow
         /// public void ConfigureServices(IServiceCollection services)
         /// {
         ///     services.AddTaskFlow();
-        ///     
+        ///
         ///     services.AddScoped&lt;MyService&gt;();
         /// }
-        /// 
+        ///
         /// public class MyService
         /// {
         ///     private readonly ITaskScheduler _scheduler;
-        ///     
+        ///
         ///     public MyService(ITaskScheduler scheduler)
         ///     {
         ///         _scheduler = scheduler;
         ///     }
-        ///     
+        ///
         ///     public Task DoWorkAsync() =&gt; _scheduler.Enqueue(() =&gt; ProcessDataAsync());
         /// }
         /// </code>
@@ -158,9 +158,9 @@ namespace System.Threading.Tasks.Flow
         /// <code>
         /// // Register independently sequential flows with different disposal policies
         /// services.AddTaskFlow("database", new TaskFlowOptions { SynchronousDisposeTimeout = TimeSpan.FromSeconds(30) });
-        /// 
+        ///
         /// services.AddTaskFlow("api", new TaskFlowOptions { SynchronousDisposeTimeout = TimeSpan.FromSeconds(10) });
-        /// 
+        ///
         /// // Usage
         /// var databaseFlow = factory.CreateTaskFlow("database");
         /// var apiFlow = factory.CreateTaskFlow("api");
@@ -224,7 +224,7 @@ namespace System.Threading.Tasks.Flow
         ///     configureOptions: provider =&gt; {
         ///         var config = provider.GetRequiredService&lt;IConfiguration&gt;();
         ///         var environment = provider.GetRequiredService&lt;IWebHostEnvironment&gt;();
-        ///         
+        ///
         ///         return new TaskFlowOptions
         ///         {
         ///             SynchronousDisposeTimeout = environment.IsDevelopment() ? TimeSpan.FromSeconds(30) : config.GetValue&lt;int&gt;("TaskFlow:SynchronousDisposeTimeout")
@@ -238,7 +238,7 @@ namespace System.Threading.Tasks.Flow
         ///         var logger = provider.GetRequiredService&lt;ILogger&gt;();
         ///         var metrics = provider.GetRequiredService&lt;IMetrics&gt;();
         ///         var config = provider.GetRequiredService&lt;IConfiguration&gt;();
-        ///         
+        ///
         ///         var chain = scheduler
         ///             .WithOperationName("RobustOperation")
         ///             .WithTimeout(TimeSpan.FromSeconds(config.GetValue&lt;int&gt;("Timeout", 30)))
@@ -246,12 +246,12 @@ namespace System.Threading.Tasks.Flow
         ///                 logger.LogError(ex, "Operation failed");
         ///                 metrics.IncrementCounter("errors");
         ///             });
-        ///             
+        ///
         ///         if (config.GetValue&lt;bool&gt;("EnableThrottling"))
         ///         {
         ///             chain = chain.WithThrottle(TimeSpan.FromMilliseconds(500));
         ///         }
-        ///         
+        ///
         ///         return chain;
         ///     });
         /// </code>

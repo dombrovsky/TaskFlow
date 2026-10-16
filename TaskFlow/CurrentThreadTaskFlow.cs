@@ -29,15 +29,15 @@ namespace System.Threading.Tasks.Flow
     /// Basic usage with a background thread:
     /// <code>
     /// var taskFlow = new CurrentThreadTaskFlow();
-    /// 
+    ///
     /// // Start the task flow on a background thread
     /// var thread = new Thread(() => taskFlow.Run()) { IsBackground = true };
     /// thread.Start();
-    /// 
+    ///
     /// // Enqueue tasks for execution on the background thread
     /// var task1 = taskFlow.Enqueue(() => Console.WriteLine("Task 1"));
     /// var task2 = taskFlow.Enqueue(() => Console.WriteLine("Task 2"));
-    /// 
+    ///
     /// // Wait for tasks to complete and dispose the task flow
     /// await Task.WhenAll(task1, task2);
     /// await taskFlow.DisposeAsync();

@@ -43,18 +43,18 @@ namespace System.Threading.Tasks.Flow
     /// public class BackgroundTaskFlowFactory : INamedTaskFlowFactory
     /// {
     ///     public string Name =&gt; "background";
-    ///     
+    ///
     ///     public ITaskFlow Create(TaskFlowOptions options)
     ///     {
     ///         // Create a dedicated thread task flow for background processing
     ///         return new DedicatedThreadTaskFlow(options);
     ///     }
     /// }
-    /// 
+    ///
     /// public class UiTaskFlowFactory : INamedTaskFlowFactory
     /// {
     ///     public string Name =&gt; "ui";
-    ///     
+    ///
     ///     public ITaskFlow Create(TaskFlowOptions options)
     ///     {
     ///         // Create a current thread task flow for UI operations
@@ -67,9 +67,9 @@ namespace System.Threading.Tasks.Flow
     /// // Register multiple named factories
     /// services.AddSingleton&lt;INamedTaskFlowFactory, BackgroundTaskFlowFactory&gt;();
     /// services.AddSingleton&lt;INamedTaskFlowFactory, UiTaskFlowFactory&gt;();
-    /// 
+    ///
     /// // Register using delegate factory
-    /// services.AddTaskFlow("database", (provider, options) =&gt; 
+    /// services.AddTaskFlow("database", (provider, options) =&gt;
     ///     new TaskFlow(options));
     /// </code>
     /// <para>Using named factories:</para>
@@ -77,18 +77,18 @@ namespace System.Threading.Tasks.Flow
     /// public class ApplicationService
     /// {
     ///     private readonly ITaskFlowFactory _factory;
-    ///     
+    ///
     ///     public ApplicationService(ITaskFlowFactory factory)
     ///     {
     ///         _factory = factory;
     ///     }
-    ///     
+    ///
     ///     public async Task ProcessInBackgroundAsync()
     ///     {
     ///         using var taskFlow = _factory.CreateTaskFlow("background");
     ///         await taskFlow.Enqueue(() =&gt; DoBackgroundWorkAsync());
     ///     }
-    ///     
+    ///
     ///     public async Task UpdateUiAsync()
     ///     {
     ///         using var taskFlow = _factory.CreateTaskFlow("ui");
@@ -134,7 +134,7 @@ namespace System.Threading.Tasks.Flow
         /// {
         ///     // This factory will be used when CreateTaskFlow("database") is called
         ///     public string Name =&gt; "database";
-        ///     
+        ///
         ///     public ITaskFlow Create(TaskFlowOptions options)
         ///     {
         ///         // Each TaskFlow processes database operations sequentially
@@ -188,7 +188,7 @@ namespace System.Threading.Tasks.Flow
         ///     // Validate input
         ///     if (options == null)
         ///         throw new ArgumentNullException(nameof(options));
-        ///     
+        ///
         ///     // Create specialized task flow for this factory's purpose
         ///     ITaskFlow taskFlow = Name switch
         ///     {
@@ -197,13 +197,13 @@ namespace System.Threading.Tasks.Flow
         ///         "sequential" =&gt; new TaskFlow(options),
         ///         _ =&gt; new TaskFlow(options)
         ///     };
-        ///     
+        ///
         ///     // Add any common decorators
         ///     if (_enableLogging)
         ///     {
         ///         taskFlow = new LoggingTaskFlowWrapper(taskFlow, _logger);
         ///     }
-        ///     
+        ///
         ///     return taskFlow;
         /// }
         /// </code>

@@ -25,16 +25,16 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// using var taskFlow = new TaskFlow();
     /// var originalContext = SynchronizationContext.Current;
-    /// 
-    /// try 
+    ///
+    /// try
     /// {
     ///     // Set the TaskFlow as the current synchronization context
     ///     SynchronizationContext.SetSynchronizationContext(
     ///         TaskFlowSynchronizationContext.For(taskFlow));
-    ///     
+    ///
     ///     // Async operations will now return to the TaskFlow context
     ///     await DoSomethingAsync();
-    ///     
+    ///
     ///     // Code here runs on the TaskFlow
     /// }
     /// finally

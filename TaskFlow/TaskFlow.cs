@@ -29,12 +29,12 @@ namespace System.Threading.Tasks.Flow
     /// Basic usage:
     /// <code>
     /// using var taskFlow = new TaskFlow();
-    /// 
+    ///
     /// // Enqueue multiple tasks
     /// var task1 = taskFlow.Enqueue(() => Console.WriteLine("Task 1"));
     /// var task2 = taskFlow.Enqueue(() => Console.WriteLine("Task 2"));
     /// var task3 = taskFlow.Enqueue(() => Console.WriteLine("Task 3"));
-    /// 
+    ///
     /// // Wait for all tasks to complete
     /// await Task.WhenAll(task1, task2, task3);
     /// </code>

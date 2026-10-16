@@ -72,7 +72,8 @@ namespace System.Threading.Tasks.Flow
         public TState GetOrCreateLocalState<TState>(Func<TState> stateFactory) where TState : class
         {
             Annotations.Argument.NotNull(stateFactory);
-            if (_registrationIndex < 0) throw new InvalidOperationException("The final operation context has no middleware registration-local state.");
+            if (_registrationIndex < 0)
+                throw new InvalidOperationException("The final operation context has no middleware registration-local state.");
             return _operation.GetOrCreateLocalState(_registrationIndex, stateFactory);
         }
 

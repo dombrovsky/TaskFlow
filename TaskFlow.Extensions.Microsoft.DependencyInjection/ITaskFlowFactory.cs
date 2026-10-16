@@ -35,17 +35,17 @@ namespace System.Threading.Tasks.Flow
     /// <code>
     /// // Register TaskFlow services
     /// services.AddTaskFlow();
-    /// 
+    ///
     /// // Inject and use the factory
     /// public class SomeService
     /// {
     ///     private readonly ITaskFlowFactory _taskFlowFactory;
-    ///     
+    ///
     ///     public SomeService(ITaskFlowFactory taskFlowFactory)
     ///     {
     ///         _taskFlowFactory = taskFlowFactory;
     ///     }
-    ///     
+    ///
     ///     public async Task ProcessDataAsync()
     ///     {
     ///         using var taskFlow = _taskFlowFactory.CreateTaskFlow();
@@ -60,7 +60,7 @@ namespace System.Threading.Tasks.Flow
         /// Creates a new <see cref="ITaskFlow"/> instance with the specified name or default configuration.
         /// </summary>
         /// <param name="name">
-        /// The optional name identifying which configuration to use. If <c>null</c> or empty, 
+        /// The optional name identifying which configuration to use. If <c>null</c> or empty,
         /// the default configuration is used.
         /// </param>
         /// <returns>
@@ -100,10 +100,10 @@ namespace System.Threading.Tasks.Flow
         /// <code>
         /// // Create default task flow
         /// using var defaultFlow = factory.CreateTaskFlow();
-        /// 
+        ///
         /// // Create named task flow
         /// using var namedFlow = factory.CreateTaskFlow("background-processor");
-        /// 
+        ///
         /// // Both are equivalent for default configuration
         /// using var flow1 = factory.CreateTaskFlow(null);
         /// using var flow2 = factory.CreateTaskFlow("");
