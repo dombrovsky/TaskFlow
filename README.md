@@ -67,16 +67,6 @@ Callers receive a task instead of blocking on `Save`. The wrapped synchronous me
 | [`TaskFlow.Microsoft.Extensions.DependencyInjection`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.DependencyInjection/) | Scoped, named, and customizable TaskFlow registrations. |
 | [`TaskFlow.Microsoft.Extensions.Logging`](https://www.nuget.org/packages/TaskFlow.Microsoft.Extensions.Logging/) | Structured operation-lifecycle logging through `Microsoft.Extensions.Logging`. |
 
-## Release versioning
-
-All packages share the version in `Directory.Build.props`. Use `1.1.0-prerelease` for the initial prerelease, then append a dot-separated numeric counter for subsequent prereleases:
-
-```text
-1.1.0-prerelease < 1.1.0-prerelease.1 < 1.1.0-prerelease.2 < ... < 1.1.0-prerelease.9 < 1.1.0-prerelease.10 < 1.1.0-prerelease.11 < ... < 1.1.0
-```
-
-SemVer compares the counter numerically, so it can grow beyond 10. Do not pad it with leading zeros: `.01` is invalid under SemVer. Increment the counter for each prerelease; remove the entire prerelease suffix for the stable release. The publish workflow detects the suffix and marks the GitHub release as a prerelease.
-
 ## Lifecycle essentials
 
 - Await returned tasks when their outcome belongs to the caller; intentionally discarded work remains bounded by the flow and can report failures inside the operation or through a decorator when needed.

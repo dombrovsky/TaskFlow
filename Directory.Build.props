@@ -12,7 +12,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>1.1.0-prerelease</Version>
+    <VersionPrefix>1.1.0</VersionPrefix>
+    <PrereleaseNumber Condition="'$(PrereleaseNumber)' == ''">1</PrereleaseNumber>
+    <VersionSuffix>rc.$(PrereleaseNumber)</VersionSuffix>
     <Authors>Volodymyr Dombrovskyi</Authors>
     <Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
     <RepositoryUrl>https://github.com/dombrovsky/TaskFlow.git</RepositoryUrl>
