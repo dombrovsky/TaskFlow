@@ -245,11 +245,11 @@ public static class TaskSchedulerEnqueueExtensions
     /// This method wraps the non-generic <see cref="Task"/> in a <see cref="ValueTask{TResult}"/> with a
     /// <see cref="Unit"/> result to match the scheduler's signature requirement.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(TaskFunc, cancellationToken).ConfigureAwait(false);
+        return taskScheduler.Enqueue(TaskFunc, cancellationToken);
 
         async ValueTask<Unit> TaskFunc(CancellationToken token)
         {
@@ -269,11 +269,11 @@ public static class TaskSchedulerEnqueueExtensions
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(taskFunc, CancellationToken.None).ConfigureAwait(false);
+        return taskScheduler.Enqueue(taskFunc, CancellationToken.None);
     }
 
     /// <summary>
@@ -353,11 +353,11 @@ public static class TaskSchedulerEnqueueExtensions
     /// to avoid method signature conflicts with other overloads.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(TaskFunc, cancellationToken).ConfigureAwait(false);
+        return taskScheduler.Enqueue(TaskFunc, cancellationToken);
 
         async ValueTask<Unit> TaskFunc(CancellationToken token)
         {
@@ -382,11 +382,11 @@ public static class TaskSchedulerEnqueueExtensions
     /// <see cref="Task"/> overload; use a named function or an explicit delegate cast.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None).ConfigureAwait(false);
+        return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None, _);
     }
 
     /// <summary>
@@ -469,18 +469,17 @@ public static class TaskSchedulerEnqueueExtensions
     /// This method wraps the synchronous action in a <see cref="ValueTask"/> to match the scheduler's
     /// asynchronous interface.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(
+        return taskScheduler.Enqueue(
                 token =>
                 {
                     action(token);
                     return new ValueTask(Task.CompletedTask);
                 },
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     /// <summary>
@@ -495,18 +494,17 @@ public static class TaskSchedulerEnqueueExtensions
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the
     /// synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(
+        return taskScheduler.Enqueue(
                 token =>
                 {
                     action(token);
                     return new ValueTask(Task.CompletedTask);
                 },
-                CancellationToken.None)
-            .ConfigureAwait(false);
+                CancellationToken.None);
     }
 
     /// <summary>
@@ -521,18 +519,17 @@ public static class TaskSchedulerEnqueueExtensions
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token, ignores the
     /// cancellation token parameter when calling the action, and wraps the synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action action)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(
+        return taskScheduler.Enqueue(
                 _ =>
                 {
                     action();
                     return new ValueTask(Task.CompletedTask);
                 },
-                CancellationToken.None)
-            .ConfigureAwait(false);
+                CancellationToken.None);
     }
 
     /// <summary>
@@ -548,18 +545,17 @@ public static class TaskSchedulerEnqueueExtensions
     /// This method ignores the cancellation token parameter when calling the action and wraps the
     /// synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
 
-        await taskScheduler.Enqueue(
+        return taskScheduler.Enqueue(
                 _ =>
                 {
                     action();
                     return new ValueTask(Task.CompletedTask);
                 },
-                cancellationToken)
-            .ConfigureAwait(false);
+                cancellationToken);
     }
 
     /// <summary>
