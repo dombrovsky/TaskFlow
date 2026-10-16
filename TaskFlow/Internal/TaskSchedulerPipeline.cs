@@ -10,18 +10,24 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly ITaskScheduler _terminal;
     private readonly MiddlewareRegistration[] _registrations;
     private readonly AnnotationScope? _annotations;
+    private readonly CoordinatedPolicy[] _policies;
+    internal KeyedCoordinator? Coordinator { get; }
+    internal TaskFlow? TerminalFlow => _terminal as TaskFlow;
 
     public PipelineTaskScheduler(ITaskScheduler terminal)
         : this(terminal, Array.Empty<MiddlewareRegistration>(), null, (terminal as TaskFlowBase)?.MiddlewareLifetime)
     {
     }
 
-    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations, TaskSchedulerMiddlewareLifetime? lifetime)
+    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations, TaskSchedulerMiddlewareLifetime? lifetime, KeyedCoordinator? coordinator = null)
     {
         Lifetime = lifetime;
+        Coordinator = coordinator;
         _terminal = terminal;
         _registrations = registrations;
         _annotations = annotations;
+        _policies = coordinator == null ? Array.Empty<CoordinatedPolicy>() : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<CoordinatedPolicy>(
+            System.Linq.Enumerable.Select(registrations, registration => registration.Middleware)));
     }
 
     internal TaskSchedulerMiddlewareLifetime? Lifetime { get; }
@@ -30,14 +36,35 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     {
         if (Lifetime != null && Lifetime != lifetime)
             throw new InvalidOperationException("A pipeline cannot change its owning middleware lifetime.");
-        return new PipelineTaskScheduler(_terminal, _registrations, _annotations, lifetime);
+        return new PipelineTaskScheduler(_terminal, _registrations, _annotations, lifetime, Coordinator);
     }
+
+    internal PipelineTaskScheduler WithKeyedScheduling(KeyedCoordinator coordinator, ITaskScheduler terminal)
+    {
+        if (Coordinator != null)
+            throw new InvalidOperationException("Keyed scheduling is already configured.");
+        foreach (var registration in _registrations)
+            if (registration.Middleware is BoundedAdmissionMiddleware)
+                throw new InvalidOperationException("Configure keyed scheduling before bounded admission.");
+        return new PipelineTaskScheduler(terminal, _registrations, _annotations, Lifetime, coordinator).Append(new CoordinatedPolicy());
+    }
+
+    internal void ValidateKey<TKey>(TKey key) where TKey : notnull
+    {
+        if (key is null)
+            throw new ArgumentNullException(nameof(key));
+        if (Coordinator == null || Coordinator.KeyType != typeof(TKey))
+            throw new InvalidOperationException("A matching keyed scheduling registration is required.");
+    }
+
+    internal CoordinatedPolicy[] GetPolicies() => _policies;
 
     internal int CountController(BoundedAdmissionController controller)
     {
         var count = 0;
         foreach (var registration in _registrations)
-            if (registration.Middleware is BoundedAdmissionMiddleware bounded && bounded.Controller == controller)
+            if ((registration.Middleware is BoundedAdmissionMiddleware bounded && bounded.Controller == controller) ||
+                (registration.Middleware is AdmissionPolicy policy && policy.Controller == controller))
                 count++;
         return count;
     }
@@ -45,29 +72,34 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     public PipelineTaskScheduler Append(object middleware)
     {
         Lifetime?.CheckRegistrationOpen();
+        if (Coordinator != null && middleware is BoundedAdmissionMiddleware bounded)
+            middleware = new AdmissionPolicy(bounded.Controller, perKey: false);
         var registrations = new MiddlewareRegistration[_registrations.Length + 1];
         Array.Copy(_registrations, registrations, _registrations.Length);
         var registration = new MiddlewareRegistration(middleware, _annotations);
         registrations[registrations.Length - 1] = registration;
-        var snapshot = new PipelineTaskScheduler(_terminal, registrations, _annotations, Lifetime);
+        var snapshot = new PipelineTaskScheduler(_terminal, registrations, _annotations, Lifetime, Coordinator);
         registration.Scheduler = snapshot;
         return snapshot;
     }
 
     public PipelineTaskScheduler WithAnnotation(Type type, IOperationAnnotation annotation)
-        => new PipelineTaskScheduler(_terminal, _registrations, new AnnotationScope(_annotations, type, annotation), Lifetime);
+        => new PipelineTaskScheduler(_terminal, _registrations, new AnnotationScope(_annotations, type, annotation), Lifetime, Coordinator);
 
     public Task<TResult> Enqueue<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, CancellationToken cancellationToken)
     {
-        return Submit(taskFunc, state, null, cancellationToken);
+        return Submit(taskFunc, state, null, null, cancellationToken);
     }
 
-    internal Task<TResult> Submit<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, AdmissionRequest? request, CancellationToken cancellationToken)
+    internal Task<TResult> Submit<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, AdmissionRequest? request, object? key, CancellationToken cancellationToken)
     {
         Annotations.Argument.NotNull(taskFunc);
+        if (Coordinator?.KeyType != null && key == null)
+            throw new InvalidOperationException("A keyed pipeline requires a keyed Enqueue or Submit overload.");
         var operation = new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken)
         {
-            AdmissionRequest = request
+            AdmissionRequest = request,
+            Key = key
         };
         if (request != null)
             operation.OnQuiesced(request.OnQuiesced);
@@ -139,6 +171,14 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
         var registrationIndex = index;
         var registration = _registrations[index];
+        if (registration.Middleware is CoordinatedPolicy)
+        {
+            if (operation.Coordinated)
+                return InvokeEnqueue(operation, index - 1, cancellationToken);
+            operation.Coordinated = true;
+            return Coordinator!.Schedule(operation, GetPolicies(),
+                token => InvokeEnqueue(operation, registrationIndex - 1, token), cancellationToken);
+        }
         var middleware = (ITaskSchedulerEnqueueMiddleware)registration.Middleware;
         var context = new TaskSchedulerEnqueueContext<TResult>(operation, registration.Annotations, registrationIndex, cancellationToken);
         var nextCalled = 0;
@@ -150,8 +190,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         });
     }
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "The linked source is disposed by OnQuiesced after underlying work ends, including caller-facing timeouts.")]
     private Task<TResult> ScheduleTerminal<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
+        if (Coordinator != null)
+        {
+            var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, Lifetime!.StoppingToken);
+            operation.OnQuiesced(linked.Dispose);
+            cancellationToken = linked.Token;
+        }
         operation.ProducerCancellationToken = cancellationToken;
         return _terminal.Enqueue((_, token) => ExecuteEnvelope(operation, token), operation.State, cancellationToken);
     }

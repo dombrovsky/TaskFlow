@@ -19,6 +19,8 @@ internal abstract class PipelineOperation
     public Action? LifetimeExit { get; set; }
 
     public AdmissionRequest? AdmissionRequest { get; set; }
+    public object? Key { get; set; }
+    public bool Coordinated { get; set; }
 
     public void AddActivity()
     {
