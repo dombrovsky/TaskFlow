@@ -107,7 +107,11 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 ChangeWaiters(submission, 1);
             }
         }
-        Pump();
+        // Keep dispatch (including custom TaskScheduler.QueueTask) off a synchronous producer's stack.
+        if (operation.AdmissionRequest?.Synchronous == true)
+            _ = Task.Run(Pump, CancellationToken.None);
+        else
+            Pump();
         return await submission.Task.ConfigureAwait(false);
     }
 
@@ -213,7 +217,10 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
             submission.Settled = true;
             submission.Cancel();
         }
-        Pump();
+        if (submission.Request?.Synchronous == true)
+            _ = Task.Run(Pump, CancellationToken.None);
+        else
+            Pump();
     }
     private void Started(Submission submission)
     {

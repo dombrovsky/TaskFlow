@@ -43,7 +43,11 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
             else
                 submission.Waiter = _waiters.AddLast(submission);
         }
-        Pump();
+        // TrySubmit only performs admission on the producer. Even an inline terminal must run elsewhere.
+        if (request?.Synchronous == true)
+            _ = Task.Run(Pump, CancellationToken.None);
+        else
+            Pump();
         return await submission.Task.ConfigureAwait(false);
     }
 
