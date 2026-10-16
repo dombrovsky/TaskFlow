@@ -10,7 +10,7 @@ using System.Threading.Tasks.Flow.Internal;
 /// <remarks>
 /// <para>Each method returns a new non-owning scheduler snapshot. The source scheduler remains unchanged and may be reused to create independent
 /// branches.</para>
-/// <para>Pipeline snapshots do not dispose or otherwise assume ownership of terminal schedulers, middleware instances, or their collaborators.</para>
+/// <para>Pipeline snapshots do not own terminal schedulers or caller-supplied middleware. Factory-created registrations belong to the shared middleware lifetime.</para>
 /// </remarks>
 public static class TaskSchedulerMiddlewareExtensions
 {
@@ -39,12 +39,7 @@ public static class TaskSchedulerMiddlewareExtensions
     {
         Argument.NotNull(taskScheduler);
         Argument.NotNull(middleware);
-        if (!(middleware is ITaskSchedulerEnqueueMiddleware) &&
-            !(middleware is ITaskSchedulerExecutionMiddleware) &&
-            !(middleware is ITaskSchedulerCompletionMiddleware))
-        {
-            throw new ArgumentException("Middleware must implement at least one task scheduler middleware phase.", nameof(middleware));
-        }
+        ValidateMiddleware(middleware);
 
         return GetPipeline(taskScheduler).Append(middleware);
     }
@@ -113,7 +108,35 @@ public static class TaskSchedulerMiddlewareExtensions
         }, state, cancellationToken);
     }
 
-    private static PipelineTaskScheduler GetPipeline(ITaskScheduler taskScheduler)
+    /// <summary>Creates and owns a middleware registration in the flow's lifetime.</summary>
+    public static ITaskScheduler UseMiddleware(this ITaskScheduler taskScheduler, ITaskSchedulerMiddlewareFactory factory)
+    {
+        Argument.NotNull(taskScheduler);
+        Argument.NotNull(factory);
+        var pipeline = GetPipeline(taskScheduler);
+        var lifetime = pipeline.Lifetime ?? throw new InvalidOperationException("This scheduler requires an explicit middleware lifetime.");
+        return pipeline.Append(lifetime.Register(factory));
+    }
+
+    /// <summary>Creates an owned registration using an explicit lifetime for a scheduler without a flow owner.</summary>
+    public static ITaskScheduler UseMiddleware(this ITaskScheduler taskScheduler, ITaskSchedulerMiddlewareFactory factory, TaskSchedulerMiddlewareLifetime lifetime)
+    {
+        Argument.NotNull(taskScheduler);
+        Argument.NotNull(factory);
+        Argument.NotNull(lifetime);
+        var pipeline = GetPipeline(taskScheduler).WithLifetime(lifetime);
+        return pipeline.Append(lifetime.Register(factory));
+    }
+
+    internal static void ValidateMiddleware(ITaskSchedulerMiddleware middleware)
+    {
+        if (!(middleware is ITaskSchedulerEnqueueMiddleware) &&
+            !(middleware is ITaskSchedulerExecutionMiddleware) &&
+            !(middleware is ITaskSchedulerCompletionMiddleware))
+            throw new ArgumentException("Middleware must implement at least one task scheduler middleware phase.", nameof(middleware));
+    }
+
+    internal static PipelineTaskScheduler GetPipeline(ITaskScheduler taskScheduler)
         => taskScheduler as PipelineTaskScheduler ?? new PipelineTaskScheduler(taskScheduler);
 
     private sealed class ContextOperationMiddleware<TResult> : ITaskSchedulerExecutionMiddleware
@@ -125,6 +148,7 @@ public static class TaskSchedulerMiddlewareExtensions
         {
             if (typeof(T) != typeof(TResult))
                 return await next(context).ConfigureAwait(true);
+            context.Operation.MarkStarted();
             var result = await _taskFunc(context).ConfigureAwait(true);
             return (T)(object?)result!;
         }

@@ -12,46 +12,101 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly AnnotationScope? _annotations;
 
     public PipelineTaskScheduler(ITaskScheduler terminal)
-        : this(terminal, Array.Empty<MiddlewareRegistration>(), null)
+        : this(terminal, Array.Empty<MiddlewareRegistration>(), null, (terminal as TaskFlowBase)?.MiddlewareLifetime)
     {
     }
 
-    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations)
+    private PipelineTaskScheduler(ITaskScheduler terminal, MiddlewareRegistration[] registrations, AnnotationScope? annotations, TaskSchedulerMiddlewareLifetime? lifetime)
     {
+        Lifetime = lifetime;
         _terminal = terminal;
         _registrations = registrations;
         _annotations = annotations;
     }
 
+    internal TaskSchedulerMiddlewareLifetime? Lifetime { get; }
+
+    internal PipelineTaskScheduler WithLifetime(TaskSchedulerMiddlewareLifetime lifetime)
+    {
+        if (Lifetime != null && Lifetime != lifetime)
+            throw new InvalidOperationException("A pipeline cannot change its owning middleware lifetime.");
+        return new PipelineTaskScheduler(_terminal, _registrations, _annotations, lifetime);
+    }
+
+    internal int CountController(BoundedAdmissionController controller)
+    {
+        var count = 0;
+        foreach (var registration in _registrations)
+            if (registration.Middleware is BoundedAdmissionMiddleware bounded && bounded.Controller == controller)
+                count++;
+        return count;
+    }
+
     public PipelineTaskScheduler Append(object middleware)
     {
+        Lifetime?.CheckRegistrationOpen();
         var registrations = new MiddlewareRegistration[_registrations.Length + 1];
         Array.Copy(_registrations, registrations, _registrations.Length);
         var registration = new MiddlewareRegistration(middleware, _annotations);
         registrations[registrations.Length - 1] = registration;
-        var snapshot = new PipelineTaskScheduler(_terminal, registrations, _annotations);
+        var snapshot = new PipelineTaskScheduler(_terminal, registrations, _annotations, Lifetime);
         registration.Scheduler = snapshot;
         return snapshot;
     }
 
     public PipelineTaskScheduler WithAnnotation(Type type, IOperationAnnotation annotation)
-        => new PipelineTaskScheduler(_terminal, _registrations, new AnnotationScope(_annotations, type, annotation));
+        => new PipelineTaskScheduler(_terminal, _registrations, new AnnotationScope(_annotations, type, annotation), Lifetime);
 
     public Task<TResult> Enqueue<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, CancellationToken cancellationToken)
     {
+        return Submit(taskFunc, state, null, cancellationToken);
+    }
+
+    internal Task<TResult> Submit<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc, object? state, AdmissionRequest? request, CancellationToken cancellationToken)
+    {
         Annotations.Argument.NotNull(taskFunc);
-        var operation = new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken);
+        var operation = new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken)
+        {
+            AdmissionRequest = request
+        };
+        if (request != null)
+            operation.OnQuiesced(request.OnQuiesced);
         return EnqueueCore(operation);
     }
 
     private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation)
     {
+        using var context = Lifetime?.EnterContext();
         try
         {
+            var result = await EnqueueWithCompletion(operation).ConfigureAwait(false);
+            operation.AdmissionRequest?.RecordCallerOutcome(null);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            operation.AdmissionRequest?.RecordCallerOutcome(exception);
+            throw;
+        }
+        finally { operation.ReleaseActivity(); }
+    }
+
+    private async ValueTask<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
+    {
+        try
+        {
+            if (Lifetime != null)
+            {
+                Lifetime.Enter();
+                operation.LifetimeExit = Lifetime.Exit;
+            }
             return await InvokeEnqueue(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
+            // Entry rejection must not invoke middleware whose resources may already be cleaned up.
+            if (Lifetime != null && operation.LifetimeExit == null)
+                throw;
             if (!operation.TryClaimCompletion())
             {
                 throw;
@@ -62,7 +117,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         }
     }
 
-    private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    {
+        operation.AddActivity();
+        try
+        { return await InvokeEnqueueCore(operation, index, cancellationToken).ConfigureAwait(false); }
+        finally { operation.ReleaseActivity(); }
+    }
+
+    private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         while (index >= 0 && !(_registrations[index].Middleware is ITaskSchedulerEnqueueMiddleware))
         {
@@ -78,7 +141,13 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerEnqueueMiddleware)registration.Middleware;
         var context = new TaskSchedulerEnqueueContext<TResult>(operation, registration.Annotations, registrationIndex, cancellationToken);
-        return middleware.InvokeAsync(context, nextContext => InvokeEnqueue(operation, registrationIndex - 1, nextContext.CancellationToken));
+        var nextCalled = 0;
+        return middleware.InvokeAsync(context, nextContext =>
+        {
+            if (Interlocked.Exchange(ref nextCalled, 1) != 0)
+                throw new InvalidOperationException("Enqueue middleware must invoke its continuation at most once.");
+            return InvokeEnqueue(operation, registrationIndex - 1, nextContext.CancellationToken);
+        });
     }
 
     private Task<TResult> ScheduleTerminal<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
@@ -109,7 +178,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         return outcome.GetResultOrThrow();
     }
 
-    private ValueTask<TResult> InvokeExecution<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private async ValueTask<TResult> InvokeExecution<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    {
+        operation.AddActivity();
+        try
+        { return await InvokeExecutionCore(operation, index, cancellationToken).ConfigureAwait(true); }
+        finally { operation.ReleaseActivity(); }
+    }
+
+    private ValueTask<TResult> InvokeExecutionCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         while (index < _registrations.Length && !(_registrations[index].Middleware is ITaskSchedulerExecutionMiddleware))
         {
@@ -119,6 +196,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         if (index >= _registrations.Length)
         {
             var finalContext = new TaskSchedulerOperationContext(operation, operation.FinalAnnotations, -1, cancellationToken);
+            operation.MarkStarted();
             return operation.TaskFunc(operation.State, finalContext.CancellationToken);
         }
 

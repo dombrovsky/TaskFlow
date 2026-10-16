@@ -42,7 +42,7 @@ Use TaskFlow instead when you need lane ownership, consistent per-submission out
 - Buffering, bounded capacity, and backpressure are the central design concerns.
 - Consumers can pull and process messages independently.
 
-Use TaskFlow instead when callers submit operations and each call must receive an individual task representing that operation's outcome.
+Use TaskFlow instead when callers submit operations and each call must receive an individual task representing that operation's outcome. Add [bounded admission](extensions/admission.md) when those operations also need capacity limits and asynchronous backpressure.
 
 ## Use custom task chaining when
 

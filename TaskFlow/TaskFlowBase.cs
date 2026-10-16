@@ -33,6 +33,8 @@ public abstract class TaskFlowBase : ITaskFlow
     private readonly object _lockObject;
 
     private TaskFlowState _state;
+    private Task? _shutdownTask;
+    internal TaskSchedulerMiddlewareLifetime MiddlewareLifetime { get; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TaskFlowBase"/> class with the specified options.
@@ -46,6 +48,7 @@ public abstract class TaskFlowBase : ITaskFlow
         _options = options;
         _disposeCancellationTokenSource = new CancellationTokenSource();
         _lockObject = new object();
+        MiddlewareLifetime = new TaskSchedulerMiddlewareLifetime(_lockObject);
         _state = TaskFlowState.NotStarted;
     }
 
@@ -202,51 +205,67 @@ public abstract class TaskFlowBase : ITaskFlow
     ///   <item>Performs proper resource cleanup</item>
     /// </list>
     /// </remarks>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Should be observed on a tasks returned from Enqueue method")]
-    protected virtual async ValueTask DisposeAsyncCore()
+    protected virtual ValueTask DisposeAsyncCore()
     {
+        MiddlewareLifetime.CheckReentrantDisposal();
+        TaskCompletionSource<bool> completion;
         Task initializationTask;
         Task completionTask;
         lock (_lockObject)
         {
+            if (_shutdownTask != null)
+                return new ValueTask(_shutdownTask);
             initializationTask = _state != TaskFlowState.NotStarted ? GetInitializationTask() : Task.CompletedTask;
-
-            if (_state == TaskFlowState.Disposed)
-            {
-                return;
-            }
-
             _state = TaskFlowState.Disposing;
+            MiddlewareLifetime.Close();
             completionTask = GetCompletionTask();
+            completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _shutdownTask = completion.Task;
         }
 
-        await initializationTask.ConfigureAwait(false);
+        _ = ShutdownAsync(initializationTask, completionTask, completion);
+        return new ValueTask(completion.Task);
+    }
 
-#if NET8_0_OR_GREATER
-        await _disposeCancellationTokenSource.CancelAsync().ConfigureAwait(false);
-#else
-        _disposeCancellationTokenSource.Cancel();
-#endif
-
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Shutdown must attempt all phases and report cleanup errors through the shared task.")]
+    private async Task ShutdownAsync(Task initializationTask, Task completionTask, TaskCompletionSource<bool> completion)
+    {
+        var errors = new System.Collections.Generic.List<Exception>();
+        try
+        { MiddlewareLifetime.SignalStopping(); }
+        catch (Exception exception) { errors.Add(exception); }
+        try
+        { await initializationTask.ConfigureAwait(false); }
+        catch (Exception exception) { errors.Add(exception); }
         try
         {
-            OnDisposeBeforeWaitForCompletion();
-            await completionTask.ConfigureAwait(false);
+#if NET8_0_OR_GREATER
+            await _disposeCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+#else
+            _disposeCancellationTokenSource.Cancel();
+#endif
         }
-        catch
-        {
-            // suppressed
-        }
-        finally
-        {
-            OnDisposeAfterWaitForCompletion();
-            _disposeCancellationTokenSource.Dispose();
-
-            lock (_lockObject)
-            {
-                _state = TaskFlowState.Disposed;
-            }
-        }
+        catch (Exception exception) { errors.Add(exception); }
+        try
+        { OnDisposeBeforeWaitForCompletion(); }
+        catch (Exception exception) { errors.Add(exception); }
+        try
+        { await completionTask.ConfigureAwait(false); }
+        catch { /* Operation failures belong to Enqueue callers. */ }
+        await MiddlewareLifetime.WaitForSubmissionsAsync().ConfigureAwait(false);
+        try
+        { await MiddlewareLifetime.CleanupAsync().ConfigureAwait(false); }
+        catch (Exception exception) { errors.Add(exception); }
+        try
+        { OnDisposeAfterWaitForCompletion(); }
+        catch (Exception exception) { errors.Add(exception); }
+        _disposeCancellationTokenSource.Dispose();
+        lock (_lockObject)
+        { _state = TaskFlowState.Disposed; }
+        if (errors.Count == 0)
+            completion.TrySetResult(true);
+        else
+            completion.TrySetException(new AggregateException(errors));
     }
 
     /// <summary>
@@ -261,7 +280,8 @@ public abstract class TaskFlowBase : ITaskFlow
     {
         lock (_lockObject)
         {
-            _state = TaskFlowState.Running;
+            if (_state != TaskFlowState.Disposing && _state != TaskFlowState.Disposed)
+                _state = TaskFlowState.Running;
         }
     }
 
@@ -277,7 +297,8 @@ public abstract class TaskFlowBase : ITaskFlow
     {
         lock (_lockObject)
         {
-            _state = TaskFlowState.Starting;
+            if (_state != TaskFlowState.Disposing && _state != TaskFlowState.Disposed)
+                _state = TaskFlowState.Starting;
         }
     }
 

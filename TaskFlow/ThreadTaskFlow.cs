@@ -94,17 +94,18 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     {
         Argument.NotNull(taskFunc);
 
+        ExecutionItem executionItem;
         lock (ThisLock)
         {
             CheckDisposed();
+            executionItem = new ExecutionItem(TaskFunc, state, _synchronizationContext, cancellationToken);
+            _blockingCollection.Add(executionItem, CancellationToken.None);
         }
-
-        var executionItem = new ExecutionItem(TaskFunc, state, _synchronizationContext, cancellationToken);
-        _blockingCollection.Add(executionItem, CancellationToken.None);
         return await executionItem.GetTypedTask<T>().ConfigureAwait(false);
 
         async Task<object?> TaskFunc(object? stateObject, CancellationToken token)
         {
+            using var context = MiddlewareLifetime.EnterContext();
             var result = await taskFunc(stateObject, token).ConfigureAwait(false);
             return result;
         }
