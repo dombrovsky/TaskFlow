@@ -86,11 +86,15 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     /// continuations within the task function will also be marshaled back to the same thread.
     /// </para>
     /// <para>
+    /// Calls made after disposal are rejected synchronously with <see cref="ObjectDisposedException"/>.
+    /// Failures from accepted operations are reported through their returned tasks.
+    /// </para>
+    /// <para>
     /// Cancellation does not remove the queued item. The delegate is invoked with a linked token that may already
     /// be canceled so queue progression remains deterministic.
     /// </para>
     /// </remarks>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Preserve task-based error propagation without wrapping accepted tasks.")]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Disposed calls throw synchronously; other scheduling errors retain task-based propagation.")]
     public override Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
     {
         try
@@ -105,7 +109,7 @@ public abstract class ThreadTaskFlow : TaskFlowBase
                 return executionItem.Task;
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not ObjectDisposedException)
         {
             return TaskExtensions.FromAsyncException<T>(exception);
         }

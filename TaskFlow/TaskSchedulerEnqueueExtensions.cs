@@ -16,6 +16,10 @@ using System.Threading.Tasks.Flow.Internal;
 /// synchronous functions, and actions) and provide convenient overloads for common scenarios.
 /// </para>
 /// <para>
+/// If a scheduler rejects an enqueue call by throwing <see cref="ObjectDisposedException"/>, the exception
+/// is propagated synchronously. Failures from accepted operations remain observable through their returned tasks.
+/// </para>
+/// <para>
 /// All extension methods perform argument validation and ensure proper exception propagation.
 /// Methods that don't specify a <see cref="CancellationToken"/> will use <see cref="CancellationToken.None"/>.
 /// </para>
@@ -573,7 +577,7 @@ public static class TaskSchedulerEnqueueExtensions
         return taskScheduler.Enqueue(token => new ValueTask<T>(func(token)), cancellationToken);
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Preserve task-based error propagation without wrapping accepted tasks.")]
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Disposed calls throw synchronously; other scheduling errors retain task-based propagation.")]
     private static Task<Unit> EnqueueCore(ITaskScheduler? taskScheduler, Func<object?, CancellationToken, ValueTask<Unit>> taskFunc, CancellationToken cancellationToken)
     {
         if (taskScheduler is null)
@@ -583,7 +587,7 @@ public static class TaskSchedulerEnqueueExtensions
         {
             return taskScheduler.Enqueue(taskFunc, null, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not ObjectDisposedException)
         {
             return TaskExtensions.FromAsyncException<Unit>(exception);
         }
