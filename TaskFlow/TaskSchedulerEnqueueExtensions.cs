@@ -247,11 +247,9 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
     {
-        Argument.NotNull(taskScheduler);
+        return EnqueueCore(taskScheduler, TaskFunc, cancellationToken);
 
-        return taskScheduler.Enqueue(TaskFunc, cancellationToken);
-
-        async ValueTask<Unit> TaskFunc(CancellationToken token)
+        async ValueTask<Unit> TaskFunc(object? state, CancellationToken token)
         {
             await taskFunc(token).ConfigureAwait(false);
             return default;
@@ -271,8 +269,6 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
     {
-        Argument.NotNull(taskScheduler);
-
         return taskScheduler.Enqueue(taskFunc, CancellationToken.None);
     }
 
@@ -355,11 +351,9 @@ public static class TaskSchedulerEnqueueExtensions
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
     {
-        Argument.NotNull(taskScheduler);
+        return EnqueueCore(taskScheduler, TaskFunc, cancellationToken);
 
-        return taskScheduler.Enqueue(TaskFunc, cancellationToken);
-
-        async ValueTask<Unit> TaskFunc(CancellationToken token)
+        async ValueTask<Unit> TaskFunc(object? state, CancellationToken token)
         {
             await valueTaskFunc(token).ConfigureAwait(false);
             return default;
@@ -384,8 +378,6 @@ public static class TaskSchedulerEnqueueExtensions
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
     {
-        Argument.NotNull(taskScheduler);
-
         return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None, _);
     }
 
@@ -471,15 +463,14 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
     {
-        Argument.NotNull(taskScheduler);
-
-        return taskScheduler.Enqueue(
-                token =>
-                {
-                    action(token);
-                    return new ValueTask(Task.CompletedTask);
-                },
-                cancellationToken);
+        return EnqueueCore(
+            taskScheduler,
+            (_, token) =>
+            {
+                action(token);
+                return new ValueTask<Unit>(default(Unit));
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -496,15 +487,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
     {
-        Argument.NotNull(taskScheduler);
-
-        return taskScheduler.Enqueue(
-                token =>
-                {
-                    action(token);
-                    return new ValueTask(Task.CompletedTask);
-                },
-                CancellationToken.None);
+        return taskScheduler.Enqueue(action, CancellationToken.None);
     }
 
     /// <summary>
@@ -521,15 +504,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Action action)
     {
-        Argument.NotNull(taskScheduler);
-
-        return taskScheduler.Enqueue(
-                _ =>
-                {
-                    action();
-                    return new ValueTask(Task.CompletedTask);
-                },
-                CancellationToken.None);
+        return taskScheduler.Enqueue(action, CancellationToken.None);
     }
 
     /// <summary>
@@ -547,15 +522,14 @@ public static class TaskSchedulerEnqueueExtensions
     /// </remarks>
     public static Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
     {
-        Argument.NotNull(taskScheduler);
-
-        return taskScheduler.Enqueue(
-                _ =>
-                {
-                    action();
-                    return new ValueTask(Task.CompletedTask);
-                },
-                cancellationToken);
+        return EnqueueCore(
+            taskScheduler,
+            (_, token) =>
+            {
+                action();
+                return new ValueTask<Unit>(default(Unit));
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -597,6 +571,22 @@ public static class TaskSchedulerEnqueueExtensions
         Argument.NotNull(taskScheduler);
 
         return taskScheduler.Enqueue(token => new ValueTask<T>(func(token)), cancellationToken);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Preserve task-based error propagation without wrapping accepted tasks.")]
+    private static Task<Unit> EnqueueCore(ITaskScheduler? taskScheduler, Func<object?, CancellationToken, ValueTask<Unit>> taskFunc, CancellationToken cancellationToken)
+    {
+        if (taskScheduler is null)
+            return Task.FromException<Unit>(new ArgumentNullException(nameof(taskScheduler)));
+
+        try
+        {
+            return taskScheduler.Enqueue(taskFunc, null, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return TaskExtensions.FromAsyncException<Unit>(exception);
+        }
     }
 
     /// <summary>
