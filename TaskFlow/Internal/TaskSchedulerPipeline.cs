@@ -261,7 +261,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerExecutionMiddleware)registration.Middleware;
-        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, operation.ProducerCancellationToken, registration.Scheduler);
+        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, cancellationToken, registration.Scheduler);
         return middleware.InvokeAsync(context, nextContext => InvokeExecution(operation, registrationIndex + 1, nextContext.CancellationToken));
     }
 
@@ -285,6 +285,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerCompletionMiddleware)registration.Middleware;
+        // Completion observes the preterminal producer token, including when execution never started.
         var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, operation.ProducerCancellationToken, registration.Scheduler);
         var nextCalled = false;
         try
