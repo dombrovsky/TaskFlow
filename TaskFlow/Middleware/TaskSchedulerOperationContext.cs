@@ -35,10 +35,23 @@ public sealed class TaskSchedulerOperationContext
     /// <value>The original state reference, which may be <c>null</c>.</value>
     public object? State => _operation.State;
 
-    /// <summary>Gets the effective producer cancellation token captured before terminal scheduling.</summary>
-    /// <value>The token selected by the enqueue pipeline and supplied to the terminal scheduler.</value>
-    /// <remarks>This value can differ from <see cref="CallerCancellationToken"/> when enqueue middleware separates caller waiting from producer work.</remarks>
+    /// <summary>Gets the cancellation token for the current pipeline phase.</summary>
+    /// <value>During execution, the effective token supplied by the terminal scheduler and forwarded through execution middleware.
+    /// During completion, the preterminal <see cref="ProducerCancellationToken"/>.</value>
+    /// <remarks>
+    /// <para>The execution token may include flow shutdown cancellation or other terminal-specific linkage. Execution middleware and the user
+    /// operation receive the same effective token when middleware passes its context onward unchanged.</para>
+    /// <para>Compatibility: execution contexts previously exposed the preterminal producer token. Use <see cref="ProducerCancellationToken"/>
+    /// when that token is required. Completion retains its producer-token semantics, including for failures before execution.</para>
+    /// </remarks>
     public CancellationToken CancellationToken { get; }
+
+    /// <summary>Gets the producer cancellation token captured before terminal scheduling.</summary>
+    /// <value>The token selected by the enqueue pipeline and supplied to the terminal scheduler, or the original caller token if terminal
+    /// scheduling was never reached.</value>
+    /// <remarks>This token excludes terminal-specific linkage, such as flow shutdown. It may differ from <see cref="CallerCancellationToken"/>
+    /// when enqueue middleware separates caller waiting from producer work.</remarks>
+    public CancellationToken ProducerCancellationToken => _operation.ProducerCancellationToken;
 
     /// <summary>Gets the submitting caller's original cancellation token.</summary>
     /// <value>The token supplied when the operation was enqueued, independently of producer-token transformations.</value>

@@ -12,7 +12,7 @@ public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
 {
     /// <summary>Processes the current outcome and continues completion processing.</summary>
     /// <typeparam name="TResult">The operation result type.</typeparam>
-    /// <param name="context">Immutable operation facts, effective cancellation, captured annotations, and this registration's local state.</param>
+    /// <param name="context">Immutable operation facts, preterminal producer cancellation, captured annotations, and this registration's local state.</param>
     /// <param name="outcome">The success or failure produced by execution or preceding completion middleware.</param>
     /// <param name="continuation">The remaining completion pipeline.</param>
     /// <returns>A value task containing the outcome that should ultimately complete the scheduled task.</returns>
