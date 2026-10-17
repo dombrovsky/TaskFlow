@@ -90,16 +90,24 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     /// be canceled so queue progression remains deterministic.
     /// </para>
     /// </remarks>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Preserve task-based error propagation without wrapping accepted tasks.")]
     public override Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
     {
-        Argument.NotNull(taskFunc);
-
-        lock (ThisLock)
+        try
         {
-            CheckDisposed();
-            var executionItem = new ExecutionItem<T>(TaskFunc, state, _synchronizationContext, cancellationToken);
-            _blockingCollection.Add(executionItem, CancellationToken.None);
-            return executionItem.Task;
+            Argument.NotNull(taskFunc);
+
+            lock (ThisLock)
+            {
+                CheckDisposed();
+                var executionItem = new ExecutionItem<T>(TaskFunc, state, _synchronizationContext, cancellationToken);
+                _blockingCollection.Add(executionItem, CancellationToken.None);
+                return executionItem.Task;
+            }
+        }
+        catch (Exception exception)
+        {
+            return TaskExtensions.FromAsyncException<T>(exception);
         }
 
         async Task<T> TaskFunc(object? stateObject, CancellationToken token)
