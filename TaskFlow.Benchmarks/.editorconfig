@@ -1,0 +1,5 @@
+[*.cs]
+# BenchmarkDotNet generates a separate executable that accesses public benchmark types.
+dotnet_diagnostic.CA1515.severity = none
+# BenchmarkDotNet invokes GlobalCleanup to dispose owned resources.
+dotnet_diagnostic.CA1001.severity = none
