@@ -3,6 +3,7 @@ namespace System.Threading.Tasks.Flow.Internal;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,14 @@ using System.Threading.Tasks.Flow.Annotations;
 
 internal static class TaskExtensions
 {
+    public static Task<T> FromAsyncException<T>(Exception exception)
+    {
+        // Keep the async method builder's original exception and cancellation-token semantics.
+        var completion = AsyncTaskMethodBuilder<T>.Create();
+        completion.SetException(exception);
+        return completion.Task;
+    }
+
     public static void Await(this Task task)
     {
         Argument.NotNull(task);
