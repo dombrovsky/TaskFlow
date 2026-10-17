@@ -10,7 +10,7 @@ Each operation returns a completed `ValueTask<int>`. All submissions must be acc
 
 Throughput includes draining all accepted completions and disposing owners. Allocation uses process-wide `GC.GetTotalAllocatedBytes(precise: true)` across that interval, divided by operation count: it includes terminal tasks, contexts, promises, and some harness continuations, rather than claiming to isolate admission allocations. Producer tasks and completion storage are created before the interval. The baseline instrumentation only increments a counter before each original `Task.Run(Pump)`; it does not change scheduling. The new counter increments under the existing scheduling lock. Reflection reads the internal counter after measurement; the library contains no reflection or dynamic code for this diagnostic.
 
-## Results
+## Initial results at 7fa12ae
 
 Values below are medians of ten samples. Drain counts are per 20,000 accepted operations; fractional medians are the midpoint of the two central sample counts. Raw samples are in [results-before.csv](results-before.csv) and [results-after.csv](results-after.csv).
 
@@ -33,6 +33,8 @@ The staged burst consistently reduced drain work items from 20,000 to one. Measu
 
 Remaining costs include normal terminal task scheduling and asynchronous promise continuations. Separate idle-to-runnable transitions may still require separate drains, including one transition per operation for isolated producers. Rejections or pre-execution cancellations with completion middleware retain their per-operation asynchronous callback handoff; those cases are not measured here. Busy-key, saturated-limit, shutdown, and lost-wakeup behavior is tested deterministically in `DispatchCoalescingFixture`, rather than inferred from throughput.
 
+The focused ownership audit and repeated keyed/default-scheduler measurements are in [REVIEW.md](REVIEW.md). They include distributions, runtime contention traces, lock timing, and a worker-minimum sensitivity check. The initial samples above remain unchanged.
+
 ## Reproduce
 
 Run from the repository root with .NET 10 and a clean disposable baseline worktree. Restore/build both variants before measuring; keep other builds/tests idle. The baseline script refuses to instrument a worktree twice.
@@ -52,4 +54,12 @@ dotnet /tmp/dispatch-new/Dispatch.dll 20000 5 > /tmp/after-b.csv
 dotnet /tmp/dispatch-old/Dispatch.dll 20000 5 > /tmp/before-b.csv
 ```
 
-Arguments select operations per sample and samples per scenario. CSV columns identify scenario, keyed mode, producer count, round, operation count, operations/s, bytes/op, and scheduled drain count. Checked-in result files add a `batch` column for the two processes per variant.
+Arguments are operations, samples, optional scenario (`all`/`short-default`/`short-inline`/`burst-inline`), optional keyed mode (`all`/`true`/`false`), optional producer count (`all`/`1`/`8`), warmup operations, warmup rounds, and minimum worker threads. Defaults preserve the original matrix, 1,000-operation warmup, and 32-worker minimum. For example:
+
+```sh
+dotnet /tmp/dispatch-new/Dispatch.dll 200000 12 short-default true 1 200000 3 32
+```
+
+The first eight CSV columns identify scenario, keyed mode, producer count, round, operation count, operations/s, bytes/op, and scheduled drain count. Additional diagnostics report process CPU milliseconds, process-wide contended lock acquisitions, completed thread-pool work items, ending worker count, and Gen0/1/2 collections during the sample. Runtime counters include framework/harness work and do not isolate coordinator locks. Configuration is written to stderr. Initial checked-in result files add a `batch` column; review results also identify the series and variant.
+
+`instrument-locks.py` is optional, intrusive timing instrumentation for disposable worktrees. It measures coordinator critical-section wall time and acquisition time with stack-only scopes and timestamps. It changes timing and is never used for production throughput claims; the harness reads its private summary after the measured interval. See the review for commands and limitations.

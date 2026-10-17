@@ -331,6 +331,57 @@ internal sealed class DispatchCoalescingFixture
         await first.Completion!;
     }
 
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public async Task SynchronousSchedulingAndCallbackFailures_DoNotAbandonTheDrain(int kind)
+    {
+        using var backend = new InlineBackend(blockFirst: true, rejectFirst: true);
+        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        var budget = Budget(64);
+        var scheduler = Configure(kind, flow, budget, 64);
+        ITaskScheduler decorated = scheduler.UseMiddleware(new FailingCompletion());
+        if (kind == 1)
+            decorated = decorated.WithPerKeyBoundedAdmission(new BoundedAdmissionOptions { Capacity = 1 });
+        var firstRan = false;
+        var first = Submit(kind, budget, decorated, 0, () => { firstRan = true; return new ValueTask<int>(0); });
+        var pending = new Task<int>[63];
+        try
+        {
+            await backend.Entered.Task;
+            pending[0] = Submit<int>(kind, budget, decorated, 1, () => throw new FormatException("Delegate failure")).Completion!;
+            pending[1] = Submit(kind, budget, decorated, 2, () => new ValueTask<int>(2)).Completion!;
+            for (var index = 2; index < pending.Length; index++)
+            {
+                var value = index + 1;
+                pending[index] = Submit(kind, budget, decorated, value, () => new ValueTask<int>(value)).Completion!;
+            }
+            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        }
+        finally { backend.Release.Set(); }
+        await Assert.ThatAsync(async () => await first.Completion!, Throws.TypeOf<TaskSchedulerException>());
+        await Assert.ThatAsync(async () => await pending[0], Throws.TypeOf<FormatException>());
+        await Assert.ThatAsync(async () => await pending[1], Throws.TypeOf<InvalidOperationException>());
+        Assert.That(await Task.WhenAll(pending.Skip(2)), Is.EqualTo(Enumerable.Range(3, 61)));
+        Assert.That(firstRan, Is.False);
+        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.InlineOnProducer, Is.Zero);
+        // The failed key and all global reservations are reusable after observable completion.
+        Assert.That(await Submit(kind, budget, decorated, 0, () => new ValueTask<int>(42)).Completion!, Is.EqualTo(42));
+        await flow.DisposeAsync();
+    }
+
+    private sealed class FailingCompletion : ITaskSchedulerCompletionMiddleware
+    {
+        public ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context,
+            TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
+        {
+            if (outcome.IsSuccess && outcome.Result is int value && value == 2)
+                throw new InvalidOperationException("Completion failure");
+            return next(context, outcome);
+        }
+    }
+
     private sealed class Observer : ITaskSchedulerExecutionMiddleware, ITaskSchedulerCompletionMiddleware
     {
         private int _inlineOnProducer;
@@ -361,7 +412,7 @@ internal sealed class DispatchCoalescingFixture
         }
     }
 
-    private sealed class InlineBackend(bool blockFirst = false) : TaskScheduler, IDisposable
+    private sealed class InlineBackend(bool blockFirst = false, bool rejectFirst = false) : TaskScheduler, IDisposable
     {
         private int _queued;
         private int _inlineOnProducer;
@@ -376,11 +427,14 @@ internal sealed class DispatchCoalescingFixture
             if (_submitting)
                 Interlocked.Increment(ref _inlineOnProducer);
             CheckOwnership?.Invoke();
-            if (Interlocked.Increment(ref _queued) == 1 && blockFirst)
+            var first = Interlocked.Increment(ref _queued) == 1;
+            if (first && blockFirst)
             {
                 Entered.SetResult(0);
                 Release.Wait();
             }
+            if (first && rejectFirst)
+                throw new InvalidOperationException("Scheduler failure");
             TryExecuteTask(task);
         }
         public void Dispose() => Release.Dispose();

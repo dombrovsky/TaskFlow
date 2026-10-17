@@ -1,0 +1,86 @@
+{
+  "old": [
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Pump()",
+      "Count": 7396,
+      "Milliseconds": 33318.72351499998
+    },
+    {
+      "Method": "other",
+      "Count": 5992,
+      "Milliseconds": 33236.001123
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Started(class Submission<!0>)",
+      "Count": 1441,
+      "Milliseconds": 6420.26525500001
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Complete(class Submission<!0>)",
+      "Count": 1625,
+      "Milliseconds": 5528.925007999999
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1+<Schedule>d__18`1[System.Int32,System.Int32].MoveNext()",
+      "Count": 737,
+      "Milliseconds": 1904.979862000001
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.Exit()",
+      "Count": 129,
+      "Milliseconds": 433.36697299999986
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.Enter()",
+      "Count": 1,
+      "Milliseconds": 0.514822
+    }
+  ],
+  "head": [
+    {
+      "Method": "other",
+      "Count": 5755,
+      "Milliseconds": 29891.182873999962
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Started(class Submission<!0>)",
+      "Count": 1484,
+      "Milliseconds": 6095.844854
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Complete(class Submission<!0>)",
+      "Count": 1681,
+      "Milliseconds": 4450.134234999988
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.Exit()",
+      "Count": 189,
+      "Milliseconds": 3116.0333889999993
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Drain(bool,bool)",
+      "Count": 1482,
+      "Milliseconds": 1723.7549889999998
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1+<Schedule>d__20`1[System.Int32,System.Int32].MoveNext()",
+      "Count": 578,
+      "Milliseconds": 922.4938950000009
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].Pump(bool)",
+      "Count": 128,
+      "Milliseconds": 382.24942700000014
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.Internal.KeyedCoordinator`1[System.Int32].RequestDispatch(class Submission<!0>)",
+      "Count": 12,
+      "Milliseconds": 13.486612000000001
+    },
+    {
+      "Method": "System.Threading.Tasks.Flow.TaskSchedulerMiddlewareLifetime.Enter()",
+      "Count": 1,
+      "Milliseconds": 0.27022
+    }
+  ]
+}
