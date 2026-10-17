@@ -269,6 +269,8 @@ public static class KeyedBoundedAdmissionExtensions
     /// and execution/completion middleware. Other enqueue middleware is rejected before submission. Dispatch is asynchronous.
     /// Accepted Completion must be observed; rejection returns Full or Closed with null Completion.
     /// The controller must occur exactly once. The key remains typed and the original state is visible to middleware.
+    /// Dispatch requests share a drain; each operation preserves its captured ExecutionContext, including flow suppression.
+    /// Admission uses existing locks and invokes key hashing/equality synchronously; comparers must be fast and nonthrowing.
     /// </remarks>
     /// <exception cref="NotSupportedException">The pipeline cannot guarantee synchronous atomic admission.</exception>
     /// <exception cref="ArgumentException">The controller is missing or registered more than once.</exception>

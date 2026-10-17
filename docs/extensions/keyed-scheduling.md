@@ -95,6 +95,8 @@ else
     ReportRejected(attempt.Admission); // Completion is null.
 ```
 
+Dispatch requests share one guarded drain per coordinator. Busy keys and saturated execution limits do not schedule independent workers for new arrivals. The existing ready-key list still determines round-robin order; each dispatched operation restores its own producer context, including context-flow suppression. See [dispatch guarantees and limitations](admission.md#dispatch-and-producer-context).
+
 `TrySubmit` validates the entire native pipeline before creating work. Other enqueue middleware, including the timeout in the earlier example, is unsupported at every position. Execution/completion middleware and annotations remain supported. Keep `Submit(Reject)` when enqueue middleware must run, or `Submit(Wait)` for backpressure; neither requires a synchronous admission decision. See [bounded admission compatibility](admission.md#supported-trysubmit-pipelines).
 
 The combined stage is placed at the outermost coordinated policy registration. All participating budgets are evaluated there, rather than introducing independent waits at each decorator. A timeout outside that stage includes admission/dispatch waiting; a timeout inside it starts when the selected operation is dispatched. Moving or appending a coordinated policy can move that stage. Ordinary user middleware retains its existing relative order.

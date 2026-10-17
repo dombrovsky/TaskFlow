@@ -31,7 +31,9 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     /// <remarks>
     /// The controller must occur exactly once in a native pipeline. Only built-in admission/coordinated enqueue policies,
     /// annotations, and execution/completion middleware are supported. Multiple budgets require a coordinated branch.
-    /// Dispatch runs asynchronously; accepted work can begin before this method returns. Observe accepted Completion tasks.
+    /// Dispatch is coalesced off the producer's stack, including terminal scheduler callbacks; accepted work can begin
+    /// before this method returns. Each operation preserves its captured ExecutionContext, including flow suppression.
+    /// Existing admission/lifetime locks may contend. Observe accepted Completion tasks.
     /// Rejection returns Full or Closed with null Completion. A cancellation that wins before admission throws synchronously.
     /// </remarks>
     /// <exception cref="NotSupportedException">The pipeline cannot guarantee synchronous atomic admission. Validation occurs before work is submitted.</exception>

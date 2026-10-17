@@ -4,22 +4,29 @@ using System.Collections.Generic;
 
 internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddleware, IDisposable
 {
+    private static readonly WaitCallback DrainCallback = static state => ((BoundedAdmissionMiddleware)state!).Drain(onWorker: true);
+
+    private readonly TaskSchedulerMiddlewareLifetime _lifetime;
     private readonly object _sync = new object();
     private readonly LinkedList<Submission> _waiters = new LinkedList<Submission>();
     private readonly Queue<Submission> _dispatch = new Queue<Submission>();
     private readonly CancellationTokenRegistration _stoppingRegistration;
 
+    private int _scheduledDrains;
     private int _used;
     private bool _pumping;
     private bool _closed;
 
     public BoundedAdmissionMiddleware(BoundedAdmissionController controller, TaskSchedulerMiddlewareLifetime lifetime)
     {
+        _lifetime = lifetime;
         Controller = controller;
         _stoppingRegistration = lifetime.StoppingToken.Register(Close);
     }
 
     public BoundedAdmissionController Controller { get; }
+    internal int ScheduledDrainCount { get { lock (_sync) return _scheduledDrains; } }
+    internal Action? DrainIdle { get; set; }
 
     public async Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
     {
@@ -27,6 +34,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         if (request?.Controller != Controller)
             request = null;
         var submission = new Submission<T>(this, context, next, request);
+        context.Operation.OnQuiesced(submission.Quiesced);
         using var cancellation = context.CancellationToken.Register(() => Cancel(submission));
         lock (_sync)
         {
@@ -43,11 +51,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
             else
                 submission.Waiter = _waiters.AddLast(submission);
         }
-        // TrySubmit only performs admission on the producer. Even an inline terminal must run elsewhere.
-        if (request?.Synchronous == true)
-            _ = Task.Run(Pump, CancellationToken.None);
-        else
-            Pump();
+        Pump(defer: request?.Synchronous == true);
         return await submission.Task.ConfigureAwait(false);
     }
 
@@ -80,7 +84,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         }
     }
 
-    private void Release()
+    private void Release(bool defer)
     {
         lock (_sync)
         {
@@ -93,27 +97,46 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                 Reserve(first);
             }
         }
-        Pump();
+        Pump(defer);
     }
 
-    private void Pump()
+    private void Pump(bool defer = false)
     {
         lock (_sync)
         {
-            if (_pumping)
+            if (_pumping || _dispatch.Count == 0)
                 return;
             _pumping = true;
         }
+        Drain(onWorker: false, defer);
+    }
+
+    // _pumping owns both the queued worker and its drain. Publish idle under the queue lock.
+    private void Drain(bool onWorker, bool defer = false)
+    {
         while (true)
         {
-            Submission next;
+            Submission? next = null;
             lock (_sync)
             {
                 if (_dispatch.Count == 0)
-                { _pumping = false; return; }
-                next = _dispatch.Dequeue();
+                    _pumping = false;
+                else if (!onWorker && (defer || _dispatch.Peek().RequiresWorker))
+                {
+                    _scheduledDrains++;
+                    _ = ThreadPool.UnsafeQueueUserWorkItem(DrainCallback, this);
+                    return;
+                }
+                else
+                    next = _dispatch.Dequeue();
             }
-            // A single dispatcher invokes continuations in FIFO order. Waking FIFO awaiters alone is insufficient.
+            if (next == null)
+            {
+                if (onWorker)
+                    DrainIdle?.Invoke();
+                return;
+            }
+            // One dispatcher invokes continuations in FIFO order, outside the admission lock.
             next.Dispatch();
         }
     }
@@ -133,7 +156,12 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
     private abstract class Submission
     {
-        protected Submission(AdmissionRequest? request) => Request = request;
+        protected Submission(AdmissionRequest? request)
+        {
+            Request = request;
+            RequiresWorker = request?.Synchronous == true || ExecutionContext.IsFlowSuppressed();
+        }
+        public bool RequiresWorker { get; }
         public AdmissionRequest? Request { get; }
         public LinkedListNode<Submission>? Waiter { get; set; }
         public bool Reserved { get; set; }
@@ -145,6 +173,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
     private sealed class Submission<T> : Submission
     {
+        private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();
         private readonly BoundedAdmissionMiddleware _owner;
         private readonly TaskSchedulerEnqueueContext<T> _context;
         private readonly TaskSchedulerEnqueueDelegate<T> _next;
@@ -165,23 +194,36 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
         public override void Dispatch()
         {
-            _context.Operation.OnQuiesced(ReleaseOnce);
             if (_owner.Controller.CapacityMode == TaskSchedulerCapacityMode.Pending)
                 _context.Operation.OnStarted(ReleaseOnce);
-            _ = ExecuteAsync();
+            if (_executionContext != null)
+                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ExecuteAsync(); }, this);
+            else
+                // Suppressed captures only dispatch on a context-free drain worker.
+                _ = ExecuteAsync();
+        }
+
+        public void Quiesced()
+        {
+            _executionContext?.Dispose();
+            if (Reserved)
+                ReleaseOnce();
         }
 
         private void ReleaseOnce()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
-                _owner.Release();
+                _owner.Release(Request?.Synchronous == true);
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Propagates every operation failure through its completion task.")]
         private async Task ExecuteAsync()
         {
             try
-            { _completion.TrySetResult(await _next(_context).ConfigureAwait(false)); }
+            {
+                using var ownership = _owner._lifetime.EnterContextIfNeeded();
+                _completion.TrySetResult(await _next(_context).ConfigureAwait(false));
+            }
             catch (OperationCanceledException) { _completion.TrySetCanceled(); }
             catch (Exception exception) { _completion.TrySetException(exception); }
         }

@@ -39,6 +39,14 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
         }
     }
 
+    internal IDisposable? EnterContextIfNeeded()
+    {
+        for (var frame = Current.Value; frame != null; frame = frame.Parent)
+            if (frame.Lifetime == this)
+                return null;
+        return EnterContext();
+    }
+
     internal IDisposable EnterContext()
     {
         var previous = Current.Value;
