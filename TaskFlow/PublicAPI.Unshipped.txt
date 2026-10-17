@@ -163,3 +163,4 @@ static System.Threading.Tasks.Flow.KeyedTaskSchedulerExtensions.WithPerKeyBounde
 
 System.Threading.Tasks.Flow.KeyedBoundedAdmissionExtensions
 System.Threading.Tasks.Flow.TaskSchedulerOperationContext.ProducerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.WithCancellationToken(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerOperationContext!

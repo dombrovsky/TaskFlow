@@ -22,13 +22,15 @@ public sealed class TaskSchedulerOperationContext
         Internal.AnnotationScope? annotations,
         int registrationIndex,
         CancellationToken cancellationToken,
-        ITaskScheduler? scheduler = null)
+        ITaskScheduler? scheduler = null,
+        CancellationToken? producerCancellationToken = null)
     {
         _operation = operation;
         _annotations = annotations;
         _registrationIndex = registrationIndex;
         _scheduler = scheduler;
         CancellationToken = cancellationToken;
+        ProducerCancellationToken = producerCancellationToken ?? operation.ProducerCancellationToken;
     }
 
     /// <summary>Gets the unmodified state supplied to <see cref="ITaskScheduler.Enqueue{TResult}"/>.</summary>
@@ -36,22 +38,19 @@ public sealed class TaskSchedulerOperationContext
     public object? State => _operation.State;
 
     /// <summary>Gets the cancellation token for the current pipeline phase.</summary>
-    /// <value>During execution, the effective token supplied by the terminal scheduler and forwarded through execution middleware.
-    /// During completion, the preterminal <see cref="ProducerCancellationToken"/>.</value>
-    /// <remarks>
-    /// <para>The execution token may include flow shutdown cancellation or other terminal-specific linkage. Execution middleware and the user
-    /// operation receive the same effective token when middleware passes its context onward unchanged.</para>
-    /// <para>Compatibility: execution contexts previously exposed the preterminal producer token. Use <see cref="ProducerCancellationToken"/>
-    /// when that token is required. Completion retains its producer-token semantics, including for failures before execution.</para>
-    /// </remarks>
+    /// <value>The effective token for this execution or completion invocation.</value>
+    /// <remarks>Execution starts with the terminal-supplied token, which may include shutdown cancellation. Downstream middleware can replace it
+    /// using <see cref="WithCancellationToken"/>. Normal completion starts with the terminal token, independently of execution-attempt replacements.
+    /// Before terminal invocation, completion uses the captured producer token (or its original caller-token initialization when terminal submission
+    /// has not occurred). Cancellation does not skip completion middleware.</remarks>
     public CancellationToken CancellationToken { get; }
 
     /// <summary>Gets the producer cancellation token captured before terminal scheduling.</summary>
-    /// <value>The token selected by the enqueue pipeline and supplied to the terminal scheduler, or the original caller token if terminal
-    /// scheduling was never reached.</value>
-    /// <remarks>This token excludes terminal-specific linkage, such as flow shutdown. It may differ from <see cref="CallerCancellationToken"/>
-    /// when enqueue middleware separates caller waiting from producer work.</remarks>
-    public CancellationToken ProducerCancellationToken => _operation.ProducerCancellationToken;
+    /// <value>The token supplied to the terminal scheduler, or the original caller token if terminal scheduling was never reached.</value>
+    /// <remarks>This token excludes cancellation added by the terminal scheduler. It can differ from <see cref="CallerCancellationToken"/>
+    /// when enqueue middleware separates caller waiting from producer work. This value is a snapshot: context copies retain it even if a
+    /// preterminal timeout races later terminal submission.</remarks>
+    public CancellationToken ProducerCancellationToken { get; }
 
     /// <summary>Gets the submitting caller's original cancellation token.</summary>
     /// <value>The token supplied when the operation was enqueued, independently of producer-token transformations.</value>
@@ -89,6 +88,16 @@ public sealed class TaskSchedulerOperationContext
             throw new InvalidOperationException("The final operation context has no middleware registration-local state.");
         return _operation.GetOrCreateLocalState(_registrationIndex, stateFactory);
     }
+
+    /// <summary>Creates a context for the same operation and registration with a replacement effective cancellation token.</summary>
+    /// <param name="cancellationToken">The token to forward to the next execution or completion invocation.</param>
+    /// <returns>A new context preserving operation identity, original state, caller and producer tokens, annotations, local-state ownership,
+    /// and callback scheduler. The current context is unchanged.</returns>
+    /// <remarks>This method does not link, cancel, or dispose token sources, create a new operation or admission reservation, or serialize
+    /// concurrent continuations. Middleware owns any replacement source and must link the incoming token when cancellation should be preserved.
+    /// Pass the returned context to the continuation; replacements apply only to that downstream invocation.</remarks>
+    public TaskSchedulerOperationContext WithCancellationToken(CancellationToken cancellationToken)
+        => new TaskSchedulerOperationContext(_operation, _annotations, _registrationIndex, cancellationToken, _scheduler, ProducerCancellationToken);
 
     internal Internal.PipelineOperation Operation => _operation;
     internal ITaskScheduler Scheduler => _scheduler ?? throw new InvalidOperationException("The context is not associated with a middleware registration.");

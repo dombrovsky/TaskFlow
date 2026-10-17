@@ -7,12 +7,14 @@ using System.Threading.Tasks;
 /// <para>Completion middleware is invoked in registration order after execution, or after an enqueue or terminal submission failure.</para>
 /// <para>Execution failures run completion on the terminal context. Failures that occur before the terminal invokes the operation cannot guarantee
 /// terminal thread or synchronization-context affinity.</para>
+/// <para>Completion starts with the terminal execution token, independently of per-attempt execution replacements. Before terminal invocation,
+/// it uses the captured producer token, or the original caller token if terminal submission has not occurred.</para>
 /// </remarks>
 public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
 {
     /// <summary>Processes the current outcome and continues completion processing.</summary>
     /// <typeparam name="TResult">The operation result type.</typeparam>
-    /// <param name="context">Immutable operation facts, preterminal producer cancellation, captured annotations, and this registration's local state.</param>
+    /// <param name="context">Immutable operation facts, effective cancellation, captured annotations, and this registration's local state.</param>
     /// <param name="outcome">The success or failure produced by execution or preceding completion middleware.</param>
     /// <param name="continuation">The remaining completion pipeline.</param>
     /// <returns>A value task containing the outcome that should ultimately complete the scheduled task.</returns>
@@ -23,6 +25,8 @@ public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
     /// <para>Middleware should normally invoke <paramref name="continuation"/> exactly once. If this method throws before invoking it, the thrown
     /// exception replaces the current outcome and later completion middleware still runs. If it throws after invoking it, later middleware is not
     /// repeated and the thrown exception becomes the final failure.</para>
+    /// <para>A context copied with <see cref="TaskSchedulerOperationContext.WithCancellationToken"/> replaces cancellation only for downstream
+    /// completion processing. The context must belong to this operation.</para>
     /// </remarks>
     ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
         TaskSchedulerOperationContext context,

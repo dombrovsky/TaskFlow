@@ -49,7 +49,7 @@ internal sealed class ExecutionCancellationFixture
                     Assert.That(observer.ExecutionContext!.CancellationToken, Is.EqualTo(delegateToken));
                     Assert.That(observer.ExecutionContext.CallerCancellationToken, Is.EqualTo(callerToken));
                     Assert.That(observer.ExecutionContext.ProducerCancellationToken, Is.EqualTo(callerToken));
-                    Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(callerToken));
+                    Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(delegateToken));
                     Assert.That(observer.CompletionException, Is.InstanceOf<OperationCanceledException>());
                     Assert.That(observer.CompletionCount, Is.EqualTo(1));
                     Assert.That(observer.StateShared, Is.True);
@@ -109,7 +109,7 @@ internal sealed class ExecutionCancellationFixture
                 Assert.That(async () => await operation.WaitAsync(TestTimeout), Throws.InstanceOf<OperationCanceledException>());
                 foreach (var observer in new[] { first, second })
                 {
-                    Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(producerToken));
+                    Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(delegateToken));
                     Assert.That(observer.CompletionContext.ProducerCancellationToken, Is.EqualTo(producerToken));
                     Assert.That(observer.CompletionContext.CallerCancellationToken, Is.EqualTo(caller.Token));
                 }
@@ -123,7 +123,7 @@ internal sealed class ExecutionCancellationFixture
     }
 
     [Test]
-    public async Task TerminalReplacementToken_ReachesAllExecutionStagesAndOperation_CompletionKeepsProducerToken()
+    public async Task TerminalReplacementToken_ReachesAllExecutionStagesAndOperation_CompletionGetsTerminalToken()
     {
         using var caller = new CancellationTokenSource();
         using var producer = new CancellationTokenSource();
@@ -148,8 +148,8 @@ internal sealed class ExecutionCancellationFixture
             Assert.That(observer.ExecutionContext!.CancellationToken, Is.EqualTo(effective.Token));
             Assert.That(observer.ExecutionContext.ProducerCancellationToken, Is.EqualTo(producer.Token));
             Assert.That(observer.ExecutionContext.CallerCancellationToken, Is.EqualTo(caller.Token));
-            Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(producer.Token));
-            Assert.That(observer.CompletionContext.CancellationToken.IsCancellationRequested, Is.False);
+            Assert.That(observer.CompletionContext!.CancellationToken, Is.EqualTo(effective.Token));
+            Assert.That(observer.CompletionContext.CancellationToken.IsCancellationRequested, Is.True);
             Assert.That(observer.CompletionCount, Is.EqualTo(1));
             Assert.That(observer.CompletionException, Is.Null);
             Assert.That(observer.StateShared, Is.True);

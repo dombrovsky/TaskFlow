@@ -27,17 +27,15 @@ public readonly struct TaskSchedulerInterceptionContext
         _extendedState = null;
         _operationContext = context;
         State = context.State;
-        CancellationToken = context.ProducerCancellationToken;
+        CancellationToken = context.CancellationToken;
     }
 
     /// <summary>Gets the original operation state after TaskFlow extended-state wrappers have been removed.</summary>
     /// <value>The caller-provided state, or <c>null</c> when no state was supplied.</value>
     public object? State { get; }
 
-    /// <summary>Gets the cancellation token received by the interception decorator.</summary>
-    /// <value>The preterminal producer token associated with the intercepted enqueue request.</value>
-    /// <remarks>This preserves the interception contract. Execution middleware and the user operation receive the terminal's effective
-    /// execution token, which may additionally include flow shutdown cancellation.</remarks>
+    /// <summary>Gets the effective execution cancellation token received by the interception decorator.</summary>
+    /// <value>The terminal execution token, or a replacement supplied by upstream execution middleware.</value>
     public CancellationToken CancellationToken { get; }
 
     /// <summary>Gets the first annotation of the requested type attached to the operation.</summary>
