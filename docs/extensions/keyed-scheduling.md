@@ -43,7 +43,7 @@ await submission.Completion;
 
 ## Keys and delegates
 
-Key-first `Enqueue` and `Submit` extension methods supply immutable submission metadata. The admission controller remains nongeneric; keyed convenience methods live in `KeyedBoundedAdmissionExtensions`. A delegate can receive the key, or omit it when it already has everything it needs. Typed-state overloads keep the original state reference visible to middleware:
+Key-first `Enqueue`, `Submit`, and `TrySubmit` extension methods supply immutable submission metadata. The admission controller remains nongeneric; keyed convenience methods live in `KeyedBoundedAdmissionExtensions`. Keyed `Enqueue` and `Submit` delegates may omit the key parameter. `TrySubmit` uses key-receiving delegates to keep its overload family focused. Typed-state overloads keep the original state reference visible to middleware:
 
 ```csharp
 await scheduler.Enqueue(
@@ -79,6 +79,25 @@ On a coordinated branch, all registered capacity budgets are checked and reserve
 Waiting preserves FIFO within each key. The coordinator selects the oldest eligible waiting key-head, skipping keys whose per-key budget is full. This avoids a hot key preventing unrelated work from using available global capacity. A new submission cannot overtake an earlier waiter for its key or an earlier eligible waiter. Admission fairness and round-robin execution are separate decisions.
 
 `Submit` targeting any coordinated controller reports the combined admission decision. Its explicit mode applies to that combined decision: `Reject` never waits for any coordinated capacity budget; `Wait` permits waiting. Ordinary `Enqueue` uses the registered policies' defaults; if any participating budget is configured to reject, the combined stage rejects when it cannot admit immediately. `Accepted` means every coordinated budget was reserved, not that dispatch or execution succeeded. Failure/cancellation before reaching the coordinated stage follows issue 30's unreached-admission contract.
+
+`TrySubmit` uses this same combined stage and accounting. It returns `Accepted`, `Full`, or `Closed` synchronously, never creates admission waiters, and cannot partially reserve budgets. All budgets use immediate rejection regardless of their configured default mode. FIFO and eligible-waiter priority are shared with `Submit(Wait)` and `Enqueue`; accepted operations use the existing round-robin dispatcher and concurrency limits.
+
+```csharp
+// This branch has no enqueue middleware other than coordinated policies.
+var immediate = flow.WithKeyedScheduling<string>()
+    .WithConcurrencyLimit(8)
+    .WithBoundedAdmission(global)
+    .WithPerKeyBoundedAdmission(perKey);
+var attempt = global.TrySubmit(immediate, documentId, Save, cancellationToken);
+if (attempt.Admission == TaskSchedulerAdmissionResult.Accepted)
+    await attempt.Completion!;
+else
+    ReportRejected(attempt.Admission); // Completion is null.
+```
+
+Dispatch requests share one guarded drain per coordinator. Busy keys and saturated execution limits do not schedule independent workers for new arrivals. The existing ready-key list still determines round-robin order; each dispatched operation restores its own producer context, including context-flow suppression. See [dispatch guarantees and limitations](admission.md#dispatch-and-producer-context).
+
+`TrySubmit` validates the entire native pipeline before creating work. Other enqueue middleware, including the timeout in the earlier example, is unsupported at every position. Execution/completion middleware and annotations remain supported. Keep `Submit(Reject)` when enqueue middleware must run, or `Submit(Wait)` for backpressure; neither requires a synchronous admission decision. See [bounded admission compatibility](admission.md#supported-trysubmit-pipelines).
 
 The combined stage is placed at the outermost coordinated policy registration. All participating budgets are evaluated there, rather than introducing independent waits at each decorator. A timeout outside that stage includes admission/dispatch waiting; a timeout inside it starts when the selected operation is dispatched. Moving or appending a coordinated policy can move that stage. Ordinary user middleware retains its existing relative order.
 
