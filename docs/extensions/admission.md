@@ -88,6 +88,10 @@ This coalesces dispatch work items, but does not eliminate terminal scheduling o
 
 The off-stack guarantee covers operation delegates, supported middleware callbacks, and terminal `QueueTask` calls initiated by this submission. It does not make admission wait-free: existing locks can contend, and keyed hashing/equality must run synchronously to decide admission. Supply a fast, stable, nonblocking, nonthrowing comparer. Runtime `ExecutionContext`/`AsyncLocal` notifications also retain their .NET behavior. With a custom backend that blocks inside `QueueTask`, a direct native flow can hold its existing owner lock and delay a concurrent producer entering that lifetime. Prefer a keyed/concurrent branch, or `TaskFlowSchedulerAdapter` with an explicit lifetime, for such backends. No asynchronous capacity or execution task is synchronously waited on.
 
+### Dispatch failures and progress
+
+Operation, execution/completion middleware, and custom terminal scheduling exceptions settle the affected accepted completion; they do not abandon the shared drain. Worker submission uses the runtime thread pool, whose managed queue has no capacity-rejection decision. Progress and shutdown draining require a functioning thread pool and cooperative running work. Resource exhaustion, runtime termination, forced thread abort, or a host without thread-pool support are outside this liveness guarantee. In particular, queueing can fail after the runtime has already published the callback, so blindly clearing drain ownership and retrying cannot safely recover. The scheduler does not fall back to executing callbacks on the producer. See the [dispatch ownership review](https://github.com/dombrovsky/TaskFlow/blob/main/benchmarks/Dispatch/REVIEW.md) for the runtime-source audit and fault tests.
+
 ### Supported TrySubmit pipelines
 
 Capability validation runs before operation creation, middleware invocation, or capacity reservation:
