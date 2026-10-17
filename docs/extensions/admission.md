@@ -78,6 +78,16 @@ An already canceled caller token throws `OperationCanceledException` synchronous
 
 Convenience overloads accept synchronous delegates and `Task`/`ValueTask` delegates, with and without results or delegate token parameters. Keyed delegates receive `key` or `(key, token)`. Typed-state core overloads accept `ValueTask` delegates, with or without results; wrap a named `Task` operation in `new ValueTask(...)` or `new ValueTask<T>(...)` when using typed state. Use named delegates or explicit lambda return types if an async lambda is ambiguous between Task and ValueTask overloads. See the [synchronous event producer recipe](../recipes.md#shed-load-from-synchronous-events) for a cooldown example.
 
+### Dispatch and producer context
+
+Admission and dispatch are separate phases. Each admission domain has one drain owner, claimed under its existing queue lock before a thread-pool worker is queued. Further arrivals join that drain. The keyed coordinator schedules a drain only when work can run; arrivals blocked by a busy key or execution limit need no worker. Completion, cancellation, and capacity release recheck runnable work. Publishing idle uses the same lock as queue mutation, so an arrival either joins the current drain or starts the next one.
+
+The worker is queued without capturing a producer's `ExecutionContext`. Each operation restores its own captured context when it dispatches; submissions made with flow suppressed execute without inheriting another producer's ambient values. Lifetime ownership is reestablished even when flow was suppressed, including around a custom `TaskScheduler.QueueTask`. A legacy inline `Enqueue` drain hands off before reaching a `TrySubmit` operation or an operation whose context flow was suppressed. Execution and completion middleware keep their usual scheduler-context behavior.
+
+This coalesces dispatch work items, but does not eliminate terminal scheduling or asynchronous task continuations. Work that becomes runnable only after a previous drain has retired needs another drain. Rejection or pre-execution cancellation with completion middleware still uses a separate per-operation asynchronous handoff to protect the producer from those callbacks; without completion middleware, rejection needs no such handoff. There is no dedicated thread or polling loop. See the [reproducible dispatch measurements](https://github.com/dombrovsky/TaskFlow/tree/main/benchmarks/Dispatch).
+
+The off-stack guarantee covers operation delegates, supported middleware callbacks, and terminal `QueueTask` calls initiated by this submission. It does not make admission wait-free: existing locks can contend, and keyed hashing/equality must run synchronously to decide admission. Supply a fast, stable, nonblocking, nonthrowing comparer. Runtime `ExecutionContext`/`AsyncLocal` notifications also retain their .NET behavior. With a custom backend that blocks inside `QueueTask`, a direct native flow can hold its existing owner lock and delay a concurrent producer entering that lifetime. Prefer a keyed/concurrent branch, or `TaskFlowSchedulerAdapter` with an explicit lifetime, for such backends. No asynchronous capacity or execution task is synchronously waited on.
+
 ### Supported TrySubmit pipelines
 
 Capability validation runs before operation creation, middleware invocation, or capacity reservation:

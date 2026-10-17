@@ -11,6 +11,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly MiddlewareRegistration[] _registrations;
     private readonly AnnotationScope? _annotations;
     private readonly CoordinatedPolicy[] _policies;
+    private readonly bool _hasCompletionMiddleware;
     internal SchedulingCoordinator? Coordinator { get; }
     internal TaskFlow? TerminalFlow => _terminal as TaskFlow;
 
@@ -26,11 +27,39 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         _terminal = terminal;
         _registrations = registrations;
         _annotations = annotations;
+        foreach (var registration in registrations)
+            if (registration.Middleware is ITaskSchedulerCompletionMiddleware)
+                _hasCompletionMiddleware = true;
         _policies = coordinator == null ? Array.Empty<CoordinatedPolicy>() : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<CoordinatedPolicy>(
             System.Linq.Enumerable.Select(registrations, registration => registration.Middleware)));
     }
 
     internal TaskSchedulerMiddlewareLifetime? Lifetime { get; }
+
+    internal int ScheduledDrainCount
+    {
+        get
+        {
+            var count = Coordinator?.ScheduledDrainCount ?? 0;
+            foreach (var registration in _registrations)
+                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
+                    count += bounded.ScheduledDrainCount;
+            return count;
+        }
+    }
+
+    // Tests pause a retiring worker after idle has been published, outside the queue lock.
+    internal Action? DrainIdle
+    {
+        set
+        {
+            if (Coordinator != null)
+                Coordinator.DrainIdle = value;
+            foreach (var registration in _registrations)
+                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
+                    bounded.DrainIdle = value;
+        }
+    }
 
     internal PipelineTaskScheduler WithLifetime(TaskSchedulerMiddlewareLifetime lifetime)
     {
@@ -216,7 +245,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
                 if (!operation.TryClaimCompletion())
                     throw;
                 // Rejection/cancellation may settle inline. Keep user completion middleware off TrySubmit's stack.
-                var outcome = operation.AdmissionRequest?.Synchronous == true
+                var outcome = operation.AdmissionRequest?.Synchronous == true && _hasCompletionMiddleware
                     ? await Task.Run(async () =>
                         await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false), CancellationToken.None).ConfigureAwait(false)
                     : await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
