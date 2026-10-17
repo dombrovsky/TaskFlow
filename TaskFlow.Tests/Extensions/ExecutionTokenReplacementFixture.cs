@@ -199,21 +199,138 @@ internal sealed class ExecutionTokenReplacementFixture
     {
         using var execution = new CancellationTokenSource();
         using var replacement = new CancellationTokenSource();
+        using var nestedReplacement = new CancellationTokenSource();
         var transform = new CompletionRecorder(replacement.Token);
         var passThrough = new CompletionRecorder();
+        var nestedTransform = new CompletionRecorder(nestedReplacement.Token);
         var failure = new InvalidOperationException("completion");
         var throwing = new CompletionRecorder(failure: failure);
         var last = new CompletionRecorder();
         var scheduler = new Terminal(execution.Token).UseMiddleware(transform).UseMiddleware(passThrough)
-            .UseMiddleware(throwing).UseMiddleware(last);
+            .UseMiddleware(nestedTransform).UseMiddleware(throwing).UseMiddleware(last);
 
         var thrown = Assert.ThrowsAsync<InvalidOperationException>(async () => await scheduler.Enqueue(() => 42));
 
         Assert.That(thrown, Is.SameAs(failure));
         Assert.That(transform.Contexts.Single().CancellationToken, Is.EqualTo(execution.Token));
-        foreach (var observer in new[] { passThrough, throwing, last })
+        foreach (var observer in new[] { passThrough, nestedTransform })
             Assert.That(observer.Contexts.Single().CancellationToken, Is.EqualTo(replacement.Token));
+        foreach (var observer in new[] { throwing, last })
+            Assert.That(observer.Contexts.Single().CancellationToken, Is.EqualTo(nestedReplacement.Token));
         Assert.That(last.Exceptions.Single(), Is.SameAs(failure));
+    }
+
+    [Test]
+    public async Task CompletionThrowAfterReplacedContinuation_DoesNotRepeatDownstreamOrQuiescence()
+    {
+        using var execution = new CancellationTokenSource();
+        using var replacement = new CancellationTokenSource();
+        var failure = new InvalidOperationException("after continuation");
+        var wrapping = new WrappingCompletion(replacement.Token, throwAfter: failure);
+        var paused = new PausedCompletion();
+        var last = new CompletionRecorder();
+        var terminal = new Terminal(execution.Token);
+        var scheduler = terminal.UseMiddleware(wrapping).UseMiddleware(paused).UseMiddleware(last);
+        var quiesced = 0;
+        var operation = scheduler.Enqueue(() => 42);
+        try
+        {
+            var downstream = await paused.Entered.Task.WaitAsync(Guard);
+            downstream.Operation.OnQuiesced(() => Interlocked.Increment(ref quiesced));
+            Assert.That(downstream.CancellationToken, Is.EqualTo(replacement.Token));
+            Assert.That(operation.IsCompleted, Is.False);
+            Assert.That(last.Contexts, Is.Empty);
+            paused.Release.SetResult(true);
+            var thrown = Assert.ThrowsAsync<InvalidOperationException>(async () => await operation.WaitAsync(Guard));
+            Assert.That(thrown, Is.SameAs(failure));
+            Assert.That(wrapping.Context!.CancellationToken, Is.EqualTo(execution.Token));
+            Assert.That(wrapping.ObservedException, Is.Null);
+            Assert.That(paused.Calls, Is.EqualTo(1));
+            Assert.That(last.Contexts.Single().CancellationToken, Is.EqualTo(replacement.Token));
+            Assert.That(last.Exceptions.Single(), Is.Null, "The later upstream failure must not notify downstream again.");
+            Assert.That(terminal.Submissions, Is.EqualTo(1));
+            Assert.That(quiesced, Is.EqualTo(1));
+        }
+        finally { paused.Release.TrySetResult(true); }
+    }
+
+    [Test]
+    public async Task DownstreamCompletionFailure_ReturnsAnOutcomeThatUpstreamCanRecover()
+    {
+        using var execution = new CancellationTokenSource();
+        using var replacement = new CancellationTokenSource();
+        var failure = new InvalidOperationException("downstream callback");
+        var wrapping = new WrappingCompletion(replacement.Token, recover: true);
+        var paused = new PausedCompletion(failure: failure);
+        var last = new CompletionRecorder();
+        var scheduler = new Terminal(execution.Token).UseMiddleware(wrapping).UseMiddleware(paused).UseMiddleware(last);
+        var operation = scheduler.Enqueue(() => 42);
+        try
+        {
+            await paused.Entered.Task.WaitAsync(Guard);
+            paused.Release.SetResult(true);
+            Assert.That(await operation.WaitAsync(Guard), Is.EqualTo(84));
+            Assert.That(wrapping.CaughtContinuationException, Is.False, "Completion failures are represented as outcomes.");
+            Assert.That(wrapping.ObservedException, Is.SameAs(failure));
+            Assert.That(wrapping.Context!.CancellationToken, Is.EqualTo(execution.Token));
+            Assert.That(last.Contexts.Single().CancellationToken, Is.EqualTo(replacement.Token));
+            Assert.That(last.Exceptions.Single(), Is.SameAs(failure));
+            Assert.That(paused.Calls, Is.EqualTo(1));
+        }
+        finally { paused.Release.TrySetResult(true); }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CompletionProducerSnapshot_SurvivesLateSubmission_InRecursionAndExceptionFallback(bool throwBeforeContinuation)
+    {
+        var clock = new FakeTimeProvider();
+        using var caller = new CancellationTokenSource();
+        using var producer = new CancellationTokenSource();
+        using var execution = new CancellationTokenSource();
+        using var replacement = new CancellationTokenSource();
+        var failure = new InvalidOperationException("paused completion");
+        var paused = new PausedCompletion(replacement.Token, throwBeforeContinuation ? failure : null);
+        var last = new CompletionRecorder();
+        var gate = new EnqueueGate();
+        var terminal = new Terminal(execution.Token);
+        var scheduler = terminal.UseMiddleware(paused).UseMiddleware(last).UseMiddleware(new ProducerToken(producer.Token))
+            .UseMiddleware(gate).WithTimeout(TimeSpan.FromMinutes(1), clock);
+        var operation = scheduler.Enqueue<int>((_, _) => new ValueTask<int>(42), null, caller.Token);
+        try
+        {
+            await gate.Entered.Task.WaitAsync(Guard);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            var upstream = await paused.Entered.Task.WaitAsync(Guard);
+            var copy = upstream.WithCancellationToken(replacement.Token);
+            Assert.That(upstream.CancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(upstream.ProducerCancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(paused.IncomingException, Is.TypeOf<TimeoutException>());
+            Assert.That(terminal.Submissions, Is.Zero);
+            gate.Release.SetResult(true);
+            await gate.Completed.Task.WaitAsync(Guard);
+            Assert.That(upstream.Operation.ProducerCancellationToken, Is.EqualTo(producer.Token));
+            Assert.That(upstream.ProducerCancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(copy.ProducerCancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(upstream.WithCancellationToken(execution.Token).ProducerCancellationToken, Is.EqualTo(caller.Token));
+            paused.Release.SetResult(true);
+            if (throwBeforeContinuation)
+                Assert.That(Assert.ThrowsAsync<InvalidOperationException>(async () => await operation.WaitAsync(Guard)), Is.SameAs(failure));
+            else
+                Assert.That(Assert.ThrowsAsync<TimeoutException>(async () => await operation.WaitAsync(Guard)), Is.SameAs(paused.IncomingException));
+            var downstream = last.Contexts.Single();
+            Assert.That(downstream.CancellationToken, Is.EqualTo(throwBeforeContinuation ? caller.Token : replacement.Token));
+            Assert.That(downstream.ProducerCancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(downstream.CallerCancellationToken, Is.EqualTo(caller.Token));
+            Assert.That(last.Exceptions.Single(), Is.SameAs(throwBeforeContinuation ? failure : paused.IncomingException));
+            Assert.That(paused.Calls, Is.EqualTo(1));
+            Assert.That(terminal.Submissions, Is.EqualTo(1));
+        }
+        finally
+        {
+            gate.Release.TrySetResult(true);
+            paused.Release.TrySetResult(true);
+        }
     }
 
     [Test]
@@ -293,19 +410,30 @@ internal sealed class ExecutionTokenReplacementFixture
         }
     }
 
-    [Test]
-    public async Task AnotherOperationsContext_IsRejectedByExecutionAndCompletionContinuations()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task AnotherOperationsContext_IsRejectedByExecutionAndCompletionContinuations(bool invalidDuringCompletion)
     {
         var foreign = new ExecutionRecorder();
         await new Terminal(CancellationToken.None).UseMiddleware(foreign).Enqueue(() => 1);
-        var invalid = new ForeignContext(foreign.Contexts.Single());
+        using var caller = new CancellationTokenSource();
+        using var producer = new CancellationTokenSource();
+        using var execution = new CancellationTokenSource();
+        var invalid = new ForeignContext(foreign.Contexts.Single(), invalidDuringCompletion);
         var actualCalls = 0;
         var completion = new CompletionRecorder();
-        var scheduler = new Terminal(CancellationToken.None).UseMiddleware(invalid).UseMiddleware(completion);
-        var failure = Assert.ThrowsAsync<InvalidOperationException>(async () => await scheduler.Enqueue(() => ++actualCalls));
+        var scheduler = new Terminal(execution.Token).UseMiddleware(invalid).UseMiddleware(completion)
+            .UseMiddleware(new ProducerToken(producer.Token));
+        var failure = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await scheduler.Enqueue<int>((_, _) => new ValueTask<int>(++actualCalls), null, caller.Token));
         Assert.That(failure!.Message, Does.Contain("same operation"));
-        Assert.That(actualCalls, Is.Zero);
-        Assert.That(completion.Contexts, Has.Count.EqualTo(1));
+        Assert.That(actualCalls, Is.EqualTo(invalidDuringCompletion ? 1 : 0));
+        var context = completion.Contexts.Single();
+        Assert.That(context.CancellationToken, Is.EqualTo(execution.Token));
+        Assert.That(context.ProducerCancellationToken, Is.EqualTo(producer.Token));
+        Assert.That(context.CallerCancellationToken, Is.EqualTo(caller.Token));
+        Assert.That(completion.Exceptions.Single(), Is.SameAs(failure));
+        Assert.That(context.Operation, Is.Not.SameAs(foreign.Contexts.Single().Operation));
     }
 
     private sealed class Annotation : IOperationAnnotation;
@@ -333,6 +461,53 @@ internal sealed class ExecutionTokenReplacementFixture
             if (failure != null)
                 throw failure;
             return continuation(replacement.HasValue ? context.WithCancellationToken(replacement.Value) : context, outcome);
+        }
+    }
+
+    private sealed class PausedCompletion(CancellationToken? replacement = null, Exception? failure = null) : ITaskSchedulerCompletionMiddleware
+    {
+        public TaskCompletionSource<TaskSchedulerOperationContext> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = Gate();
+        public int Calls { get; private set; }
+        public Exception? IncomingException { get; private set; }
+
+        public async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(TaskSchedulerOperationContext context,
+            TaskSchedulerOperationOutcome<TResult> outcome, TaskSchedulerCompletionDelegate<TResult> continuation)
+        {
+            Calls++;
+            IncomingException = outcome.Exception;
+            Entered.TrySetResult(context);
+            await Release.Task;
+            if (failure != null)
+                throw failure;
+            return await continuation(replacement.HasValue ? context.WithCancellationToken(replacement.Value) : context, outcome);
+        }
+    }
+
+    private sealed class WrappingCompletion(CancellationToken replacement, Exception? throwAfter = null, bool recover = false) : ITaskSchedulerCompletionMiddleware
+    {
+        public TaskSchedulerOperationContext? Context { get; private set; }
+        public Exception? ObservedException { get; private set; }
+        public bool CaughtContinuationException { get; private set; }
+
+        public async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(TaskSchedulerOperationContext context,
+            TaskSchedulerOperationOutcome<TResult> outcome, TaskSchedulerCompletionDelegate<TResult> continuation)
+        {
+            Context = context;
+            TaskSchedulerOperationOutcome<TResult> downstream;
+            try
+            {
+                downstream = await continuation(context.WithCancellationToken(replacement), outcome);
+            }
+            catch (InvalidOperationException)
+            {
+                CaughtContinuationException = true;
+                throw;
+            }
+            ObservedException = downstream.Exception;
+            if (throwAfter != null)
+                throw throwAfter;
+            return recover ? TaskSchedulerOperationOutcome<TResult>.FromResult((TResult)(object)84) : downstream;
         }
     }
 
@@ -404,12 +579,12 @@ internal sealed class ExecutionTokenReplacementFixture
         }
     }
 
-    private sealed class ForeignContext(TaskSchedulerOperationContext foreign) : ITaskSchedulerExecutionMiddleware, ITaskSchedulerCompletionMiddleware
+    private sealed class ForeignContext(TaskSchedulerOperationContext foreign, bool invalidDuringCompletion) : ITaskSchedulerExecutionMiddleware, ITaskSchedulerCompletionMiddleware
     {
         public ValueTask<TResult> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerExecutionDelegate<TResult> continuation)
-            => continuation(foreign.WithCancellationToken(context.CancellationToken));
+            => continuation(invalidDuringCompletion ? context : foreign.WithCancellationToken(CancellationToken.None));
         public ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(TaskSchedulerOperationContext context,
             TaskSchedulerOperationOutcome<TResult> outcome, TaskSchedulerCompletionDelegate<TResult> continuation)
-            => continuation(foreign.WithCancellationToken(context.CancellationToken), outcome);
+            => continuation(invalidDuringCompletion ? foreign.WithCancellationToken(CancellationToken.None) : context, outcome);
     }
 }
