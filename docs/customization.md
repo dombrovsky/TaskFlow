@@ -104,7 +104,7 @@ ITaskScheduler interactive = common.UseMiddleware(new InteractiveAdmissionMiddle
 ITaskScheduler background = common.UseMiddleware(new BackgroundAdmissionMiddleware());
 ```
 
-The snapshot is non-owning. Disposing a terminal that implements `IDisposable` remains the caller's responsibility. A pipeline never disposes the terminal, middleware objects, or collaborators held by middleware.
+The snapshot is non-owning. Disposing a terminal that implements `IDisposable` remains the caller's responsibility. A pipeline never disposes the terminal or caller-supplied middleware objects. Factory-created registrations are owned by the flow's middleware lifetime; see [bounded admission and middleware lifetime](extensions/admission.md#lifetime-and-shutdown).
 
 ### Phase ordering
 

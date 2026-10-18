@@ -144,6 +144,32 @@ Decorator order is observable: each extension wraps the scheduler returned by th
 
 The factory keeps the root `ITaskFlow` separate from the decorated scheduler. Disposing a factory-created flow or a container-owned scoped registration therefore disposes the real owner rather than relying on its decorators to own it.
 
+## Keyed scheduling and admission
+
+Microsoft DI service keys select registrations; TaskFlow scheduling keys select FIFO execution turns. They are independent.
+
+Named factory flows expose an ownership wrapper. Ordinary `Enqueue` reaches the configured chain, but keyed `Enqueue` and explicit admission-controller `Submit` require a native scheduler snapshot. Configuring `WithKeyedScheduling` inside a named factory chain does not expose those capabilities on the returned wrapper.
+
+Register the owner and native snapshot separately when using these APIs:
+
+```csharp
+var services = new ServiceCollection();
+services.AddScoped<TaskFlow>();
+services.AddScoped<ITaskScheduler>(provider =>
+    provider.GetRequiredService<TaskFlow>()
+        .WithKeyedScheduling<string>()
+        .WithConcurrencyLimit(2));
+
+await using var root = services.BuildServiceProvider();
+await using var scope = root.CreateAsyncScope();
+var scheduler = scope.ServiceProvider.GetRequiredService<ITaskScheduler>();
+await scheduler.Enqueue("document-17", token => SaveAsync(token));
+
+static Task SaveAsync(CancellationToken token) => Task.CompletedTask;
+```
+
+The scope owns the separately registered `TaskFlow`; consumers borrow its scheduler. Apply bounded admission to the same native snapshot if you need controller `Submit`. See [keyed scheduling](extensions/keyed-scheduling.md) and [bounded admission](extensions/admission.md) for composition and capacity rules.
+
 ## Advanced creation
 
 The same `AddTaskFlow` overload can also customize creation of the underlying `ITaskFlow` and resolve `TaskFlowOptions` from the service provider. Use those delegates when a named configuration needs a different execution model or options determined from other registered services.

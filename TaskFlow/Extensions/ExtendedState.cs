@@ -1,15 +1,14 @@
-namespace System.Threading.Tasks.Flow
+namespace System.Threading.Tasks.Flow;
+
+internal sealed class ExtendedState
 {
-    internal sealed class ExtendedState
+    public ExtendedState(object? state, object? extended)
     {
-        public ExtendedState(object? state, object? extended)
-        {
-            State = state;
-            Extended = extended;
-        }
-
-        public object? State { get; }
-
-        public object? Extended { get; }
+        State = state;
+        Extended = extended;
     }
+
+    public object? State { get; }
+
+    public object? Extended { get; }
 }

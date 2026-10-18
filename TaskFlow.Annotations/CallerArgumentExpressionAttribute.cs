@@ -1,15 +1,14 @@
-namespace System.Threading.Tasks.Flow.Annotations
+namespace System.Threading.Tasks.Flow.Annotations;
+
+using System;
+
+[AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
+internal sealed class CallerArgumentExpressionAttribute : Attribute
 {
-    using System;
-
-    [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]
-    internal sealed class CallerArgumentExpressionAttribute : Attribute
+    public CallerArgumentExpressionAttribute(string parameterName)
     {
-        public CallerArgumentExpressionAttribute(string parameterName)
-        {
-            ParameterName = parameterName;
-        }
-
-        public string ParameterName { get; }
+        ParameterName = parameterName;
     }
+
+    public string ParameterName { get; }
 }

@@ -1,0 +1,51 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze C#
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup .NET
+        id: setup-dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Select .NET 10 SDK
+        run: dotnet new globaljson --sdk-version "${{ steps.setup-dotnet.outputs.dotnet-version }}" --roll-forward latestPatch --force
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+
+      - name: Restore dependencies
+        run: dotnet restore TaskFlow.sln
+
+      - name: Build for analysis
+        run: dotnet build TaskFlow.sln --configuration Release --no-restore --no-incremental -p:UseSharedCompilation=false -p:GeneratePackageOnBuild=false
+
+      - name: Analyze and upload results
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:csharp"

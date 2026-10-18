@@ -1,9 +1,8 @@
-namespace System.Threading.Tasks.Flow.Internal
-{
-    using System.Runtime.InteropServices;
+namespace System.Threading.Tasks.Flow.Internal;
 
-    [StructLayout(LayoutKind.Sequential, Size = 1)]
-    internal readonly struct Unit
-    {
-    }
+using System.Runtime.InteropServices;
+
+[StructLayout(LayoutKind.Sequential, Size = 1)]
+internal readonly struct Unit
+{
 }

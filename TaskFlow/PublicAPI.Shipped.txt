@@ -1,72 +1,16 @@
 #nullable enable
-abstract System.Threading.Tasks.Flow.TaskFlowBase.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-abstract System.Threading.Tasks.Flow.TaskFlowBase.GetCompletionTask() -> System.Threading.Tasks.Task!
-abstract System.Threading.Tasks.Flow.TaskFlowBase.GetInitializationTask() -> System.Threading.Tasks.Task!
-abstract System.Threading.Tasks.Flow.ThreadTaskFlow.ThreadId.get -> int
-override System.Threading.Tasks.Flow.CurrentThreadTaskFlow.ThreadId.get -> int
-override System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.ThreadId.get -> int
-override System.Threading.Tasks.Flow.TaskFlow.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-override System.Threading.Tasks.Flow.TaskFlowOptions.Equals(object? obj) -> bool
-override System.Threading.Tasks.Flow.TaskFlowOptions.GetHashCode() -> int
-override System.Threading.Tasks.Flow.TaskFlowOptions.ToString() -> string!
-override System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.Post(System.Threading.SendOrPostCallback! d, object? state) -> void
-override System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.Send(System.Threading.SendOrPostCallback! d, object? state) -> void
-override System.Threading.Tasks.Flow.ThreadTaskFlow.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-override System.Threading.Tasks.Flow.ThreadTaskFlow.GetCompletionTask() -> System.Threading.Tasks.Task!
-override System.Threading.Tasks.Flow.ThreadTaskFlow.GetInitializationTask() -> System.Threading.Tasks.Task!
-override System.Threading.Tasks.Flow.ThreadTaskFlow.OnDisposeAfterWaitForCompletion() -> void
-override System.Threading.Tasks.Flow.ThreadTaskFlow.OnDisposeBeforeWaitForCompletion() -> void
-static System.Threading.Tasks.Flow.AnnotatingTaskSchedulerExtensions.AnnotatedEnqueue<T, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<object?, TAnnotation?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.AnnotatingTaskSchedulerExtensions.WithOperationName(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, string! operationName) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.CancellationScopeTaskSchedulerExtensions.CreateCancellationScope(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.CancellationToken scopeCancellationToken) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.CancelPreviousTaskSchedulerExtensions.CreateCancelPrevious(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Exception!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, System.Exception!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction, System.Func<TException!, bool>? errorFilter = null) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions.Intercept(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.IAsyncTaskSchedulerInterceptor! interceptor) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions.Intercept<TInterceptor>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, TInterceptor interceptor) -> System.Threading.Tasks.Flow.ITaskScheduler!
-static System.Threading.Tasks.Flow.TaskFlowOptions.Default.get -> System.Threading.Tasks.Flow.TaskFlowOptions!
-static System.Threading.Tasks.Flow.TaskFlowOptions.Default.set -> void
-static System.Threading.Tasks.Flow.TaskFlowOptions.operator !=(System.Threading.Tasks.Flow.TaskFlowOptions? left, System.Threading.Tasks.Flow.TaskFlowOptions? right) -> bool
-static System.Threading.Tasks.Flow.TaskFlowOptions.operator ==(System.Threading.Tasks.Flow.TaskFlowOptions? left, System.Threading.Tasks.Flow.TaskFlowOptions? right) -> bool
-static System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.For(System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> System.Threading.SynchronizationContext!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action! action) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action! action, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.CancellationToken>! action) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.CancellationToken>! action, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.CancellationToken cancellationToken, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.Task!>! taskFunc) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T, TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T, TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, T>! func, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.Task<T>!>! taskFunc) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.ValueTask<T>>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<T>! func) -> System.Threading.Tasks.Task<T>!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
-static System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.GetAnnotation<TAnnotation>(object? state) -> TAnnotation?
-static System.Threading.Tasks.Flow.TimeoutTaskSchedulerExtensions.WithTimeout(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.TimeSpan timeout) -> System.Threading.Tasks.Flow.ITaskScheduler!
 System.Threading.Tasks.Flow.AnnotatingTaskSchedulerExtensions
-System.Threading.Tasks.Flow.CancellationScopeTaskSchedulerExtensions
 System.Threading.Tasks.Flow.CancelPreviousTaskSchedulerExtensions
+System.Threading.Tasks.Flow.CancellationScopeTaskSchedulerExtensions
 System.Threading.Tasks.Flow.CurrentThreadTaskFlow
 System.Threading.Tasks.Flow.CurrentThreadTaskFlow.CurrentThreadTaskFlow() -> void
 System.Threading.Tasks.Flow.CurrentThreadTaskFlow.CurrentThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> void
 System.Threading.Tasks.Flow.CurrentThreadTaskFlow.Run() -> void
 System.Threading.Tasks.Flow.DedicatedThreadTaskFlow
-System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(string? name = null) -> void
-System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options, string? name = null) -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow() -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options, string? name) -> void
+System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.DedicatedThreadTaskFlow(string? name) -> void
 System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions
 System.Threading.Tasks.Flow.IAsyncTaskInterceptor
 System.Threading.Tasks.Flow.IAsyncTaskInterceptor.OnBeforeAsync(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context) -> System.Threading.Tasks.ValueTask
@@ -75,7 +19,6 @@ System.Threading.Tasks.Flow.IAsyncTaskInterceptor.OnFinallyAsync(System.Threadin
 System.Threading.Tasks.Flow.IAsyncTaskInterceptor.OnSuccessAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context, TResult result) -> System.Threading.Tasks.ValueTask
 System.Threading.Tasks.Flow.IAsyncTaskSchedulerInterceptor
 System.Threading.Tasks.Flow.IAsyncTaskSchedulerInterceptor.CreateInterceptor(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context) -> System.Threading.Tasks.Flow.IAsyncTaskInterceptor!
-System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions
 System.Threading.Tasks.Flow.IOperationAnnotation
 System.Threading.Tasks.Flow.ITaskFlow
 System.Threading.Tasks.Flow.ITaskFlow.Dispose(System.TimeSpan timeout) -> bool
@@ -83,11 +26,19 @@ System.Threading.Tasks.Flow.ITaskFlowInfo
 System.Threading.Tasks.Flow.ITaskFlowInfo.Options.get -> System.Threading.Tasks.Flow.TaskFlowOptions!
 System.Threading.Tasks.Flow.ITaskScheduler
 System.Threading.Tasks.Flow.ITaskScheduler.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+System.Threading.Tasks.Flow.ITaskSchedulerCompletionMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerCompletionMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult> outcome, System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>! continuation) -> System.Threading.Tasks.ValueTask<System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>>
+System.Threading.Tasks.Flow.ITaskSchedulerEnqueueMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerEnqueueMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>! context, System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>! continuation) -> System.Threading.Tasks.Task<TResult>!
+System.Threading.Tasks.Flow.ITaskSchedulerExecutionMiddleware
+System.Threading.Tasks.Flow.ITaskSchedulerExecutionMiddleware.InvokeAsync<TResult>(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>! continuation) -> System.Threading.Tasks.ValueTask<TResult>
 System.Threading.Tasks.Flow.ITaskSchedulerInterceptor
 System.Threading.Tasks.Flow.ITaskSchedulerInterceptor.OnBefore(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context) -> void
 System.Threading.Tasks.Flow.ITaskSchedulerInterceptor.OnError(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context, System.Exception! exception) -> void
 System.Threading.Tasks.Flow.ITaskSchedulerInterceptor.OnFinally(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context) -> void
 System.Threading.Tasks.Flow.ITaskSchedulerInterceptor.OnSuccess<TResult>(System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext context, TResult result) -> void
+System.Threading.Tasks.Flow.ITaskSchedulerMiddleware
+System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions
 System.Threading.Tasks.Flow.OperationNameAnnotation
 System.Threading.Tasks.Flow.OperationNameAnnotation.OperationName.get -> string!
 System.Threading.Tasks.Flow.OperationThrottledException
@@ -127,18 +78,111 @@ System.Threading.Tasks.Flow.TaskFlowSchedulerAdapter.Enqueue<T>(System.Func<obje
 System.Threading.Tasks.Flow.TaskFlowSchedulerAdapter.TaskFlowSchedulerAdapter(System.Threading.Tasks.TaskScheduler! taskScheduler) -> void
 System.Threading.Tasks.Flow.TaskFlowSynchronizationContext
 System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.TaskFlowSynchronizationContext(System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> void
+System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.CallerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.CancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetAnnotation<TAnnotation>() -> TAnnotation?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetLocalState<TState>() -> TState?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.GetOrCreateLocalState<TState>(System.Func<TState!>! stateFactory) -> TState!
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.State.get -> object?
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>.WithCancellationToken(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>!
+System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>
 System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions
 System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter
+System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>
 System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext
 System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.CancellationToken.get -> System.Threading.CancellationToken
 System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.GetAnnotation<TAnnotation>() -> TAnnotation?
 System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.State.get -> object?
 System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.TaskSchedulerInterceptionContext() -> void
+System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.CallerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.CancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetAnnotation<TAnnotation>() -> TAnnotation?
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetLocalState<TState>() -> TState?
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.GetOrCreateLocalState<TState>(System.Func<TState!>! stateFactory) -> TState!
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.State.get -> object?
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.Exception.get -> System.Exception?
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.IsSuccess.get -> bool
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.Result.get -> TResult
+System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.TaskSchedulerOperationOutcome() -> void
 System.Threading.Tasks.Flow.ThreadTaskFlow
 System.Threading.Tasks.Flow.ThreadTaskFlow.ThreadStart(object? _) -> void
 System.Threading.Tasks.Flow.ThreadTaskFlow.ThreadTaskFlow(System.Threading.Tasks.Flow.TaskFlowOptions! options) -> void
 System.Threading.Tasks.Flow.TimeoutTaskSchedulerExtensions
+abstract System.Threading.Tasks.Flow.TaskFlowBase.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+abstract System.Threading.Tasks.Flow.TaskFlowBase.GetCompletionTask() -> System.Threading.Tasks.Task!
+abstract System.Threading.Tasks.Flow.TaskFlowBase.GetInitializationTask() -> System.Threading.Tasks.Task!
+abstract System.Threading.Tasks.Flow.ThreadTaskFlow.ThreadId.get -> int
+override System.Threading.Tasks.Flow.CurrentThreadTaskFlow.ThreadId.get -> int
+override System.Threading.Tasks.Flow.DedicatedThreadTaskFlow.ThreadId.get -> int
+override System.Threading.Tasks.Flow.TaskFlow.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+override System.Threading.Tasks.Flow.TaskFlowOptions.Equals(object? obj) -> bool
+override System.Threading.Tasks.Flow.TaskFlowOptions.GetHashCode() -> int
+override System.Threading.Tasks.Flow.TaskFlowOptions.ToString() -> string!
+override System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.Post(System.Threading.SendOrPostCallback! d, object? state) -> void
+override System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.Send(System.Threading.SendOrPostCallback! d, object? state) -> void
+override System.Threading.Tasks.Flow.ThreadTaskFlow.Enqueue<T>(System.Func<object?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+override System.Threading.Tasks.Flow.ThreadTaskFlow.GetCompletionTask() -> System.Threading.Tasks.Task!
+override System.Threading.Tasks.Flow.ThreadTaskFlow.GetInitializationTask() -> System.Threading.Tasks.Task!
+override System.Threading.Tasks.Flow.ThreadTaskFlow.OnDisposeAfterWaitForCompletion() -> void
+override System.Threading.Tasks.Flow.ThreadTaskFlow.OnDisposeBeforeWaitForCompletion() -> void
+static System.Threading.Tasks.Flow.AnnotatingTaskSchedulerExtensions.AnnotatedEnqueue<T, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<object?, TAnnotation?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, object? state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.AnnotatingTaskSchedulerExtensions.WithOperationName(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, string! operationName) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.CancelPreviousTaskSchedulerExtensions.CreateCancelPrevious(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.CancellationScopeTaskSchedulerExtensions.CreateCancellationScope(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.CancellationToken scopeCancellationToken) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Exception!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, System.Exception!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException, TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, TAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!, System.Threading.Tasks.Flow.OperationNameAnnotation?>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.Tasks.Flow.ITaskScheduler!, TException!>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.ExceptionTaskSchedulerExtensions.OnError<TException>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<TException!>! errorAction, System.Func<TException!, bool>? errorFilter) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions.Intercept(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.IAsyncTaskSchedulerInterceptor! interceptor) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.InterceptionTaskSchedulerExtensions.Intercept<TInterceptor>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, TInterceptor interceptor) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskFlowOptions.Default.get -> System.Threading.Tasks.Flow.TaskFlowOptions!
+static System.Threading.Tasks.Flow.TaskFlowOptions.Default.set -> void
+static System.Threading.Tasks.Flow.TaskFlowOptions.operator !=(System.Threading.Tasks.Flow.TaskFlowOptions? left, System.Threading.Tasks.Flow.TaskFlowOptions? right) -> bool
+static System.Threading.Tasks.Flow.TaskFlowOptions.operator ==(System.Threading.Tasks.Flow.TaskFlowOptions? left, System.Threading.Tasks.Flow.TaskFlowOptions? right) -> bool
+static System.Threading.Tasks.Flow.TaskFlowSynchronizationContext.For(System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler) -> System.Threading.SynchronizationContext!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action! action) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action! action, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.CancellationToken>! action) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Action<System.Threading.CancellationToken>! action, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.CancellationToken cancellationToken, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.Task!>! taskFunc) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.ValueTask>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T, TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T, TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<T>!>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! taskFunc, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<T>>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.CancellationToken, T>! func, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.Task<T>!>! taskFunc) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<System.Threading.Tasks.ValueTask<T>>! valueTaskFunc, System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.DummyParameter? _ = null) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<T>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<T>! func) -> System.Threading.Tasks.Task<T>!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerEnqueueExtensions.Enqueue<TState>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Func<TState, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! taskFunc, TState state, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+static System.Threading.Tasks.Flow.TaskSchedulerInterceptionContext.GetAnnotation<TAnnotation>(object? state) -> TAnnotation?
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.UseMiddleware(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.Threading.Tasks.Flow.ITaskSchedulerMiddleware! middleware) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerMiddlewareExtensions.WithAnnotation<TAnnotation>(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, TAnnotation! annotation) -> System.Threading.Tasks.Flow.ITaskScheduler!
+static System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.FromException(System.Exception! exception) -> System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+static System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>.FromResult(TResult result) -> System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>
+static System.Threading.Tasks.Flow.TimeoutTaskSchedulerExtensions.WithTimeout(this System.Threading.Tasks.Flow.ITaskScheduler! taskScheduler, System.TimeSpan timeout) -> System.Threading.Tasks.Flow.ITaskScheduler!
 virtual System.Threading.Tasks.Flow.TaskFlowBase.Dispose(bool disposing) -> void
 virtual System.Threading.Tasks.Flow.TaskFlowBase.DisposeAsyncCore() -> System.Threading.Tasks.ValueTask
 virtual System.Threading.Tasks.Flow.TaskFlowBase.OnDisposeAfterWaitForCompletion() -> void
 virtual System.Threading.Tasks.Flow.TaskFlowBase.OnDisposeBeforeWaitForCompletion() -> void
+virtual System.Threading.Tasks.Flow.TaskSchedulerCompletionDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context, System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult> outcome) -> System.Threading.Tasks.ValueTask<System.Threading.Tasks.Flow.TaskSchedulerOperationOutcome<TResult>>
+virtual System.Threading.Tasks.Flow.TaskSchedulerEnqueueDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerEnqueueContext<TResult>! context) -> System.Threading.Tasks.Task<TResult>!
+virtual System.Threading.Tasks.Flow.TaskSchedulerExecutionDelegate<TResult>.Invoke(System.Threading.Tasks.Flow.TaskSchedulerOperationContext! context) -> System.Threading.Tasks.ValueTask<TResult>

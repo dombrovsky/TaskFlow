@@ -32,6 +32,14 @@ static Task RefreshAsync(CancellationToken token) => Task.CompletedTask;
 
 The clock starts when `Enqueue` reaches the timeout wrapper, not when the delegate starts. On a busy built-in flow, the returned task can time out while waiting. The queued delegate is then invoked later with an already-canceled token. If it ignores cancellation, it can continue and hold the lane even though the caller already received `TimeoutException`.
 
+Pass a `TimeProvider` to control timeout delays, for example with `FakeTimeProvider` in tests:
+
+```csharp
+ITaskScheduler bounded = flow.WithTimeout(TimeSpan.FromSeconds(30), timeProvider);
+```
+
+Omitting the provider or passing `null` uses `TimeProvider.System`. On .NET 8 and .NET 10, the provider overload is included in the core `TaskFlow` package. When using TaskFlow's `netstandard2.0` asset, install `TaskFlow.Extensions.Time` to receive the provider overload through `Microsoft.Bcl.TimeProvider`, just as with `WithThrottle`. The existing `WithTimeout(TimeSpan)` overload remains in the core package on all targets.
+
 ## Error observation
 
 `OnError<TException>` runs an action for matching exceptions and then rethrows so the returned task preserves failure.
@@ -93,4 +101,4 @@ On .NET 8 and .NET 10, `WithThrottle` is in the core `TaskFlow` package. When a 
 | Report failures without changing successful behavior | `OnError` |
 | Admit at most one submission per interval | `WithThrottle` |
 | Cancel older unfinished operations | `CreateCancelPrevious` |
-| Retry or suppress failures | Implement inside the delegate or use an external policy; TaskFlow has no built-in retry policy |
+| Retry or suppress failures | Use [Polly inside the delegate](../integrations/polly.md); TaskFlow has no built-in retry policy |
