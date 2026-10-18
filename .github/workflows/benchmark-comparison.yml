@@ -35,7 +35,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(github.event_name == 'pull_request' && '["candidate", "merge-base", "synthetic", "older-release"]' || '["candidate"]') }}
+        include:
+          - scenario: drift-1.0.0
+            candidate: 0800af84229d7beb3a6fa507d236d0ff533b0c92
+          - scenario: tip-a15f373
+            candidate: a15f3735413def6598461f0a46b96cff3591ac1f
+          - scenario: midpoint-34dc96e
+            candidate: 34dc96ee49db4f817a8ac0c8209a46f46a164506
     steps:
       - uses: actions/checkout@v6
         with:
@@ -50,9 +56,9 @@ jobs:
         env:
           MODE: ${{ inputs.mode || 'release' }}
           BASELINE: ${{ inputs.baseline || '1.0.0' }}
-          CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
+          CANDIDATE: ${{ matrix.candidate }}
           TARGET: ${{ inputs.target || format('origin/{0}', github.event.pull_request.base.ref) }}
-          SCOPE: ${{ inputs.scope || 'representative' }}
+          SCOPE: full
           SCENARIO: ${{ matrix.scenario }}
         run: |
           if [ "$SCENARIO" = 'synthetic' ]; then
@@ -64,6 +70,22 @@ jobs:
           else
             python3 build/benchmark_compare.py --mode "$MODE" --baseline "$BASELINE" --candidate "$CANDIDATE" --target "$TARGET" --scope "$SCOPE" --output "$RUNNER_TEMP/comparison"
           fi
+      - name: Emit compact investigation measurements
+        if: always()
+        run: |
+          python3 - <<'PYRESULT'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ['RUNNER_TEMP']) / 'comparison/comparison.json'
+          if path.exists():
+              report = json.loads(path.read_text())
+              result = {key: report.get(key) for key in ['baseline_sha', 'candidate_sha', 'selection', 'scope', 'baseline_failure', 'candidate_failure', 'incompatible_configuration']}
+              for side in ['baseline', 'candidate']:
+                  if side in report:
+                      value = report[side]
+                      result[side] = {'series': value['series'], 'cases': value['cases'], 'harness': value['provenance']['harness_hash'], 'settings': value['provenance']['settings']}
+              print('BISECT_RESULT=' + json.dumps(result, separators=(',', ':')))
+          PYRESULT
       - name: Report early infrastructure failure
         if: failure()
         run: |
