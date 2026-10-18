@@ -7,7 +7,7 @@ permalink: /integrations/polly/
 
 # Polly v8 resilience pipelines with TaskFlow
 
-Run Polly **inside the delegate submitted to TaskFlow** to retry an operation without giving up its queue position. No `TaskFlow.Polly` package is required.
+Run Polly **inside the delegate submitted to TaskFlow** to retry an operation without giving up its queue position.
 
 Install `TaskFlow` and `Polly.Core`. These examples use Polly 8.8.0 on .NET 8/10. `SaveAsync(CancellationToken)` is an application method returning `ValueTask`; `cancellationToken` is the caller's token.
 
