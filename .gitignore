@@ -35,6 +35,7 @@ launchSettings.json
 
 # Local BenchmarkDotNet output.
 BenchmarkDotNet.Artifacts/
+
 # Generated history is included only in the Pages build.
 docs/benchmarks/data/
 __pycache__/
