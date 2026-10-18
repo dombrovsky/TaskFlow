@@ -12,7 +12,6 @@ on:
       - "TaskFlow.Extensions.Microsoft.Logging/README.md"
       - ".github/workflows/documentation.yml"
   pull_request:
-    branches: [ "main" ]
     paths:
       - "docs/**"
       - "README.md"
@@ -22,6 +21,9 @@ on:
       - "TaskFlow.Extensions.Microsoft.Logging/README.md"
       - ".github/workflows/documentation.yml"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Benchmark history"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -32,11 +34,25 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Include durable benchmark history
+        run: |
+          mkdir -p docs/benchmarks/data
+          if git show-ref --verify --quiet refs/remotes/origin/benchmark-data; then
+            git archive origin/benchmark-data | tar -x -C docs/benchmarks/data
+          else
+            echo '{"schema":1,"records":[]}' > docs/benchmarks/data/index.json
+          fi
 
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'

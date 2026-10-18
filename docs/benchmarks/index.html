@@ -1,0 +1,19 @@
+---
+layout: page
+title: Benchmark history
+permalink: /benchmarks/
+---
+<p>Measured cross-run trends are advisory: hosted runner noise and temporal drift limit conclusions.
+Use a controlled same-run comparison for change attribution. Dry and incomplete runs are excluded.</p>
+<p><label>Compatible series <select id="series"></select></label></p>
+<p><label>Case and parameters <select id="case"></select></label></p>
+<p><label>Metric <select id="metric"><option value="mean_ns">Mean ns/op</option><option value="ops_s">Operations/s</option><option value="allocated_bytes">Managed bytes/op</option></select></label></p>
+<p id="status" role="status">Loading measured history…</p>
+<svg id="chart" viewBox="0 0 850 300" role="img" aria-label="Selected metric history" style="width:100%;background:#fafafa"></svg>
+<div style="overflow:auto"><table><thead><tr><th>Release / checkout</th><th>UTC date</th><th>Mean ns/op</th><th>StdDev / samples</th><th>Ops/s</th><th>Bytes/op</th><th>Evidence</th></tr></thead><tbody id="rows"></tbody></table></div>
+<details><summary>Selected environment and harness provenance</summary><pre id="provenance" style="white-space:pre-wrap"></pre></details>
+<p>Enqueue-only allocation is unsupported because deferred execution and iteration setup prevent valid attribution.
+Missing measurements are shown explicitly. Separate series retain different harness, runtime, CPU, quota, affinity and image configurations.
+Raw records include warmup and actual measurements, full environment, source tree identities and job settings.</p>
+<p><a href="https://github.com/dombrovsky/TaskFlow/blob/main/TaskFlow.Benchmarks/README.md">Reproduction, storage, comparison and activation guide</a></p>
+<script src="{{ '/benchmarks/history.js' | relative_url }}" defer></script>

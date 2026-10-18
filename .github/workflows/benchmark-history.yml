@@ -1,0 +1,140 @@
+name: Benchmark history
+
+on:
+  pull_request:
+    paths: ['TaskFlow.Benchmarks/**', 'build/benchmark_*.py', '.github/workflows/benchmark-history.yml']
+  push:
+    branches: [main]
+    paths: ['TaskFlow/**', 'TaskFlow.Annotations/**', 'TaskFlow.Benchmarks/**', 'Directory.Build.*', 'build/benchmark_*.py', '.github/workflows/benchmark-history.yml']
+  schedule:
+    - cron: '23 4 * * 1'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'main, 1.0.0 (verified release checkout), or an exact release tag'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-main:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.100
+      - name: Measure resolved main with the common harness (read-only validation)
+        run: python3 build/benchmark_run.py --source origin/main --label 'TaskFlow main' --output "$RUNNER_TEMP/measurement-main"
+      - name: Readable main measurements
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/measurement-main/summary.md" ]; then
+            cat "$RUNNER_TEMP/measurement-main/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Main measurement failed or incomplete; no history point was created.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: measured-main
+          path: ${{ runner.temp }}/measurement-main
+          if-no-files-found: warn
+
+  measure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'release' && 'main' || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.100
+      - name: Select exact source and measure all 16 cases
+        env:
+          SOURCE: ${{ github.event_name == 'pull_request' && '1.0.0' || inputs.source || github.event.release.tag_name || github.sha }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$SOURCE" = '1.0.0' ]; then
+            python3 build/benchmark_run.py --release-1.0.0 --output "$RUNNER_TEMP/measurement"
+          else
+            if [ "$SOURCE" = 'main' ]; then
+              SOURCE=$(git rev-parse origin/main)
+              LABEL='TaskFlow main'
+            elif [ "$EVENT" = 'workflow_dispatch' ] || [ "$EVENT" = 'release' ]; then
+              LABEL="TaskFlow release $SOURCE"
+              RELEASE_TAG="$SOURCE"
+              SOURCE=$(git rev-parse --verify "refs/tags/$SOURCE^{commit}")
+            else
+              LABEL='TaskFlow main'
+            fi
+            python3 build/benchmark_run.py --source "$SOURCE" --label "$LABEL" --release-tag "${RELEASE_TAG:-}" --output "$RUNNER_TEMP/measurement"
+          fi
+      - name: Readable measured results
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/measurement/summary.md" ]; then
+            cat "$RUNNER_TEMP/measurement/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Measurement failed or incomplete. No history point was created. Inspect logs and partial raw artifacts.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: measured-history
+          path: ${{ runner.temp }}/measurement
+          if-no-files-found: warn
+
+  publish:
+    needs: measure
+    if: >-
+      github.repository == 'dombrovsky/TaskFlow' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      || github.repository == 'dombrovsky/TaskFlow' && github.event_name == 'release' &&
+      github.event.release.target_commitish == 'main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          name: measured-history
+          path: ${{ runner.temp }}/measurement
+      - name: Append immutable records and index
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git show-ref --verify --quiet refs/remotes/origin/benchmark-data; then
+            git worktree add "$RUNNER_TEMP/data" origin/benchmark-data
+          else
+            git worktree add --detach "$RUNNER_TEMP/data" HEAD
+            git -C "$RUNNER_TEMP/data" switch --orphan benchmark-data
+            git -C "$RUNNER_TEMP/data" rm -rf --ignore-unmatch .
+          fi
+          for attempt in 1 2 3 4 5; do
+            python3 build/benchmark_publish.py "$RUNNER_TEMP/measurement" "$RUNNER_TEMP/data"
+            git -C "$RUNNER_TEMP/data" add .
+            if git -C "$RUNNER_TEMP/data" diff --cached --quiet; then exit 0; fi
+            git -C "$RUNNER_TEMP/data" commit -m "Append benchmark run $GITHUB_RUN_ID/$GITHUB_RUN_ATTEMPT"
+            if git -C "$RUNNER_TEMP/data" push origin HEAD:benchmark-data; then exit 0; fi
+            git fetch origin benchmark-data
+            git -C "$RUNNER_TEMP/data" reset --hard origin/benchmark-data
+          done
+          echo 'Concurrent publication could not be resolved; rerun the publication job.' >&2
+          exit 1

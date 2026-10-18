@@ -1,0 +1,78 @@
+name: Benchmark comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Baseline selection
+        type: choice
+        options: [release, merge-base]
+        default: release
+      baseline:
+        description: Release tag or exact release commit (release mode)
+        default: '1.0.0'
+      candidate:
+        description: Candidate commit or branch
+        default: main
+      target:
+        description: Target branch for merge-base
+        default: origin/main
+      scope:
+        description: Compatible cases to measure
+        type: choice
+        options: [representative, full]
+        default: representative
+  pull_request:
+    paths: ['build/benchmark_compare.py', '.github/workflows/benchmark-comparison.yml', 'build/test_benchmark_reporting.py']
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(github.event_name == 'pull_request' && '["candidate", "merge-base", "synthetic", "older-release"]' || '["candidate"]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.100
+      - name: Verify reporting contract
+        run: python3 -m unittest discover -s build -p 'test_benchmark*.py'
+      - name: Measure baseline then candidate on this runner
+        env:
+          MODE: ${{ inputs.mode || 'release' }}
+          BASELINE: ${{ inputs.baseline || '1.0.0' }}
+          CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
+          TARGET: ${{ inputs.target || format('origin/{0}', github.event.pull_request.base.ref) }}
+          SCOPE: ${{ inputs.scope || 'representative' }}
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          if [ "$SCENARIO" = 'synthetic' ]; then
+            python3 build/benchmark_compare.py --mode merge-base --target 0800af84229d7beb3a6fa507d236d0ff533b0c92 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --validate-slowdown --output "$RUNNER_TEMP/comparison"
+          elif [ "$SCENARIO" = 'older-release' ]; then
+            python3 build/benchmark_compare.py --mode release --baseline 1.0.0-rc2 --candidate "$CANDIDATE" --output "$RUNNER_TEMP/comparison"
+          elif [ "$SCENARIO" = 'merge-base' ]; then
+            python3 build/benchmark_compare.py --mode merge-base --candidate "$CANDIDATE" --target "$TARGET" --scope "$SCOPE" --output "$RUNNER_TEMP/comparison"
+          else
+            python3 build/benchmark_compare.py --mode "$MODE" --baseline "$BASELINE" --candidate "$CANDIDATE" --target "$TARGET" --scope "$SCOPE" --output "$RUNNER_TEMP/comparison"
+          fi
+      - name: Report early infrastructure failure
+        if: failure()
+        run: |
+          if [ ! -f "$RUNNER_TEMP/comparison/summary.md" ]; then
+            echo 'Comparison infrastructure failed before measurement; no performance evidence is available. Inspect logs and partial artifacts.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: benchmark-comparison-${{ matrix.scenario }}
+          path: ${{ runner.temp }}/comparison
+          if-no-files-found: warn
