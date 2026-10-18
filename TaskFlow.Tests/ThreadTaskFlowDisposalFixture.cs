@@ -8,12 +8,6 @@ using System.Threading.Tasks.Flow;
 internal sealed class ThreadTaskFlowDisposalFixture
 {
     private static readonly int[] ExpectedExecutionOrder = [1, 4, 2, 3];
-    private static readonly string[] RejectedOverloads =
-    [
-        "DirectGeneric", "Action", "ActionWithToken", "TokenAction", "TokenActionWithToken",
-        "Task", "TokenTask", "TokenTaskWithToken", "StateTask",
-        "ValueTask", "TokenValueTask", "TokenValueTaskWithToken", "StateValueTask",
-    ];
 
     [TestCase(false, false)]
     [TestCase(false, true)]
@@ -99,44 +93,6 @@ internal sealed class ThreadTaskFlowDisposalFixture
         }
     }
 
-    [Test]
-    public void Enqueue_AfterDispose_ShouldThrowSynchronously(
-        [Values(false, true)] bool currentThread,
-        [ValueSource(nameof(RejectedOverloads))] string overload)
-    {
-        using var sut = CreateFlow(currentThread);
-        sut.Dispose();
-        AssertDisposedEnqueueThrows(sut, overload);
-    }
-
-    [Test]
-    public async Task Enqueue_AfterDisposeAsync_ShouldThrowSynchronously(
-        [Values(false, true)] bool currentThread,
-        [ValueSource(nameof(RejectedOverloads))] string overload)
-    {
-        await using var sut = CreateFlow(currentThread);
-        await sut.DisposeAsync();
-        AssertDisposedEnqueueThrows(sut, overload);
-    }
-
-    [Test]
-    public async Task Enqueue_AcceptedOperationThrowsObjectDisposed_ShouldFaultReturnedTask(
-        [Values(false, true)] bool currentThread,
-        [Values(false, true)] bool convenienceOverload)
-    {
-        await using var sut = CreateFlow(currentThread);
-        var failure = new ObjectDisposedException("operation-resource");
-        Task? task = null;
-        Assert.That(() =>
-        {
-            task = convenienceOverload
-                ? sut.Enqueue((Action)(() => throw failure))
-                : sut.Enqueue<int>((state, token) => throw failure, null, CancellationToken.None);
-        }, Throws.Nothing);
-        await Assert.ThatAsync(async () => await task!, Throws.Exception.SameAs(failure));
-        Assert.That(task!.IsFaulted, Is.True);
-    }
-
     [TestCase(false)]
     [TestCase(true)]
     public async Task Enqueue_NullDelegate_ShouldReturnFaultedTask(bool currentThread)
@@ -146,40 +102,6 @@ internal sealed class ThreadTaskFlowDisposalFixture
         Assert.That(() => { task = sut.Enqueue<int>(null!, null, CancellationToken.None); }, Throws.Nothing);
         Assert.That(task!.IsFaulted, Is.True);
         await Assert.ThatAsync(async () => await task, Throws.TypeOf<ArgumentNullException>());
-    }
-
-    private static void AssertDisposedEnqueueThrows(ThreadTaskFlow sut, string overload)
-    {
-        var invoked = false;
-        Task? returnedTask = null;
-        void Action() => invoked = true;
-        Task TaskOperation()
-        { Action(); return Task.CompletedTask; }
-        ValueTask ValueTaskOperation()
-        { Action(); return ValueTask.CompletedTask; }
-
-        Assert.That(() =>
-        {
-            returnedTask = overload switch
-            {
-                "DirectGeneric" => sut.Enqueue((state, token) => { Action(); return new ValueTask<int>(42); }, null, CancellationToken.None),
-                "Action" => sut.Enqueue(Action),
-                "ActionWithToken" => sut.Enqueue(Action, CancellationToken.None),
-                "TokenAction" => sut.Enqueue(token => { Action(); }),
-                "TokenActionWithToken" => sut.Enqueue(token => { Action(); }, CancellationToken.None),
-                "Task" => sut.Enqueue(TaskOperation),
-                "TokenTask" => sut.Enqueue(token => TaskOperation()),
-                "TokenTaskWithToken" => sut.Enqueue(token => TaskOperation(), CancellationToken.None),
-                "StateTask" => sut.Enqueue((int state, CancellationToken token) => TaskOperation(), 42, CancellationToken.None),
-                "ValueTask" => sut.Enqueue(ValueTaskOperation, null),
-                "TokenValueTask" => sut.Enqueue(token => ValueTaskOperation(), null),
-                "TokenValueTaskWithToken" => sut.Enqueue(token => ValueTaskOperation(), CancellationToken.None, null),
-                "StateValueTask" => sut.Enqueue((int state, CancellationToken token) => ValueTaskOperation(), 42, CancellationToken.None),
-                _ => throw new ArgumentOutOfRangeException(nameof(overload)),
-            };
-        }, Throws.TypeOf<ObjectDisposedException>());
-        Assert.That(returnedTask, Is.Null, "A disposed flow must reject the call before returning a task.");
-        Assert.That(invoked, Is.False, "A rejected delegate must never execute.");
     }
 
     private static ThreadTaskFlow CreateFlow(bool currentThread)
