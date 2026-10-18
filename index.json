@@ -8,6 +8,14 @@
       "label": "TaskFlow main",
       "sha": "d3d9a9e7296d49c385e5072005347c315608e9ab",
       "timestamp": "2026-10-18T06:57:45.805781+00:00"
+    },
+    {
+      "path": "runs/7e3410545c4cdf38602f2cdd01b2e9e67d9bad51/39105910991-1/record.json",
+      "sha256": "e9195f057502c3ecff683fc52467cbda7ede9a8bd7f3611902530fb252fe41c4",
+      "series": "6695bb663c9c3090f3b22cea7c44fa9f3b09b93b5ac68a9a7cb1674dd5b857df",
+      "label": "TaskFlow 1.0.0",
+      "sha": "7e3410545c4cdf38602f2cdd01b2e9e67d9bad51",
+      "timestamp": "2026-10-18T06:58:20.136100+00:00"
     }
   ]
 }
