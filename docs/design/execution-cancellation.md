@@ -1,23 +1,25 @@
 # Execution and completion cancellation
 
-C1 and C2 form one cancellation contract. Execution middleware must preserve the terminal's effective token, and it must be able to forward a scoped replacement without creating another logical operation.
+The terminal scheduler is the `ITaskScheduler` at the end of the enqueue pipeline. Its execution token may include cancellation added by the scheduler, such as flow shutdown. Middleware preserves this token unless it deliberately replaces it for downstream work.
 
-## Four token roles
+## Token roles
+
+`TaskSchedulerOperationContext` distinguishes four roles:
 
 | Role | Meaning | Public access |
 | --- | --- | --- |
-| Caller (C) | Original token passed to Enqueue | `CallerCancellationToken` |
-| Producer (P) | Token selected before terminal submission, including enqueue transformations | `ProducerCancellationToken` |
-| Execution (E) | Token supplied when the terminal invokes the envelope; built-in flows add shutdown cancellation | Initial execution and normal completion `CancellationToken` |
-| Attempt (A) | Token selected for a particular downstream middleware invocation | `CancellationToken` on a context returned by `WithCancellationToken` |
+| Caller | Original token passed to `Enqueue` | `CallerCancellationToken` |
+| Producer | Token selected by enqueue middleware for terminal submission | `ProducerCancellationToken` |
+| Execution | Token supplied when the terminal invokes the operation | Initial execution and normal completion `CancellationToken` |
+| Attempt | Replacement token supplied by execution middleware | `CancellationToken` on a context copied with `WithCancellationToken` |
 
-A custom terminal can supply an E unrelated to C or P. The pipeline forwards E rather than trying to reconstruct it. If enqueue middleware intentionally detaches P from C, execution does not implicitly reattach C.
+These roles can have different tokens. Keeping caller and producer cancellation separate lets middleware detach a caller's wait from shared work. The pipeline does not reattach caller cancellation after that choice.
 
-`ProducerCancellationToken` is a snapshot taken when each context is created. A copied context retains that snapshot even if an early caller timeout races later terminal submission. On a path that has not reached terminal submission, the existing producer field is initialized to C; that value is a fallback, not a finalized producer selection.
+Each context snapshots the producer token when created. Copies retain that value even if an early timeout races later submission. Before terminal submission, it falls back to the original caller token.
 
-## Immutable token replacement
+## Scoped replacements
 
-Execution middleware can create a scoped attempt token and forward it through ordinary middleware to the actual user delegate:
+A timeout middleware can link incoming cancellation to an attempt's timeout:
 
 ```csharp
 public async ValueTask<TResult> InvokeAsync<TResult>(
@@ -30,24 +32,22 @@ public async ValueTask<TResult> InvokeAsync<TResult>(
 }
 ```
 
-`WithCancellationToken` creates an immutable context copy. It preserves the exact operation identity, original state, annotation scope, registration-local state slot, callback scheduler, caller token, and producer snapshot. It does not create another operation, admission reservation, or local-state array. The method itself does not create, link, cancel, or dispose any token source. The middleware above explicitly owns its source and links the incoming token so caller/producer/shutdown cancellation remains effective.
+`WithCancellationToken` returns an immutable context copy for the same operation and registration. It preserves state, annotations, local state, callback scheduler, caller token, and producer snapshot. It creates no operation or admission reservation and does not manage token sources. Middleware owns its source and must link incoming cancellation when it should remain effective.
 
-Replacements apply downstream for that invocation. If one stage supplies X, a pass-through stage sees X; a later stage can supply Y, and the user delegate sees Y. The original contexts remain unchanged. A retry starts each new attempt from its own original context and a fresh token, rather than reusing the previous attempt's canceled token. Registration-local state belongs to the logical operation and is shared across attempts, not recreated per attempt.
+Replacements affect only the downstream invocation; later middleware can replace them again without changing upstream contexts. Each retry should start from its original context with a fresh token, avoiding cancellation left by a previous attempt. Local state remains shared across attempts. Continuations reject another operation's context; copies do not serialize concurrent calls.
 
-Execution and completion continuations reject contexts belonging to another operation. Copying a context does not serialize concurrent continuation calls or make hedging safe. No Polly dependency or Polly-specific abstraction is introduced; scoped timeouts and sequential retry decorators can use this API independently.
+## Completion and disposal
 
-## Completion and early outcomes
+Normal completion starts with the terminal's execution token, not the last attempt token, whose source may already be disposed. Completion middleware can replace its own downstream token. Middleware must await or return its continuation.
 
-Normal terminal completion starts with E, regardless of the last attempt's A. Attempt token sources can be disposed before completion runs. Completion middleware may use `WithCancellationToken` to replace the token for its own downstream invocation; subsequent stages preserve that replacement. If a completion callback throws before continuing, later callbacks receive its incoming token and the replacement exception. If it throws after continuing, the pipeline does not repeat downstream completion.
+If a completion callback throws before continuing, the pipeline passes its incoming token and failure outcome to later callbacks. Throwing after continuing does not repeat downstream callbacks. Upstream callbacks can inspect and transform returned outcomes.
 
-For enqueue-side rejection, timeout, or terminal submission failure, no terminal execution token is available to that completion winner. It receives the captured P, or the existing C initialization if terminal submission has not occurred. Completion runs once, even if timed-out underlying work subsequently reaches the terminal. Preterminal completion does not promise terminal thread or synchronization-context affinity. Cancellation never causes the pipeline to skip completion processing.
+Enqueue-side rejection, timeout, or submission failure uses the producer snapshot, with the caller fallback described above. Completion runs once even if timed-out work later reaches the terminal. Early completion does not guarantee the terminal's thread or synchronization context. Cancellation does not skip completion callbacks.
 
-Disposal cooperatively cancels middleware and delegates observing E, and A when its source is linked to E. A middleware can deliberately replace cancellation; the copy API does not enforce non-removable shutdown. Disposal still waits for underlying work that ignores cancellation. Copies and retries retain FIFO envelope ordering, quiescence, admission accounting, and lifetime ownership.
+Disposal requests cancellation and waits for underlying work to finish. Cancellation remains cooperative. Copies and retries keep the same queue position, admission reservation, and lifetime ownership.
 
-## Behavioral compatibility
+## Compatibility
 
-Previously, `TaskSchedulerOperationContext.CancellationToken` was documented as P and execution/completion middleware reset it to P. It now represents the current invocation's effective token: E initially, or an explicit downstream replacement. This intentionally changes both execution and normal completion cancellation behavior. Middleware that needs the preterminal token must use `ProducerCancellationToken`; `CallerCancellationToken` retains its original semantics. Consumers that compare token identity or use cancellation-sensitive completion logic must review that assumption.
+`CancellationToken` represents effective cancellation so middleware can observe shutdown and scoped timeouts consistently. Code relying on its earlier producer-token meaning must use `ProducerCancellationToken` when it needs that token. `CallerCancellationToken` always exposes the original caller token.
 
-`TaskSchedulerInterceptionContext.CancellationToken` now follows the effective execution token too, including upstream attempt replacements. Interceptors that observe cancellation can therefore observe shutdown or a scoped attempt timeout. Completion callbacks within an execution interceptor remain part of its execution scope; they are distinct from the separately invoked completion-middleware phase.
-
-C4 (#48), custom scheduler callback placement, is independent and unchanged by this work. No TaskFlow.Polly integration is implemented.
+`TaskSchedulerInterceptionContext.CancellationToken` also follows the effective execution token. An interceptor's success, error, and finally callbacks belong to its execution scope, separately from completion middleware.
