@@ -45,7 +45,17 @@ MemoryDiagnoser reports managed bytes per operation for completion, producer, mi
 
 `Token=None`, `Live`, and `CanceledCooperative` reuse a source created outside measurement. Delegates deliberately tolerate cancellation; the canceled case measures passing an already-canceled caller token, not exception propagation or queue removal. Per-call source creation/registration is not included. Yielding delegates measure scheduler resumption overhead, not representative application I/O.
 
-Optional dedicated-thread and Channel/SemaphoreSlim/task-chain comparisons are deferred. Equivalent FIFO, cancellation, failure observation, lifetime, and middleware semantics need separate validation before such comparisons can support conclusions. See [samples](samples/README.md) for the local run and methodological review.
+Optional dedicated-thread and Channel/SemaphoreSlim/task-chain comparisons are deferred. Equivalent FIFO, cancellation, failure observation, lifetime, and middleware semantics need separate validation before such comparisons can support conclusions.
+
+
+## Reviewing results
+
+Generated reports belong in workflow summaries and downloadable artifacts, rather than source control. Before interpreting a measured run:
+
+- Check that every requested case has successful measurements and valid statistics, and that the raw JSON's actual iteration count matches the configured job. Account for outliers excluded from the reported statistics. Dry runs are smoke checks only.
+- Confirm that batch times, throughput, and allocations are normalized by 1,000 operations. For enqueue-only measurements, confirm invocation count one, unroll factor one, and no allocation claim; its drain occurs outside timing.
+- Record the SDK/runtime, runner, CPU quota and affinity, GC/tiering settings, and any process-priority limitations alongside the results. CPU topology alone does not establish the CPU quota available to a container.
+- Inspect iteration-time warnings and variability before comparing small differences. Use more launches/iterations on a controlled machine before drawing performance conclusions; shared-runner results are not regression thresholds.
 
 
 ## History and release comparisons

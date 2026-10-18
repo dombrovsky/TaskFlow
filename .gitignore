@@ -33,5 +33,5 @@ packages/
 
 launchSettings.json
 
-# Local BenchmarkDotNet output; reviewed samples live under TaskFlow.Benchmarks/samples.
+# Local BenchmarkDotNet output.
 BenchmarkDotNet.Artifacts/
