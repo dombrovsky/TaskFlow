@@ -101,4 +101,4 @@ On .NET 8 and .NET 10, `WithThrottle` is in the core `TaskFlow` package. When a 
 | Report failures without changing successful behavior | `OnError` |
 | Admit at most one submission per interval | `WithThrottle` |
 | Cancel older unfinished operations | `CreateCancelPrevious` |
-| Retry or suppress failures | Implement inside the delegate or use an external policy; TaskFlow has no built-in retry policy |
+| Retry or suppress failures | Use [Polly inside the delegate](../integrations/polly.md); TaskFlow has no built-in retry policy |
