@@ -131,7 +131,8 @@ def main():
             try:
                 synthetic = args.validate_slowdown and side == "candidate"
                 report[side] = measure(sha, output / side, f"{side}: {sha}", sha == RELEASE and not synthetic,
-                                       filters=filters, omit=omit, synthetic_delay=synthetic)
+                                       filters=filters, omit=omit, synthetic_delay=synthetic,
+                                       release_tag=args.baseline if side == "baseline" and args.mode == "release" else None)
             except Exception as error:
                 report[f"{side}_failure"] = f"{type(error).__name__}: {error}"
                 traceback.print_exc()

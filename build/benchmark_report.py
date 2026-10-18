@@ -74,7 +74,8 @@ def history_summary(record):
     p = record["provenance"]
     text = f"# {p['label']}\n\nMeasured checkout: `{p['measured_sha']}`; release source: `{p.get('release_source_sha')}`\n\n"
     text += f"Harness: `{p['harness_hash']}`; environment series: `{record['series']}`\n\n"
-    text += f"[Workflow run]({p['run_url']}) · [Raw results](./raw/)\n\n"
+    text += (f"[Workflow run and downloadable raw artifacts]({p['run_url']}#artifacts)\n\n"
+             if p["run_url"] else "Local measurement; raw reports are in `raw/`.\n\n")
     text += "Cross-run history is advisory. Inspect variability and runner configuration before comparing.\n\n"
     text += "| Case | Mean ns/op | StdDev | Ops/s | Bytes/op | Samples |\n|---|---:|---:|---:|---:|---:|\n"
     for key, value in record["cases"].items():

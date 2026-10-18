@@ -116,6 +116,7 @@ Validation commands (generated evidence stays outside source control):
 python3 build/benchmark_compare.py --mode release --baseline 1.0.0 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --output /tmp/unchanged-pair
 python3 build/benchmark_compare.py --mode merge-base --target 0800af84229d7beb3a6fa507d236d0ff533b0c92 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --validate-slowdown --output /tmp/synthetic-pair
 python3 build/benchmark_compare.py --mode release --baseline 1.0.0-rc2 --candidate HEAD --output /tmp/older-release-pair
+python3 build/benchmark_compare.py --mode release --baseline 0e597547a98ec96b5e027ea7079e3876cb149432 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --scope full --output /tmp/pre-middleware-pair
 ```
 
 `--validate-slowdown` is only an experiment: inject an uncommitted `SpinWait(5000)` into the disposable candidate checkout, preserve the exact diff in provenance, then delete that checkout. The common harness remains identical. The record is marked synthetic, release verification is disabled for that candidate, and history publication explicitly rejects it. No production edit or generated performance result is committed. These validation results are not release performance claims.

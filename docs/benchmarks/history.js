@@ -20,11 +20,14 @@
     const response = await fetch(new URL('index.json', data));
     if (!response.ok) throw new Error(`Index HTTP ${response.status}`);
     const index = await response.json();
+    if (index.schema !== 1) throw new Error(`Unsupported index schema ${index.schema}`);
     const records = await Promise.all(index.records.map(async entry => {
       const url = new URL(entry.path, data);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Record HTTP ${response.status}`);
-      return {record: await response.json(), url};
+      const record = await response.json();
+      if (record.schema !== 1) throw new Error(`Unsupported record schema ${record.schema}`);
+      return {record, url};
     }));
     if (!records.length) {
       status.textContent = 'No measured history has been published. A TaskFlow 1.0.0 baseline is not yet available.';

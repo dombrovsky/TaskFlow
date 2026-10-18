@@ -12,7 +12,6 @@ on:
       - "TaskFlow.Extensions.Microsoft.Logging/README.md"
       - ".github/workflows/documentation.yml"
   pull_request:
-    branches: [ "main" ]
     paths:
       - "docs/**"
       - "README.md"
