@@ -17,6 +17,8 @@ public interface ITaskSchedulerExecutionMiddleware : ITaskSchedulerMiddleware
     /// <remarks>
     /// <para>Ordinary middleware should invoke <paramref name="continuation"/> once. Orchestration middleware may invoke it multiple times—for
     /// example, to retry—without enqueueing another terminal delegate. Returning without invoking it replaces the user operation.</para>
+    /// <para>Use <see cref="TaskSchedulerOperationContext.WithCancellationToken"/> to forward a replacement effective token to downstream
+    /// execution. The continuation requires a context for the same operation; another operation's context is rejected.</para>
     /// <para>A thrown exception or a faulted value task becomes a failed <see cref="TaskSchedulerOperationOutcome{TResult}"/> and is passed to
     /// completion middleware. Use <c>ConfigureAwait(true)</c> when an asynchronous continuation must retain terminal affinity.</para>
     /// </remarks>

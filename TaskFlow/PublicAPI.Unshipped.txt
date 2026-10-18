@@ -162,3 +162,5 @@ static System.Threading.Tasks.Flow.KeyedTaskSchedulerExtensions.WithPerKeyBounde
 static System.Threading.Tasks.Flow.KeyedTaskSchedulerExtensions.WithPerKeyBoundedAdmission(this System.Threading.Tasks.Flow.ITaskScheduler! scheduler, System.Threading.Tasks.Flow.BoundedAdmissionOptions! options) -> System.Threading.Tasks.Flow.ITaskScheduler!
 
 System.Threading.Tasks.Flow.KeyedBoundedAdmissionExtensions
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.ProducerCancellationToken.get -> System.Threading.CancellationToken
+System.Threading.Tasks.Flow.TaskSchedulerOperationContext.WithCancellationToken(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Flow.TaskSchedulerOperationContext!

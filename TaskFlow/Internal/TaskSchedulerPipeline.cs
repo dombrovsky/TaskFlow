@@ -153,7 +153,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
                 throw;
             }
 
-            var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.CallerCancellationToken).ConfigureAwait(false);
+            var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
             return outcome.GetResultOrThrow();
         }
     }
@@ -261,8 +261,12 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerExecutionMiddleware)registration.Middleware;
-        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, operation.ProducerCancellationToken, registration.Scheduler);
-        return middleware.InvokeAsync(context, nextContext => InvokeExecution(operation, registrationIndex + 1, nextContext.CancellationToken));
+        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, cancellationToken, registration.Scheduler);
+        return middleware.InvokeAsync(context, nextContext =>
+        {
+            ValidateOperationContext(operation, nextContext);
+            return InvokeExecution(operation, registrationIndex + 1, nextContext.CancellationToken);
+        });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Completion middleware failures replace the current outcome by contract.")]
@@ -270,8 +274,10 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         PipelineOperation<TResult> operation,
         int index,
         TaskSchedulerOperationOutcome<TResult> outcome,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        CancellationToken? producerCancellationToken = null)
     {
+        var producerToken = producerCancellationToken ?? operation.ProducerCancellationToken;
         while (index < _registrations.Length && !(_registrations[index].Middleware is ITaskSchedulerCompletionMiddleware))
         {
             index++;
@@ -285,14 +291,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerCompletionMiddleware)registration.Middleware;
-        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, operation.ProducerCancellationToken, registration.Scheduler);
+        var context = new TaskSchedulerOperationContext(operation, registration.Annotations, registrationIndex, cancellationToken, registration.Scheduler, producerToken);
         var nextCalled = false;
         try
         {
             return await middleware.InvokeAsync(context, outcome, async (nextContext, nextOutcome) =>
             {
+                ValidateOperationContext(operation, nextContext);
                 nextCalled = true;
-                return await InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken).ConfigureAwait(true);
+                return await InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken, producerToken).ConfigureAwait(true);
             }).ConfigureAwait(true);
         }
         catch (Exception exception)
@@ -300,7 +307,13 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             var replacement = TaskSchedulerOperationOutcome<TResult>.FromException(exception);
             return nextCalled
                 ? replacement
-                : await InvokeCompletion(operation, registrationIndex + 1, replacement, cancellationToken).ConfigureAwait(true);
+                : await InvokeCompletion(operation, registrationIndex + 1, replacement, cancellationToken, producerToken).ConfigureAwait(true);
         }
+    }
+
+    private static void ValidateOperationContext(PipelineOperation operation, TaskSchedulerOperationContext context)
+    {
+        if (!ReferenceEquals(operation, context.Operation))
+            throw new InvalidOperationException("A middleware continuation must receive a context for the same operation.");
     }
 }

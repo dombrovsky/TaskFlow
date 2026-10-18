@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 /// <para>Completion middleware is invoked in registration order after execution, or after an enqueue or terminal submission failure.</para>
 /// <para>Execution failures run completion on the terminal context. Failures that occur before the terminal invokes the operation cannot guarantee
 /// terminal thread or synchronization-context affinity.</para>
+/// <para>Completion starts with the terminal execution token, independently of per-attempt execution replacements. Before terminal invocation,
+/// it uses the captured producer token, or the original caller token if terminal submission has not occurred.</para>
 /// </remarks>
 public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
 {
@@ -23,6 +25,8 @@ public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
     /// <para>Middleware should normally invoke <paramref name="continuation"/> exactly once. If this method throws before invoking it, the thrown
     /// exception replaces the current outcome and later completion middleware still runs. If it throws after invoking it, later middleware is not
     /// repeated and the thrown exception becomes the final failure.</para>
+    /// <para>A context copied with <see cref="TaskSchedulerOperationContext.WithCancellationToken"/> replaces cancellation only for downstream
+    /// completion processing. The context must belong to this operation.</para>
     /// </remarks>
     ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
         TaskSchedulerOperationContext context,

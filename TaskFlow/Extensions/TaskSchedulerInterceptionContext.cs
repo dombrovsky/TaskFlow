@@ -34,8 +34,8 @@ public readonly struct TaskSchedulerInterceptionContext
     /// <value>The caller-provided state, or <c>null</c> when no state was supplied.</value>
     public object? State { get; }
 
-    /// <summary>Gets the cancellation token received by the interception decorator.</summary>
-    /// <value>The token associated with the intercepted enqueue request.</value>
+    /// <summary>Gets the effective execution cancellation token received by the interception decorator.</summary>
+    /// <value>The terminal execution token, or a replacement supplied by upstream execution middleware.</value>
     public CancellationToken CancellationToken { get; }
 
     /// <summary>Gets the first annotation of the requested type attached to the operation.</summary>

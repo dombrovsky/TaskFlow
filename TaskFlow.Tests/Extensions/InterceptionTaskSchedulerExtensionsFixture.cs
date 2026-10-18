@@ -175,6 +175,7 @@ internal sealed class InterceptionTaskSchedulerExtensionsFixture
         var state = new object();
         using var cts = new CancellationTokenSource();
 
+        CancellationToken executionToken = default;
         var result = await taskFlow.WithOperationName("sync")
             .Intercept(new SynchronousLifecycleInterceptor(recorder))
             .Enqueue((operationState, token) =>
@@ -182,13 +183,14 @@ internal sealed class InterceptionTaskSchedulerExtensionsFixture
                 recorder.Events.Add("operation");
                 Assert.That(operationState, Is.SameAs(state));
                 Assert.That(token.CanBeCanceled, Is.True);
+                executionToken = token;
                 return new ValueTask<int>(42);
             }, state, cts.Token);
 
         Assert.That(result, Is.EqualTo(42));
         Assert.That(recorder.Events, Is.EqualTo(SuccessfulLifecycle));
         Assert.That(recorder.Context.State, Is.SameAs(state));
-        Assert.That(recorder.Context.CancellationToken, Is.EqualTo(cts.Token));
+        Assert.That(recorder.Context.CancellationToken, Is.EqualTo(executionToken));
         Assert.That(recorder.Context.GetAnnotation<OperationNameAnnotation>()?.OperationName, Is.EqualTo("sync"));
     }
 
