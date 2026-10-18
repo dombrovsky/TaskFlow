@@ -1,8 +1,6 @@
 namespace System.Threading.Tasks.Flow;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks.Flow.Annotations;
-using System.Threading.Tasks.Flow.Internal;
 
 internal static class ExtendedStateTaskSchedulerExtensions
 {
@@ -24,19 +22,13 @@ internal static class ExtendedStateTaskSchedulerExtensions
             _extendedState = extendedState;
         }
 
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Disposed calls throw synchronously; other scheduling errors retain task-based propagation.")]
         public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
+            Argument.NotNull(taskFunc);
+
             var extendedState = new ExtendedState(state, _extendedState);
 
-            try
-            {
-                return _baseTaskScheduler.Enqueue(Action, extendedState, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not ObjectDisposedException)
-            {
-                return TaskExtensions.FromAsyncException<T>(exception);
-            }
+            return _baseTaskScheduler.Enqueue(Action, extendedState, cancellationToken);
 
             async ValueTask<T> Action(ExtendedState s, CancellationToken token)
             {

@@ -124,11 +124,22 @@ internal sealed class TaskSchedulerDisposalConformanceFixture
         }
     }
 
-    [TestCase("DirectGeneric")]
-    [TestCase("Action")]
-    public async Task Enqueue_AcceptedOperationThrowsObjectDisposed_ShouldFaultTask(string overload)
+    [TestCaseSource(typeof(TaskSchedulerDisposalConformance), nameof(TaskSchedulerDisposalConformance.Overloads))]
+    public void Enqueue_NullDelegate_ShouldThrowSynchronously(string overload)
     {
-        var failure = new ObjectDisposedException("operation-resource");
+        Task? task = null;
+        Assert.That(() => { task = TaskSchedulerDisposalConformance.EnqueueNullDelegate(_scheduler, overload, IsKeyed); }, Throws.TypeOf<ArgumentNullException>());
+        Assert.That(task, Is.Null);
+        Assert.That(_observer.Invocations, Is.Zero, "Invalid arguments must be rejected before middleware executes.");
+    }
+
+    [TestCase("DirectGeneric", "disposed")]
+    [TestCase("DirectGeneric", "argument")]
+    [TestCase("Action", "disposed")]
+    [TestCase("Action", "argument")]
+    public async Task Enqueue_AcceptedOperationThrows_ShouldFaultTask(string overload, string exceptionType)
+    {
+        Exception failure = exceptionType == "disposed" ? new ObjectDisposedException("operation-resource") : new ArgumentException("Operation failed");
         Task? task = null;
         Assert.That(() => { task = TaskSchedulerDisposalConformance.Enqueue(_scheduler, overload, () => throw failure, IsKeyed); }, Throws.Nothing);
         await Assert.ThatAsync(async () => await task!, Throws.Exception.SameAs(failure));

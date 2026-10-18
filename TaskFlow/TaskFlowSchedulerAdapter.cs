@@ -1,9 +1,7 @@
 namespace System.Threading.Tasks.Flow;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks.Flow.Annotations;
-using System.Threading.Tasks.Flow.Internal;
 
 /// <summary>
 /// Provides an adapter that allows .NET Framework's <see cref="TaskScheduler"/> to be used as an <see cref="ITaskScheduler"/>.
@@ -112,12 +110,12 @@ public sealed class TaskFlowSchedulerAdapter : ITaskScheduler
     /// scheduler starts the task, the task function may not be invoked.
     /// </para>
     /// </remarks>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Disposed calls throw synchronously; other scheduling errors retain task-based propagation.")]
     public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
     {
+        Argument.NotNull(taskFunc);
+
         try
         {
-            Argument.NotNull(taskFunc);
             var scheduled = Task.Factory.StartNew(() => taskFunc(state, cancellationToken), cancellationToken, TaskCreationOptions.None, _taskScheduler);
             return AwaitOperation(scheduled);
         }
@@ -126,10 +124,6 @@ public sealed class TaskFlowSchedulerAdapter : ITaskScheduler
             // Task.Factory.StartNew wraps exceptions from TaskScheduler.QueueTask.
             ExceptionDispatchInfo.Capture(disposed).Throw();
             throw;
-        }
-        catch (Exception exception) when (exception is not ObjectDisposedException)
-        {
-            return TaskExtensions.FromAsyncException<T>(exception);
         }
 
         static async Task<T> AwaitOperation(Task<ValueTask<T>> scheduled)

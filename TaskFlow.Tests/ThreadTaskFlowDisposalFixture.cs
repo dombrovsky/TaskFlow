@@ -93,17 +93,6 @@ internal sealed class ThreadTaskFlowDisposalFixture
         }
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public async Task Enqueue_NullDelegate_ShouldReturnFaultedTask(bool currentThread)
-    {
-        await using var sut = CreateFlow(currentThread);
-        Task<int>? task = null;
-        Assert.That(() => { task = sut.Enqueue<int>(null!, null, CancellationToken.None); }, Throws.Nothing);
-        Assert.That(task!.IsFaulted, Is.True);
-        await Assert.ThatAsync(async () => await task, Throws.TypeOf<ArgumentNullException>());
-    }
-
     private static ThreadTaskFlow CreateFlow(bool currentThread)
     {
         if (!currentThread)
