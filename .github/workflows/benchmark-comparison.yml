@@ -36,12 +36,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - scenario: drift-1.0.0
-            candidate: 0800af84229d7beb3a6fa507d236d0ff533b0c92
-          - scenario: tip-a15f373
-            candidate: a15f3735413def6598461f0a46b96cff3591ac1f
-          - scenario: midpoint-34dc96e
+          - scenario: lower-midpoint-6753f55
+            candidate: 6753f55a39352addc57059967767c5b1153a6ec1
+          - scenario: before-boundary-51d6a20
+            candidate: 51d6a202c8bb3da71cc7b307859c7c3b545efd5d
+          - scenario: boundary-parent-to-34dc96e
+            baseline: 51d6a202c8bb3da71cc7b307859c7c3b545efd5d
             candidate: 34dc96ee49db4f817a8ac0c8209a46f46a164506
+          - scenario: keyed-parent-to-4424d18
+            baseline: 34dc96ee49db4f817a8ac0c8209a46f46a164506
+            candidate: 4424d181273cba2fdf37ef51c39781accb6d40bd
     steps:
       - uses: actions/checkout@v6
         with:
@@ -55,7 +59,7 @@ jobs:
       - name: Measure baseline then candidate on this runner
         env:
           MODE: ${{ inputs.mode || 'release' }}
-          BASELINE: ${{ inputs.baseline || '1.0.0' }}
+          BASELINE: ${{ matrix.baseline || inputs.baseline || '1.0.0' }}
           CANDIDATE: ${{ matrix.candidate }}
           TARGET: ${{ inputs.target || format('origin/{0}', github.event.pull_request.base.ref) }}
           SCOPE: full
