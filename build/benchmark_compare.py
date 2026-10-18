@@ -55,14 +55,21 @@ def render(report):
             text += f"{side}: harness `{p['harness_hash']}`, series `{value['series']}`, SDK {p['settings']['sdk']}, runtime {p['settings']['runtime']}.\n\n"
         if error := report.get(f"{side}_failure"):
             text += f"**{side} infrastructure failure: {error}. No valid comparison for failed cases.**\n\n"
-    text += "| Case | Baseline ns/op ± SD | Candidate ns/op ± SD | Δ ns/op (%) | Baseline / candidate ops/s | Δ ops/s (%) | Baseline / candidate bytes/op | Δ bytes/op (%) | Evidence |\n"
-    text += "|---|---:|---:|---:|---:|---:|---:|---:|---|\n"
     baseline = report.get("baseline", {}).get("cases", {})
     candidate = report.get("candidate", {}).get("cases", {})
+    if not (baseline.keys() & candidate.keys()) or incompatible:
+        text += "\nNo valid paired evidence is available; supported single-side metrics are retained below.\n\n"
+    text += "| Case | Baseline ns/op ± SD | Candidate ns/op ± SD | Δ ns/op (%) | Baseline / candidate ops/s | Δ ops/s (%) | Baseline / candidate bytes/op | Δ bytes/op (%) | Evidence |\n"
+    text += "|---|---:|---:|---:|---:|---:|---:|---:|---|\n"
     for key in sorted(baseline.keys() | candidate.keys()):
         a, b = baseline.get(key), candidate.get(key)
         if not a or not b or incompatible:
-            text += f"| {key} | {'measured' if a else 'missing / unsupported'} | {'measured' if b else 'missing / unsupported'} | — | — | — | — | — | incomparable: added, removed, unsupported or failed |\n"
+            def mean(value):
+                return f"{value['mean_ns']:.2f} ± {value['stddev_ns']:.2f}" if value else "missing / unsupported"
+            def metric(value, name):
+                return value.get(name) if value else "missing"
+            text += (f"| {key} | {mean(a)} | {mean(b)} | — | {metric(a, 'ops_s')} / {metric(b, 'ops_s')} | — | "
+                     f"{metric(a, 'allocated_bytes')} / {metric(b, 'allocated_bytes')} | — | incomparable: added, removed, unsupported, failed or incompatible configuration |\n")
             continue
         text += (f"| {key} | {a['mean_ns']:.2f} ± {a['stddev_ns']:.2f} | {b['mean_ns']:.2f} ± {b['stddev_ns']:.2f} | "
                  f"{delta(a['mean_ns'], b['mean_ns'])} | {a['ops_s']:.2f} / {b['ops_s']:.2f} | {delta(a['ops_s'], b['ops_s'])} | "
@@ -71,7 +78,7 @@ def render(report):
     for exclusion in report["exclusions"]:
         text += f"- {exclusion}\n"
     text += "\nEnqueue-only allocations are unsupported. Unselected cases are excluded, never inferred. "
-    text += "Download **benchmark-comparison** from this run's Artifacts for `comparison.json`, exact provenance, summaries and both raw BenchmarkDotNet JSON trees.\n"
+    text += "Download **benchmark-comparison-*** artifacts from this run's Artifacts for `comparison.json`, exact provenance, summaries and both raw BenchmarkDotNet JSON trees.\n"
     if run_url := os.environ.get("GITHUB_SERVER_URL"):
         text += f"\n[Run and downloadable artifacts]({run_url}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']})\n"
     return text

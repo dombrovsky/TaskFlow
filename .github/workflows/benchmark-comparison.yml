@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(github.event_name == 'pull_request' && '["candidate", "synthetic", "older-release"]' || '["candidate"]') }}
+        scenario: ${{ fromJSON(github.event_name == 'pull_request' && '["candidate", "merge-base", "synthetic", "older-release"]' || '["candidate"]') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -59,6 +59,8 @@ jobs:
             python3 build/benchmark_compare.py --mode merge-base --target 0800af84229d7beb3a6fa507d236d0ff533b0c92 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --validate-slowdown --output "$RUNNER_TEMP/comparison"
           elif [ "$SCENARIO" = 'older-release' ]; then
             python3 build/benchmark_compare.py --mode release --baseline 1.0.0-rc2 --candidate "$CANDIDATE" --output "$RUNNER_TEMP/comparison"
+          elif [ "$SCENARIO" = 'merge-base' ]; then
+            python3 build/benchmark_compare.py --mode merge-base --candidate "$CANDIDATE" --target "$TARGET" --scope "$SCOPE" --output "$RUNNER_TEMP/comparison"
           else
             python3 build/benchmark_compare.py --mode "$MODE" --baseline "$BASELINE" --candidate "$CANDIDATE" --target "$TARGET" --scope "$SCOPE" --output "$RUNNER_TEMP/comparison"
           fi
