@@ -83,6 +83,7 @@ Read [Concepts and lifecycle](https://dombrovsky.github.io/TaskFlow/concepts-and
 - [Recipes](https://dombrovsky.github.io/TaskFlow/recipes/)
 - [Extensions](https://dombrovsky.github.io/TaskFlow/extensions/)
 - [Dependency injection](https://dombrovsky.github.io/TaskFlow/dependency-injection/)
+- [Polly retry and timeout pipelines](https://dombrovsky.github.io/TaskFlow/integrations/polly/)
 - [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
 
 TaskFlow is available under the [MIT License](LICENSE). Contributions and problem reports are welcome through [GitHub issues](https://github.com/dombrovsky/TaskFlow/issues).

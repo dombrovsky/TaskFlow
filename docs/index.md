@@ -44,6 +44,7 @@ Use TaskFlow to:
 | Apply TaskFlow to common application problems | [Recipes](recipes.md) |
 | Add cancellation, reliability, and diagnostics policies | [Extensions](extensions/index.md) |
 | Register scoped or named flows | [Dependency injection](dependency-injection.md) |
+| Retry operations with Polly while preserving queue/key order | [Polly integration](integrations/polly.md) |
 | Implement adapters or custom flows | [Customization](customization.md) |
 | Check framework and package availability | [Compatibility](compatibility.md) |
 | Diagnose common integration problems | [Troubleshooting](troubleshooting.md) |
