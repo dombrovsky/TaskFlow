@@ -48,3 +48,6 @@ dotnet add package TaskFlow.Microsoft.Extensions.Logging
 ```
 
 All TaskFlow APIs use the `System.Threading.Tasks.Flow` namespace. Logging configuration also uses `Microsoft.Extensions.Logging`, and registration uses `Microsoft.Extensions.DependencyInjection`.
+
+
+`TrySubmit` is available on `netstandard2.0`, `net8.0`, and `net10.0`. Its typed keyed path and capability validation use no reflection, dynamic code generation, or runtime generic construction, preserving the existing NativeAOT/trimming model. Only native pipeline compositions documented in [bounded admission](extensions/admission.md#supported-trysubmit-pipelines) support synchronous admission.

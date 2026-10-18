@@ -11,6 +11,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly MiddlewareRegistration[] _registrations;
     private readonly AnnotationScope? _annotations;
     private readonly CoordinatedPolicy[] _policies;
+    private readonly bool _hasCompletionMiddleware;
     internal SchedulingCoordinator? Coordinator { get; }
     internal TaskFlow? TerminalFlow => _terminal as TaskFlow;
 
@@ -26,11 +27,39 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         _terminal = terminal;
         _registrations = registrations;
         _annotations = annotations;
+        foreach (var registration in registrations)
+            if (registration.Middleware is ITaskSchedulerCompletionMiddleware)
+                _hasCompletionMiddleware = true;
         _policies = coordinator == null ? Array.Empty<CoordinatedPolicy>() : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<CoordinatedPolicy>(
             System.Linq.Enumerable.Select(registrations, registration => registration.Middleware)));
     }
 
     internal TaskSchedulerMiddlewareLifetime? Lifetime { get; }
+
+    internal int ScheduledDrainCount
+    {
+        get
+        {
+            var count = Coordinator?.ScheduledDrainCount ?? 0;
+            foreach (var registration in _registrations)
+                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
+                    count += bounded.ScheduledDrainCount;
+            return count;
+        }
+    }
+
+    // Tests pause a retiring worker after idle has been published, outside the queue lock.
+    internal Action? DrainIdle
+    {
+        set
+        {
+            if (Coordinator != null)
+                Coordinator.DrainIdle = value;
+            foreach (var registration in _registrations)
+                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
+                    bounded.DrainIdle = value;
+        }
+    }
 
     internal PipelineTaskScheduler WithLifetime(TaskSchedulerMiddlewareLifetime lifetime)
     {
@@ -66,6 +95,53 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
                 (registration.Middleware is AdmissionPolicy policy && policy.Controller == controller))
                 count++;
         return count;
+    }
+
+    internal void ValidateTrySubmit()
+    {
+        if (_terminal is not (TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow or TaskFlowSchedulerAdapter))
+            throw new NotSupportedException("TrySubmit requires a built-in terminal scheduler.");
+        var budgets = 0;
+        foreach (var registration in _registrations)
+        {
+            if (registration.Middleware is BoundedAdmissionMiddleware)
+                budgets++;
+            else if (registration.Middleware is ITaskSchedulerEnqueueMiddleware && registration.Middleware is not CoordinatedPolicy)
+                throw new NotSupportedException("TrySubmit does not support enqueue middleware other than built-in admission and coordinated scheduling policies. Use Submit with Reject instead.");
+        }
+        if (Coordinator == null && budgets != 1)
+            throw new NotSupportedException("TrySubmit with multiple budgets requires keyed scheduling or a concurrent branch. Configure scheduling before bounded admission.");
+    }
+
+    internal static TaskSchedulerTrySubmission<TResult> FinishTrySubmit<TResult>(AdmissionRequest request, Task<TResult> completion)
+    {
+        var decision = request.Decision;
+        // Capability validation guarantees a settled decision; never wait on an incomplete task.
+        if (!decision.IsCompleted)
+        {
+            ObserveUnreturned(decision);
+            ObserveUnreturned(completion);
+            throw new InvalidOperationException("The pipeline did not make a synchronous admission decision.");
+        }
+        try
+        {
+            var result = decision.GetAwaiter().GetResult();
+            if (result == TaskSchedulerAdmissionResult.Accepted)
+                return new TaskSchedulerTrySubmission<TResult>(result, completion);
+            ObserveUnreturned(completion);
+            return new TaskSchedulerTrySubmission<TResult>(result, null);
+        }
+        catch
+        {
+            ObserveUnreturned(completion);
+            throw;
+        }
+    }
+
+    private static void ObserveUnreturned(Task task)
+    {
+        _ = task.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     public PipelineTaskScheduler Append(object middleware)
@@ -147,13 +223,24 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         {
             // Entry rejection must not invoke middleware whose resources may already be cleaned up.
             if (Lifetime != null && operation.LifetimeExit == null)
+            {
+                if (operation.AdmissionRequest?.Synchronous == true && exception is ObjectDisposedException)
+                    operation.AdmissionRequest.Decide(TaskSchedulerAdmissionResult.Closed);
                 throw;
+            }
             if (!operation.TryClaimCompletion())
             {
                 throw;
             }
 
-            var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.CallerCancellationToken).ConfigureAwait(false);
+            // Rejection/cancellation may settle inline. User completion middleware must not delay TrySubmit.
+            var outcome = operation.AdmissionRequest?.Synchronous == true && _hasCompletionMiddleware
+                ? await Task.Run(async () =>
+                {
+                    using var completionContext = Lifetime?.EnterContextIfNeeded();
+                    return await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.CallerCancellationToken).ConfigureAwait(false);
+                }, CancellationToken.None).ConfigureAwait(false)
+                : await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.CallerCancellationToken).ConfigureAwait(false);
             return outcome.GetResultOrThrow();
         }
     }
@@ -216,7 +303,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
         // Reestablish ownership even when the submitting caller suppressed ExecutionContext flow.
-        using var executionContext = Coordinator != null ? Lifetime?.EnterContext() : null;
+        using var executionContext = Coordinator != null || _terminal is TaskFlowSchedulerAdapter ? Lifetime?.EnterContextIfNeeded() : null;
         TaskSchedulerOperationOutcome<TResult> outcome;
         try
         {

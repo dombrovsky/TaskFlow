@@ -45,3 +45,6 @@ TaskFlow also provides dedicated-thread and caller-owned-thread flows, cancellat
 - [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
 
 Source, license, and feedback are available in the [TaskFlow repository](https://github.com/dombrovsky/TaskFlow).
+
+
+For synchronous load shedding, `admission.TrySubmit(scheduler, operation)` returns an immediate admission enum and an observable completion task on acceptance. It never waits for capacity. Use `Submit(..., TaskSchedulerAdmissionMode.Wait)` for asynchronous backpressure, or `Submit(..., Reject)` when enqueue middleware must run before the decision. See [bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) for pipeline compatibility and [event producer recipes](https://dombrovsky.github.io/TaskFlow/recipes/#shed-load-from-synchronous-events).
