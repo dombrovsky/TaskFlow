@@ -16,7 +16,7 @@ def main():
     mode = os.environ.get("BENCHMARK_RUN_MODE", "measured")
     outcome = os.environ.get("BENCHMARK_OUTCOME", "unknown")
     # Values are supplied by Actions, rather than interpolated into shell source.
-    commit = os.environ.get("GITHUB_SHA", "local")
+    commit = os.environ.get("BENCHMARK_COMMIT", os.environ.get("GITHUB_SHA", "local"))
     if mode not in {"smoke", "measured"} or outcome not in {"success", "failure", "skipped", "cancelled", "unknown"}:
         raise ValueError("Unexpected benchmark mode or outcome")
     if commit != "local" and (len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit)):

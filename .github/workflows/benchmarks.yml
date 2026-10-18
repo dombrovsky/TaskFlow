@@ -28,6 +28,8 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
@@ -56,6 +58,7 @@ jobs:
       - name: Publish readable results
         if: always()
         env:
+          BENCHMARK_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           BENCHMARK_RUN_MODE: ${{ github.event_name == 'pull_request' && 'smoke' || 'measured' }}
           BENCHMARK_OUTCOME: ${{ github.event_name == 'pull_request' && steps.smoke.outcome || steps.measure.outcome }}
         run: python3 build/Write-BenchmarkSummary.py

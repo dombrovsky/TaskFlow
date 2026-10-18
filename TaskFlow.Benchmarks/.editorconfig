@@ -3,3 +3,5 @@
 dotnet_diagnostic.CA1515.severity = none
 # BenchmarkDotNet invokes GlobalCleanup to dispose owned resources.
 dotnet_diagnostic.CA1001.severity = none
+# Share the harness across the release and main trees without changing production style.
+csharp_style_namespace_declarations = file_scoped:warning

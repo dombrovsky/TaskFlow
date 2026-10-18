@@ -2,6 +2,10 @@
 
 Standalone BenchmarkDotNet 0.15.8 executable targeting .NET 10. It is intentionally outside `TaskFlow.sln`, is not a test project, and sets `IsPackable=false` and `GeneratePackageOnBuild=false`. Normal solution tests and package publication do not run or publish it. No production sources are modified.
 
+This branch, `issue-43-benchmarks` (PR #47), combines current `main` with the release-based `benchmarks-1.0.0` branch. The latter starts at 1.0.0 commit `0800af84229d7beb3a6fa507d236d0ff533b0c92` and provides 16 common cases, including pipeline middleware. This branch adds four keyed scheduling cases and three bounded-admission cases for APIs introduced after 1.0.0, for 23 cases total. The common benchmark sources and identifiers are identical across the two branches.
+
+To measure the unchanged release library, check out `benchmarks-1.0.0`; to measure the current library and newer APIs, use this branch. PR benchmark CI checks out the head SHA explicitly and records that SHA in the summary, so a baseline PR run is not silently measured against GitHub's synthetic merge commit.
+
 From the repository root, with a .NET 10 SDK and runtime installed:
 
 ```sh
@@ -46,6 +50,17 @@ MemoryDiagnoser reports managed bytes per operation for completion, producer, mi
 `Token=None`, `Live`, and `CanceledCooperative` reuse a source created outside measurement. Delegates deliberately tolerate cancellation; the canceled case measures passing an already-canceled caller token, not exception propagation or queue removal. Per-call source creation/registration is not included. Yielding delegates measure scheduler resumption overhead, not representative application I/O.
 
 Optional dedicated-thread and Channel/SemaphoreSlim/task-chain comparisons are deferred. Equivalent FIFO, cancellation, failure observation, lifetime, and middleware semantics need separate validation before such comparisons can support conclusions.
+
+
+## Comparing the shared cases
+
+Run the same command, SDK/runtime and environment on both branches, sequentially on the same idle runner:
+
+```sh
+dotnet run --project TaskFlow.Benchmarks -c Release --no-build -- --filter '*SequentialBenchmarks*' '*BurstBenchmarks*' '*ProducerBenchmarks*' '*EnqueueOnlyBenchmarks*' '*MiddlewareBenchmarks*'
+```
+
+Use independent build/artifact directories for each checkout, match cases by class/method and parameters, and retain the full JSON/environment for both runs. The modern-only keyed/admission cases have no 1.0.0 baseline. Shared harness source and stable identifiers make the 16 common cases comparable; CPU/runtime and noise still need to be controlled. This branch does not implement the automated pairing workflow in #44.
 
 
 ## Reviewing results
