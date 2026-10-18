@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from benchmark_report import read_cases
+from benchmark_compare import delta, evidence, render
 
 
 class ReportingTests(unittest.TestCase):
@@ -54,6 +55,26 @@ class ReportingTests(unittest.TestCase):
     def test_duplicate_identifier_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Duplicate"):
             self.parse([self.benchmark, self.benchmark])
+
+    def test_zero_and_missing_allocation_changes(self):
+        self.assertIn("zero baseline", delta(0, 10))
+        self.assertEqual(delta(None, 10), "unsupported / missing")
+        self.assertEqual(delta(100, 120), "+20.00 (+20.0%)")
+
+    def test_variability_and_material_change(self):
+        before = {"n": 8, "mean_ns": 100, "stddev_ns": 1, "error_ns": 0.4}
+        after = {**before, "mean_ns": 130}
+        self.assertIn("slowdown", evidence(before, after))
+        self.assertIn("insufficient", evidence(before, before))
+        self.assertIn("insufficient", evidence(before, {**after, "stddev_ns": 50}))
+        self.assertIn("insufficient", evidence(before, {**after, "n": 3}))
+
+    def test_missing_side_and_failure_remain_visible(self):
+        report = {"selection": "test", "baseline_sha": "a", "candidate_sha": "b", "mode": "release",
+                  "scope": "full", "baseline_failure": "build failed", "exclusions": ["middleware unsupported"]}
+        text = render(report)
+        self.assertIn("build failed", text)
+        self.assertIn("middleware unsupported", text)
 
 
 if __name__ == "__main__":

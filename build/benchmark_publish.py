@@ -6,15 +6,17 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from benchmark_report import SCHEMA, digest, read_cases, write_json
+from benchmark_report import EXPECTED, SCHEMA, digest, read_cases, write_json
 
 
 def append(results, data):
     results, data = Path(results), Path(data)
     record = json.loads((results / "record.json").read_text())
-    if record["schema"] != SCHEMA or read_cases(results / "raw") != record["cases"] or len(record["cases"]) != 16:
+    if record["schema"] != SCHEMA or read_cases(results / "raw") != record["cases"] or set(record["cases"]) != EXPECTED:
         raise ValueError("Only complete measured records can be published")
     p = record["provenance"]
+    if p.get("synthetic_validation_patch"):
+        raise ValueError("Synthetic validation can never enter measured history")
     if p["run_id"] == "local" or not p["run_url"]:
         raise ValueError("History publication requires a workflow run identity")
     key = f"runs/{p['measured_sha']}/{int(p['run_id'])}-{int(p['attempt'])}"

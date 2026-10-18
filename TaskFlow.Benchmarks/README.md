@@ -96,3 +96,26 @@ Cross-run history is weaker evidence than rerunning both versions sequentially o
 This work is based on PR #50, not #47. Merge #50 first, then this dependent change. New manual/schedule/workflow_run definitions must exist on the default branch before those triggers activate. Enable Actions read/write workflow permissions for the trusted publisher if repository policy restricts the requested `contents: write`, and configure the existing GitHub Pages environment for Actions deployments. Do not grant write permissions to measurement jobs.
 
 After activation, dispatch **Benchmark history** on **main** with `source=1.0.0`. Verify the summary shows all 16 measured cases and the checked release tree; verify `benchmark-data/index.json` and immutable raw results, then the successful **Documentation** deployment and the explicit **TaskFlow 1.0.0** chart/table label. Dispatch `source=main` to establish current-main history. A PR measurement or local run alone does not establish durable publication. Until these live steps succeed, the baseline must not be described as published. Rerun a failed measurement for fresh evidence; rerun only publication if measurement artifacts remain available. Artifacts are convenience downloads, never the durable database.
+
+## Controlled same-run comparisons (#44)
+
+`Benchmark comparison` starts manually with `mode=release` or `mode=merge-base`. The initial release mapping `1.0.0` resolves exactly to `0800af84229d7beb3a6fa507d236d0ff533b0c92`. Other selections accept an explicit release tag or full source SHA; there is no moving latest baseline. Merge-base records both resolved candidate and target SHAs and computes their Git merge-base. Candidate and baseline use identical common harness files, SDK/runtime, processor count and job settings, with independent worktrees, output trees and raw artifacts. Both run sequentially **baseline first, then candidate** on one runner. This ordering can introduce temporal drift; repeat runs with a stable idle runner before attribution. PR runs for comparison/reporting changes are read-only advisory validation; no required PR gate is introduced.
+
+```sh
+python3 build/benchmark_compare.py --mode release --baseline 1.0.0 --candidate origin/main --scope representative --output /tmp/release-pair
+python3 build/benchmark_compare.py --mode merge-base --target origin/main --candidate HEAD --scope full --output /tmp/merge-base-pair
+```
+
+The representative scope measures the drained burst and three synchronous caller-token cases. Full scope selects all 16 compatible cases. Known keyed/bounded admission cases are explicitly outside this common harness. If a source lacks middleware, all five middleware cases are removed from **both** builds without modifying supported workloads or identifiers, and exclusions are listed. Older releases with the incompatible ValueTask/no-state Enqueue API cannot support these workload semantics; reports say so rather than adapting the workload silently. Build/runtime failures remain visible as failed workflow jobs with partial evidence, while valid candidate measurements are retained. A missing case or mismatched environment never receives a comparison delta.
+
+Job summaries show both means, standard deviations, throughput, managed allocations and absolute/percentage changes. Zero baselines have no percentage; missing/invalid allocations are unsupported. The initial material-change heuristic is **20%**, with at least six retained samples, coefficient of variation no greater than 15%, and a difference larger than three combined standard errors. This is a conservative reporting heuristic, not a formal significance test. High variance, overlapping uncertainty and small sample sets are explicitly insufficient evidence. The workflow fails only on infrastructure/measurement errors, never because timing or allocation changed. Full raw BDN JSON and provenance are in the downloadable `benchmark-comparison` artifact and `comparison.json`; summary tables are directly visible without a download. Rerun with a fresh output directory; investigate runner load and repeat on a controlled machine.
+
+Validation commands (generated evidence stays outside source control):
+
+```sh
+python3 build/benchmark_compare.py --mode release --baseline 1.0.0 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --output /tmp/unchanged-pair
+python3 build/benchmark_compare.py --mode merge-base --target 0800af84229d7beb3a6fa507d236d0ff533b0c92 --candidate 0800af84229d7beb3a6fa507d236d0ff533b0c92 --validate-slowdown --output /tmp/synthetic-pair
+python3 build/benchmark_compare.py --mode release --baseline 1.0.0-rc2 --candidate HEAD --output /tmp/older-release-pair
+```
+
+`--validate-slowdown` is only an experiment: inject an uncommitted `SpinWait(5000)` into the disposable candidate checkout, preserve the exact diff in provenance, then delete that checkout. The common harness remains identical. The record is marked synthetic, release verification is disabled for that candidate, and history publication explicitly rejects it. No production edit or generated performance result is committed. These validation results are not release performance claims.

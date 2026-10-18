@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event_name == 'release' && 'main' || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@v5
@@ -45,11 +46,12 @@ jobs:
               LABEL='TaskFlow main'
             elif [ "$EVENT" = 'workflow_dispatch' ] || [ "$EVENT" = 'release' ]; then
               LABEL="TaskFlow release $SOURCE"
+              RELEASE_TAG="$SOURCE"
               SOURCE=$(git rev-parse --verify "refs/tags/$SOURCE^{commit}")
             else
               LABEL='TaskFlow main'
             fi
-            python3 build/benchmark_run.py --source "$SOURCE" --label "$LABEL" --output "$RUNNER_TEMP/measurement"
+            python3 build/benchmark_run.py --source "$SOURCE" --label "$LABEL" --release-tag "${RELEASE_TAG:-}" --output "$RUNNER_TEMP/measurement"
           fi
       - name: Readable measured results
         if: always()

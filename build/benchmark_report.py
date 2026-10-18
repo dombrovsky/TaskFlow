@@ -12,6 +12,13 @@ RELEASE_CHECKOUT = "7e3410545c4cdf38602f2cdd01b2e9e67d9bad51"
 SETTINGS = {"warmup": 3, "iterations": 8, "launches": 1, "processor_count": 2,
             "sdk": "10.0.100", "runtime": "10.0.0", "bdn": "0.15.8"}
 PRODUCTION = ["TaskFlow", "TaskFlow.Annotations", "Directory.Build.props", "Directory.Build.targets", "TaskFlow.snk"]
+PREFIX = "TaskFlow.Benchmarks."
+EXPECTED = {PREFIX + name for name in [
+    "BurstBenchmarks.SubmitAndDrain", "EnqueueOnlyBenchmarks.SubmitOnly",
+    *[f"MiddlewareBenchmarks.PipelineCompletion(Layers: {n})" for n in [0, 1, 2, 4, 8]],
+    *[f"ProducerBenchmarks.ConcurrentSubmitAndDrain(Producers: {n})" for n in [1, 4, 16]],
+    *[f"SequentialBenchmarks.{method}(Token: {token})" for token in ["None", "Live", "CanceledCooperative"]
+      for method in ["SyncCompletion", "AsyncCompletion"]]]}
 
 
 def digest(value):
