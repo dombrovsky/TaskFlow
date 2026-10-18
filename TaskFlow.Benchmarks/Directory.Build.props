@@ -1,0 +1,13 @@
+<Project>
+  <Import Project="..\Directory.Build.props" />
+  <!-- Also applies to BenchmarkDotNet's generated project below bin/. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Generated harness identifiers and Params attributes are not CLS-compliant. -->
+    <AssemblyAttribute Remove="System.CLSCompliant" />
+  </ItemGroup>
+</Project>

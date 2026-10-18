@@ -1,0 +1,71 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    paths:
+      - 'TaskFlow.Benchmarks/**'
+      - 'TaskFlow/**'
+      - 'Directory.Build.*'
+      - '.editorconfig'
+      - '.github/workflows/benchmarks.yml'
+      - 'build/Write-BenchmarkSummary.py'
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: BenchmarkDotNet filter
+        default: '*'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_PROCESSOR_COUNT: "2"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Record environment
+        run: dotnet --info
+      - name: Restore
+        run: dotnet restore TaskFlow.Benchmarks/TaskFlow.Benchmarks.csproj
+      - name: Verify formatting
+        run: |
+          dotnet format whitespace TaskFlow.Benchmarks/TaskFlow.Benchmarks.csproj --verify-no-changes --no-restore
+          dotnet format style TaskFlow.Benchmarks/TaskFlow.Benchmarks.csproj --diagnostics IDE0161 --verify-no-changes --no-restore
+      - name: Build
+        run: dotnet build TaskFlow.Benchmarks/TaskFlow.Benchmarks.csproj -c Release --no-restore
+      - name: Validate workloads
+        run: dotnet run --project TaskFlow.Benchmarks -c Release --no-build -- --validate
+      - name: Smoke benchmark harness
+        id: smoke
+        if: github.event_name == 'pull_request'
+        run: dotnet run --project TaskFlow.Benchmarks -c Release --no-build -- --job Dry --filter '*'
+      - name: Measure selected benchmarks
+        id: measure
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BENCHMARK_FILTER: ${{ inputs.filter }}
+        run: dotnet run --project TaskFlow.Benchmarks -c Release --no-build -- --filter "$BENCHMARK_FILTER"
+      - name: Publish readable results
+        if: always()
+        env:
+          BENCHMARK_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          BENCHMARK_RUN_MODE: ${{ github.event_name == 'pull_request' && 'smoke' || 'measured' }}
+          BENCHMARK_OUTCOME: ${{ github.event_name == 'pull_request' && steps.smoke.outcome || steps.measure.outcome }}
+        run: python3 build/Write-BenchmarkSummary.py
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: benchmark-results
+          path: BenchmarkDotNet.Artifacts/
+          if-no-files-found: ignore
