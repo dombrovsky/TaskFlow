@@ -1,6 +1,7 @@
 namespace TaskFlow.LifetimeProbe;
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Threading.Tasks.Flow;
@@ -20,10 +21,12 @@ internal static class Program
             Measure("scope/root", () => { using var scope = lifetime.EnterContext(); });
             using (lifetime.EnterContext())
                 Measure("scope/nested", () => { using var scope = lifetime.EnterContext(); });
+            Measure("Task/default-context-construction", ConstructTask);
             var local = new AsyncLocal<object?>();
             var first = new object();
             var second = new object();
             local.Value = first;
+            Measure("Task/ambient-context-construction", ConstructTask);
             Measure("AsyncLocal/change-and-restore", () => { local.Value = second; local.Value = first; });
             Measure("AsyncLocal/same-value", () => local.Value = first);
             var operation = new PipelineOperation<int>(Sync, null, 0, null, default);
@@ -103,6 +106,9 @@ internal static class Program
     }
 
     private static async ValueTask<int> Yield(object? state, CancellationToken token) { await Task.Yield(); return 42; }
+
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "This construction-only probe never starts tasks or creates wait handles; unstarted tasks cannot be disposed.")]
+    private static void ConstructTask() => GC.KeepAlive(new Task<int>(static () => 42));
 
     private static void Measure(string name, Action action)
     {

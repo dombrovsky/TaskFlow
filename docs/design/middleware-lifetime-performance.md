@@ -49,11 +49,41 @@ The entry points are:
 On the measured Linux x64 .NET 10 runtime, the original root `EnterContext` allocates
 224 bytes and nested entry 296 bytes. An isolated changing-and-restoring
 `AsyncLocal<object>` probe allocates 144 bytes; writing the identical reference
-allocates nothing. The original scope also allocates a 32-byte frame, 24-byte
+allocates nothing. A construction-only task probe measures 72 bytes without
+ambient state and 152 bytes with ambient state, confirming the additional
+80-byte task context storage. The original scope also allocates a 32-byte frame, 24-byte
 closure, 64-byte delegate and 32-byte action disposable. Root entry adds a 72-byte
 execution context/map; restoring a nonempty parent adds another 72 bytes. These
 sizes are runtime-specific. The probe records raw observations separately from
 whole-operation measurements.
+
+The allocation traces for the healthy parent and regression commit identify the
+following exact steady-state breakdown for the eight-layer synchronous forwarding
+case (the trace's allocation weights are sampled; the object sizes, source-level
+counts, exact allocation deltas and independent scope probes support this accounting):
+
+| Added allocation in PR #34 | Bytes per operation |
+| --- | ---: |
+| Nine enqueue activity state-machine boxes, 128 bytes each | 1,152 |
+| Outer `EnqueueCore` + `EnqueueWithCompletion` boxes: 128 + 160, replacing 152 | 136 |
+| Submission root scope plus nested terminal scope: 224 + 296 | 520 |
+| Two 80-byte task `ContingentProperties` objects for nondefault context capture | 160 |
+| Bound `Lifetime.Exit` action | 64 |
+| Growth of the existing operation from 80 to 120 bytes | 40 |
+| **Total: 4,936 → 7,008** | **2,072** |
+
+The two task context-storage objects appear because submission now sets ambient
+state before `Task.Factory.StartNew` and `ContinueWith` capture their context.
+Capturing a context is not synonymous with cloning it, but storing a nondefault
+context on each task needs this extra storage. This contribution depends on the
+caller: it may already be paid when user ambient state is present. Direct bare
+flow submissions establish ownership inside the scheduled delegate instead, so
+their observed regression is the root scope's 224 bytes alone.
+
+Current main also includes PR #46's cancellation-context changes: the eight-layer
+case adds another 200 bytes (17 operation contexts grow by eight bytes, and eight
+completion closures grow by eight). That explains 7,008 at the regression commit
+versus 7,208 at the optimization baseline; it is a separate change.
 
 A typed internal scope removes the closure/delegate/disposable. Reentering the
 same current owner returns a default scope, avoiding both another frame and
@@ -83,7 +113,17 @@ continuation closure stores the returned task identity; volatile publication cov
 continuations invoked on another thread. No task table, pooling, or new tracking
 object is introduced. Distinct tasks still get independent async tracking, and
 the terminal task is tracked. Synchronous failures still become faulted/canceled
-submission tasks. The execution activity wrappers remain: arbitrary execution
+submission tasks. For eight layers against current main, the allocation reductions reconcile as
+follows: A saves 400 bytes (416 bytes of scope objects/writes, offset by a 16-byte
+larger suspended root state); B saves 304 (64-byte exit delegate, redundant
+128-byte root activity box, and 112 bytes of outer-state consolidation); C saves
+another 832 (seven 128-byte boxes plus eight bytes at the terminal tracker, offset
+by nine continuation closures growing by eight bytes). Together this predicts
+7,208 → 5,672 bytes, matching the full-workload measurements. The final candidate
+uses one 192-byte root state-machine box and one 120-byte terminal enqueue tracker
+in this forwarding case, instead of the previous root pair and nine wrappers.
+
+The execution activity wrappers remain: arbitrary execution
 middleware can abandon an asynchronous child or invoke a continuation repeatedly.
 
 Tracking cannot simply be removed for unbounded pipelines. Even without admission,
@@ -100,6 +140,55 @@ and never bypasses a middleware registration, admission request or coordinator.
 Bare flows retain their ambient guard: dropping it would permit self-disposal to
 wait on the operation currently trying to dispose the flow.
 
+## Measured before/after results
+
+The [same-run GitHub comparison](https://github.com/dombrovsky/TaskFlow/actions/runs/39145624738)
+compares current main `ccd52f2` with production implementation `5f5eb13`. It uses
+SDK 10.0.100, runtime 10.0.0, BenchmarkDotNet 0.15.8, processor count two, three
+warmups, eight actual iterations, one launch, identical compatible harness sources,
+and baseline-first independent worktrees on one runner. The complete 16-case
+[raw artifact](https://github.com/dombrovsky/TaskFlow/actions/runs/39145624738/artifacts/12143048721)
+contains JSON measurements, variability, allocations, settings and source provenance.
+The following rounded values are copied from that job's BenchmarkDotNet tables:
+
+| Middleware layers | Before ns/op | After ns/op | Time change | Before → after bytes/op |
+| --- | ---: | ---: | ---: | ---: |
+| 0, bare flow | 1,227 | 1,110 | −9.5% | 736 → 616 |
+| 1 | 3,167 | 2,642 | −16.6% | 2,784 → 2,087 |
+| 2 | 3,646 | 2,984 | −18.2% | 3,416 → 2,600 |
+| 4 | 4,540 | 3,710 | −18.3% | 4,679 → 3,624 |
+| 8 | 6,235 | 5,556 | −10.9% | 7,208 → 5,672 |
+
+The eight-layer allocation reduction is 21.3%. Burst means were 641.8 → 602.4 ns/op
+with 915 → 803 bytes/op. Burst uncertainty overlaps, so this run does not establish
+a precise burst speedup. Producer means for 1/4/16 producers were 612.2/710.3/714.5 →
+542.2/693.9/706.1 ns/op; the smaller concurrent-producer differences are inconclusive.
+Sequential synchronous/no-token work measured 1,102 → 1,012 ns/op, 736 → 616 bytes;
+yielding/no-token work measured 1,824 → 1,717.2 ns/op, 944 → 832 bytes. Live and
+cooperatively canceled caller tokens also retained lower allocations. Enqueue-only
+timing has broad uncertainty and no allocation claim. These are one-run observations,
+not universal thresholds or a complete recovery of the original regression.
+
+A correctly paired local 16-case run on SDK 10.0.402/runtime 10.0.13 also reduced
+eight-layer allocation from approximately 7,208 to 5,672 bytes and mean time from
+6,250.6 to 4,149.6 ns/op. Its greater variability and different environment make the
+GitHub result the preferred timing evidence. An earlier local long-duration pass
+used the candidate project directory for both sides because BenchmarkDotNet resolves
+its generated project from the working directory. It is retained as a same-source
+control, excluded from before/after claims. Short-iteration exploratory runs and
+screening probes are also kept separately in the raw investigation archive.
+
+The [build workflow](https://github.com/dombrovsky/TaskFlow/actions/runs/39145624677)
+passed the complete solution tests and required formatting checks on both runtimes.
+The final focused local suite passed 122 tests on each runtime. Local full-suite
+runs hit older cancellation/timing assertions; unchanged main reproduced those
+failure families, and a 100 ms disposal assertion failed once only in the local
+candidate run. It is not a reliable timing guarantee under container scheduling.
+The successful CI full-suite run is separate evidence; no assertion was relaxed.
+Library builds cover netstandard2.0/net8.0/net10.0, and trimmed plus NativeAOT smoke
+applications executed lifetime, bounded, keyed and annotation-only work on both
+.NET 8 and .NET 10. These are smoke checks, not exhaustive AOT application coverage.
+
 ## Experiments and remaining cost
 
 The isolated experiments compare current main with scope reduction (A), operation
@@ -108,7 +197,38 @@ identity tracking (C), and annotation-only forwarding (D). C demonstrates useful
 explicit propagation inside the pipeline, but does not claim ambient-free public
 disposal. Each implementation is measured separately against the same baseline;
 B versus C isolates the additional forwarding optimization. A combined candidate
-also establishes ownership at opaque execution boundaries.
+also establishes ownership at opaque execution boundaries. A throwaway variant
+retaining explicit accounting while making ambient entry a no-op fails the nested
+owner guard test after `await`; its rejected patch and test output are retained.
+It is excluded from performance claims.
+
+Calibrated independent local middleware runs isolate the variants as follows:
+
+| Variant | Eight-layer mean ± SD, ns/op | Managed bytes/op |
+| --- | ---: | ---: |
+| Current main | 6,250.6 ± 731.0 | 7,207 |
+| A: scopes only | 6,856.5 ± 623.4 | 6,806 |
+| B: ownership/root consolidation | 6,310.4 ± 740.1 | 6,902 |
+| C: B + forwarding identity | 4,539.5 ± 356.1 | 6,072 |
+| Combined A+B+C | 4,149.6 ± 425.9 | 5,671 |
+
+These runs use the same SDK/runtime and settings as the local full comparison.
+They are ordered runs with substantial timing variability; the scope-only and
+root-only timing differences do not establish a separate speedup. The allocation
+changes and state-machine sizes provide the stronger attribution. The combined
+change is independently confirmed by the less variable GitHub comparison.
+
+D's matched annotation-only benchmark measured 2,409.7 ± 427.9 → 1,536.6 ± 42.2
+ns/op and 2,151 → 956 bytes/op against current main, with the original scope code
+on both sides. The combined candidate also applies A's scope reduction.
+
+Coordination screening medians (whole-process managed bytes per operation,
+including harness overhead) were 3,112 → 2,421 for outstanding admission,
+3,271 → 2,583 for pending admission, 3,247 → 2,592 for bounded producers,
+4,387 → 3,683 for keyed scheduling, and 4,115 → 3,384 for keyed producers.
+Those short timing samples vary substantially, including changing directions
+for concurrent keyed work; they support allocation screening, not firm latency
+or throughput claims. All raw per-iteration samples are retained.
 
 Use `build/LifetimeProbe` for exact scope allocations and screening across
 0/1/2/4/8 middleware layers, sequential/yielding delegates, bursts, 4/16 producers,
@@ -117,6 +237,23 @@ keyed producers. Use the unchanged 16-case BenchmarkDotNet suite for calibrated
 before/after confirmation. Raw samples, patches, binaries' hashes and environment
 records accompany the investigation; generated results are not source-controlled.
 The comparison workflow runs full matched cases when lifetime sources change.
+
+A yielding trace also identifies 136-byte `InvokeExecution` state-machine boxes.
+A fully pending eight-layer execution can need nine such boxes (1,224 bytes), in
+addition to the envelope, delegate and terminal async states. A `Task.Yield()`
+workload can finish while outer wrappers are still unwinding, so its actual box
+count is scheduling-dependent. These retained execution wrappers protect abandoned
+or repeated asynchronous execution continuations; synchronous allocation figures
+do not capture this cost.
+
+For the synchronous eight-layer case, the remaining lifetime-related allocation
+over the healthy parent reconciles to 536 bytes: a 104-byte scope, 160 bytes of task
+context storage, 40 bytes of operation growth, 40 bytes of root state growth, a
+120-byte terminal tracker, and 72 bytes of larger enqueue closures. Current main's
+separate cancellation-context changes contribute the other 200 bytes above that
+parent. This identifies opportunities separately from claiming every byte is
+intrinsically unavoidable; removing the guard or independent-work tracking is not
+a correct optimization.
 
 Some overhead remains necessary under the existing contract: an ambient frame and
 execution-context change at a new logical owner; context capture/restoration across
