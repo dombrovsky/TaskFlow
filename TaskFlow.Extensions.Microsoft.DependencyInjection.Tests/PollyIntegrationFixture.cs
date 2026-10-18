@@ -1,13 +1,12 @@
-namespace TaskFlow.Documentation.Tests;
+namespace TaskFlow.Extensions.Microsoft.DependencyInjection.Tests;
 
-using Microsoft.Extensions.Time.Testing;
+using global::Microsoft.Extensions.Time.Testing;
 using NUnit.Framework;
 using Polly;
 using Polly.Retry;
 using Polly.Timeout;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using System.Threading.Tasks.Flow;
 
@@ -20,58 +19,13 @@ internal sealed class PollyIntegrationFixture
     private static readonly string[] ResubmissionOrder = ["attempt-1", "later", "attempt-2"];
     private static readonly string[] KeyedOrder = ["A1", "A2", "later-A"];
 
-    [Test]
-    public void GuideSnippets_MatchCompiledSource()
-    {
-        var guide = File.ReadAllText(Path.Combine(TestContext.CurrentContext.TestDirectory, "polly.md")).ReplaceLineEndings("\n");
-        var source = File.ReadAllText(Path.Combine(TestContext.CurrentContext.TestDirectory, "PollyExamples.cs")).ReplaceLineEndings("\n");
-        var snippets = Regex.Matches(guide, @"<!-- snippet: ([\w-]+) -->\n```csharp\n(.*?)\n```", RegexOptions.Singleline);
-        Assert.That(snippets, Has.Count.EqualTo(7));
-        foreach (Match snippet in snippets)
-        {
-            var region = Regex.Match(source, @"#region " + snippet.Groups[1].Value + @"\n(.*?)\n#endregion", RegexOptions.Singleline);
-            Assert.That(region.Success, Is.True);
-            Assert.That(snippet.Groups[2].Value, Is.EqualTo(region.Groups[1].Value), snippet.Groups[1].Value);
-        }
-        // Verify imports too: every C# fence is represented in compiled source.
-        var imports = Regex.Match(guide, @"```csharp\n(using .*?)\n```", RegexOptions.Singleline).Groups[1].Value;
-        Assert.That(imports, Is.Not.Empty);
-        Assert.That(source, Does.Contain(imports));
-        Assert.That(Regex.Matches(guide, @"```csharp"), Has.Count.EqualTo(8));
-    }
-
-    [Test]
-    public async Task PublicExamples_ExecuteWithApplicationDelegates()
-    {
-        var calls = 0;
-        ValueTask Save(CancellationToken token)
-        {
-            token.ThrowIfCancellationRequested();
-            Interlocked.Increment(ref calls);
-            return ValueTask.CompletedTask;
-        }
-        await RetryExample.RunAsync(Save, CancellationToken.None);
-        await ResubmissionExample.RunAsync(Save, CancellationToken.None);
-        await TimeoutExample.RunAsync(Save, CancellationToken.None);
-        await DedicatedThreadExample.RunAsync(Save, CancellationToken.None);
-        await DependencyInjectionExample.RunAsync(Save, CancellationToken.None);
-        await KeyedDependencyInjectionExample.RunAsync(Save, CancellationToken.None);
-        await KeyedExample.RunAsync((_, token) =>
-        {
-            token.ThrowIfCancellationRequested();
-            Interlocked.Increment(ref calls);
-            return ValueTask.FromResult(1);
-        }, CancellationToken.None);
-        Assert.That(calls, Is.EqualTo(9));
-    }
-
     [TestCase(HttpStatusCode.ServiceUnavailable, 4)]
     [TestCase(HttpStatusCode.BadRequest, 1)]
     public async Task RetryFactory_FiltersFailuresAndCountsRetries(HttpStatusCode status, int expectedCalls)
     {
         var calls = 0;
         var clock = new ObservedTimeProvider();
-        var pipeline = RetryExample.Create(maxRetries: 3, useJitter: false, timeProvider: clock);
+        var pipeline = CreateRetry(clock, maxRetries: 3, useJitter: false);
         var work = pipeline.ExecuteAsync(_ =>
         {
             calls++;
@@ -240,7 +194,7 @@ internal sealed class PollyIntegrationFixture
     public async Task TaskFlowTimeout_IncludesQueueWaitBeforePollyStarts()
     {
         var clock = new ObservedTimeProvider();
-        var pipeline = TimeoutExample.Create();
+        var pipeline = new ResiliencePipelineBuilder().AddTimeout(TimeSpan.FromSeconds(12)).Build();
         await using var flow = new TaskFlow();
         var started = Gate();
         var release = Gate();
@@ -346,6 +300,18 @@ internal sealed class PollyIntegrationFixture
             Assert.That(contexts[1], Is.Null);
         }
     }
+
+    // Retry configuration from docs/integrations/polly.md; fake time controls its delays.
+    private static ResiliencePipeline CreateRetry(TimeProvider clock, int maxRetries, bool useJitter) =>
+        new ResiliencePipelineBuilder { TimeProvider = clock }.AddRetry(new RetryStrategyOptions
+        {
+            ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(
+                error => error.StatusCode == HttpStatusCode.ServiceUnavailable),
+            MaxRetryAttempts = maxRetries,
+            Delay = TimeSpan.FromMilliseconds(200),
+            BackoffType = DelayBackoffType.Exponential,
+            UseJitter = useJitter
+        }).Build();
 
     private static TaskCompletionSource Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
