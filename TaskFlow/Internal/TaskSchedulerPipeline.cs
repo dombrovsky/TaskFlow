@@ -96,8 +96,16 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         Annotations.Argument.NotNull(taskFunc);
         if (Coordinator?.RequiresKey == true)
             throw new InvalidOperationException("A keyed pipeline requires a keyed Enqueue or Submit overload.");
+        // A built-in terminal already guards disposal and drains every accepted delegate.
+        // An annotation-only snapshot has no middleware or admission outcome to track.
+        if (_registrations.Length == 0 && request == null && Coordinator == null && _terminal is TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow)
+            return EnqueueTerminal(taskFunc, state, cancellationToken);
         return SubmitOperation(new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken), request);
     }
+
+    private async Task<TResult> EnqueueTerminal<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
+        object? state, CancellationToken cancellationToken)
+        => await _terminal.Enqueue(taskFunc, state, cancellationToken).ConfigureAwait(false);
 
     internal Task<TResult> SubmitKeyed<TKey, TResult>(TKey key, Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
         object? state, AdmissionRequest? request, CancellationToken cancellationToken) where TKey : notnull
@@ -120,7 +128,24 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         using var context = Lifetime?.EnterContext();
         try
         {
-            var result = await EnqueueWithCompletion(operation).ConfigureAwait(false);
+            TResult result;
+            try
+            {
+                if (Lifetime != null)
+                {
+                    Lifetime.Enter();
+                    operation.Lifetime = Lifetime;
+                }
+                // The root activity already covers this invocation, including completion middleware.
+                result = await InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken, out _).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                if ((Lifetime != null && operation.Lifetime == null) || !operation.TryClaimCompletion())
+                    throw;
+                var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
+                result = outcome.GetResultOrThrow();
+            }
             operation.AdmissionRequest?.RecordCallerOutcome(null);
             return result;
         }
@@ -132,42 +157,41 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         finally { operation.ReleaseActivity(); }
     }
 
-    private async ValueTask<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Synchronous middleware failures must be returned through the submission task, including cancellation.")]
+    private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
+        operation.AddActivity();
+        Task<TResult> task;
+        bool needsTracking;
         try
         {
-            if (Lifetime != null)
-            {
-                Lifetime.Enter();
-                operation.LifetimeExit = Lifetime.Exit;
-            }
-            return await InvokeEnqueue(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
+            task = InvokeEnqueueCore(operation, index, cancellationToken, out var tracked);
+            needsTracking = !tracked && !task.IsCompleted;
         }
         catch (Exception exception)
         {
-            // Entry rejection must not invoke middleware whose resources may already be cleaned up.
-            if (Lifetime != null && operation.LifetimeExit == null)
-                throw;
-            if (!operation.TryClaimCompletion())
-            {
-                throw;
-            }
-
-            var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
-            return outcome.GetResultOrThrow();
+            operation.ReleaseActivity();
+            return EnqueueFailure<TResult>(exception);
         }
+        if (needsTracking)
+            return AwaitEnqueue(task, operation);
+        operation.ReleaseActivity();
+        return task;
     }
 
-    private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private static async Task<TResult> AwaitEnqueue<TResult>(Task<TResult> task, PipelineOperation operation)
     {
-        operation.AddActivity();
         try
-        { return await InvokeEnqueueCore(operation, index, cancellationToken).ConfigureAwait(false); }
+        { return await task.ConfigureAwait(false); }
         finally { operation.ReleaseActivity(); }
     }
 
-    private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private static async Task<TResult> EnqueueFailure<TResult>(Exception exception)
+        => await Task.FromException<TResult>(exception).ConfigureAwait(false);
+
+    private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken, out bool tracked)
     {
+        tracked = false;
         while (index >= 0 && !(_registrations[index].Middleware is ITaskSchedulerEnqueueMiddleware))
         {
             index--;
@@ -191,12 +215,19 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var middleware = (ITaskSchedulerEnqueueMiddleware)registration.Middleware;
         var context = new TaskSchedulerEnqueueContext<TResult>(operation, registration.Annotations, registrationIndex, cancellationToken);
         var nextCalled = 0;
-        return middleware.InvokeAsync(context, nextContext =>
+        Task<TResult>? nextTask = null;
+        var task = middleware.InvokeAsync(context, nextContext =>
         {
             if (Interlocked.Exchange(ref nextCalled, 1) != 0)
                 throw new InvalidOperationException("Enqueue middleware must invoke its continuation at most once.");
-            return InvokeEnqueue(operation, registrationIndex - 1, nextContext.CancellationToken);
+            var pending = InvokeEnqueue(operation, registrationIndex - 1, nextContext.CancellationToken);
+            Volatile.Write(ref nextTask, pending);
+            return pending;
         });
+        // Forwarding the exact child task shares its existing activity. A distinct task
+        // still needs independent tracking: it may finish before or after its child.
+        tracked = ReferenceEquals(task, Volatile.Read(ref nextTask));
+        return task;
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "The linked source is disposed by OnQuiesced after underlying work ends, including caller-facing timeouts.")]
@@ -215,8 +246,9 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The pipeline converts every operation failure into a completion outcome.")]
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
-        // Reestablish ownership even when the submitting caller suppressed ExecutionContext flow.
-        using var executionContext = Coordinator != null ? Lifetime?.EnterContext() : null;
+        // Opaque terminals and suppressed ExecutionContext flow may drop the submitting scope.
+        // EnterContext is a no-op when this owner is already current.
+        using var executionContext = Lifetime?.EnterContext();
         TaskSchedulerOperationOutcome<TResult> outcome;
         try
         {

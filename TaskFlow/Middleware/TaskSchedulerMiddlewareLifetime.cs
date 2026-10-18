@@ -39,11 +39,27 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
         }
     }
 
-    internal IDisposable EnterContext()
+    internal ContextScope EnterContext()
     {
         var previous = Current.Value;
+        if (previous?.Lifetime == this)
+            return default;
         Current.Value = new Frame(this, previous);
-        return Internal.Disposable.Create(() => Current.Value = previous);
+        return new ContextScope(previous);
+    }
+
+    internal readonly struct ContextScope : IDisposable
+    {
+        private readonly Frame? _previous;
+        private readonly bool _entered;
+
+        internal ContextScope(Frame? previous) { _previous = previous; _entered = true; }
+
+        public void Dispose()
+        {
+            if (_entered)
+                Current.Value = _previous;
+        }
     }
 
     private void ThrowIfClosed()
@@ -180,7 +196,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
             completion.TrySetException(new AggregateException(errors));
     }
 
-    private sealed class Frame
+    internal sealed class Frame
     {
         public Frame(TaskSchedulerMiddlewareLifetime lifetime, Frame? parent) { Lifetime = lifetime; Parent = parent; }
         public TaskSchedulerMiddlewareLifetime Lifetime { get; }

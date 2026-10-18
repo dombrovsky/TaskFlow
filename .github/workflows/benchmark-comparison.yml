@@ -23,7 +23,13 @@ on:
         options: [representative, full]
         default: representative
   pull_request:
-    paths: ['build/benchmark_compare.py', '.github/workflows/benchmark-comparison.yml', 'build/test_benchmark_reporting.py']
+    paths:
+      - 'build/benchmark_compare.py'
+      - '.github/workflows/benchmark-comparison.yml'
+      - 'build/test_benchmark_reporting.py'
+      - 'TaskFlow/Internal/PipelineOperation.cs'
+      - 'TaskFlow/Internal/TaskSchedulerPipeline.cs'
+      - 'TaskFlow/Middleware/TaskSchedulerMiddlewareLifetime.cs'
 
 permissions:
   contents: read
@@ -52,7 +58,7 @@ jobs:
           BASELINE: ${{ inputs.baseline || '1.0.0' }}
           CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
           TARGET: ${{ inputs.target || format('origin/{0}', github.event.pull_request.base.ref) }}
-          SCOPE: ${{ inputs.scope || 'representative' }}
+          SCOPE: ${{ inputs.scope || 'full' }}
           SCENARIO: ${{ matrix.scenario }}
         run: |
           if [ "$SCENARIO" = 'synthetic' ]; then
