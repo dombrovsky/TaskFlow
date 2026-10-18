@@ -1,3 +1,9 @@
+> Follow-up: [Further lifetime overhead investigation](middleware-lifetime-alternatives.md)
+> evaluates ambient-free semantics and two additional allocation optimizations.
+> The historical comparisons below describe the initial PR #54 implementation;
+> subsequent cached root frames save 32 bytes per ordinary root entry, and root
+> execution consolidation removes one 136-byte box when that wrapper suspends.
+
 # Middleware lifetime performance
 
 PR #53 established the adjacent regression boundary `51d6a20` → `34dc96e`

@@ -14,6 +14,36 @@ internal static class Program
 
     private static async Task Main(string[] args)
     {
+        if (args.Contains("--pending"))
+        {
+            foreach (var layers in new[] { 1, 8 })
+            {
+                var owner = new TaskSchedulerMiddlewareLifetime();
+                await using var ownerCleanup = owner.ConfigureAwait(false);
+                ITaskScheduler pipeline = new InlineTerminal();
+                for (var index = 0; index < layers; index++)
+                    pipeline = pipeline.UseMiddleware(new ForwardingFactory(), owner);
+                void Run()
+                {
+                    var gate = new TaskCompletionSource<int>();
+                    var task = pipeline.Enqueue(static (state, _) => new ValueTask<int>(((TaskCompletionSource<int>)state!).Task), gate, default);
+                    if (task.IsCompleted)
+                        throw new InvalidOperationException("Work did not suspend");
+                    gate.SetResult(42);
+                    if (!task.IsCompletedSuccessfully || task.GetAwaiter().GetResult() != 42)
+                        throw new InvalidOperationException("Work did not finish inline");
+                }
+                for (var index = 0; index < 10000; index++)
+                    Run();
+                var allocated = GC.GetAllocatedBytesForCurrentThread();
+                const int count = 10000;
+                for (var index = 0; index < count; index++)
+                    Run();
+                allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+                Console.WriteLine(JsonSerializer.Serialize(new { name = "forced-pending", layers, iterations = count, bytesPerOperation = allocated / (double)count }));
+            }
+            return;
+        }
         if (args.Contains("--scope"))
         {
             var lifetime = new TaskSchedulerMiddlewareLifetime();
@@ -120,6 +150,16 @@ internal static class Program
         for (var i = 0; i < count; i++)
             action();
         Console.WriteLine(JsonSerializer.Serialize(new { name, iterations = count, nsPerOperation = Stopwatch.GetElapsedTime(started).TotalNanoseconds / count, bytesPerOperation = (GC.GetAllocatedBytesForCurrentThread() - bytes) / (double)count }));
+    }
+
+    private sealed class InlineTerminal : ITaskScheduler
+    {
+        public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken) => taskFunc(state, cancellationToken).AsTask();
+    }
+
+    private sealed class ForwardingFactory : ITaskSchedulerMiddlewareFactory
+    {
+        public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => new Forwarding();
     }
 
     private sealed class Forwarding : ITaskSchedulerEnqueueMiddleware, ITaskSchedulerExecutionMiddleware, ITaskSchedulerCompletionMiddleware

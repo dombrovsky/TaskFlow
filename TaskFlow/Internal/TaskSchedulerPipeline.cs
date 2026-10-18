@@ -249,23 +249,29 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         // Opaque terminals and suppressed ExecutionContext flow may drop the submitting scope.
         // EnterContext is a no-op when this owner is already current.
         using var executionContext = Lifetime?.EnterContext();
-        TaskSchedulerOperationOutcome<TResult> outcome;
+        // The envelope owns the root execution activity, including completion middleware.
+        operation.AddActivity();
         try
         {
-            var result = await InvokeExecution(operation, 0, cancellationToken).ConfigureAwait(true);
-            outcome = TaskSchedulerOperationOutcome<TResult>.FromResult(result);
-        }
-        catch (Exception exception)
-        {
-            outcome = TaskSchedulerOperationOutcome<TResult>.FromException(exception);
-        }
+            TaskSchedulerOperationOutcome<TResult> outcome;
+            try
+            {
+                var result = await InvokeExecutionCore(operation, 0, cancellationToken).ConfigureAwait(true);
+                outcome = TaskSchedulerOperationOutcome<TResult>.FromResult(result);
+            }
+            catch (Exception exception)
+            {
+                outcome = TaskSchedulerOperationOutcome<TResult>.FromException(exception);
+            }
 
-        if (operation.TryClaimCompletion())
-        {
-            outcome = await InvokeCompletion(operation, 0, outcome, cancellationToken).ConfigureAwait(true);
-        }
+            if (operation.TryClaimCompletion())
+            {
+                outcome = await InvokeCompletion(operation, 0, outcome, cancellationToken).ConfigureAwait(true);
+            }
 
-        return outcome.GetResultOrThrow();
+            return outcome.GetResultOrThrow();
+        }
+        finally { operation.ReleaseActivity(); }
     }
 
     private async ValueTask<TResult> InvokeExecution<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)

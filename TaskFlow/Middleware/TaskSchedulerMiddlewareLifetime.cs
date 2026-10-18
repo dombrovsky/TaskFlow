@@ -10,6 +10,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     private static readonly AsyncLocal<Frame?> Current = new AsyncLocal<Frame?>();
 
     private readonly object _sync;
+    private readonly Frame _rootFrame;
     private readonly CancellationTokenSource _stopping = new CancellationTokenSource();
     private readonly List<ITaskSchedulerMiddleware?> _owned = new List<ITaskSchedulerMiddleware?>();
     private readonly TaskCompletionSource<bool> _drained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -24,6 +25,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     internal TaskSchedulerMiddlewareLifetime(object sync)
     {
         _sync = sync;
+        _rootFrame = new Frame(this, null);
         StoppingToken = _stopping.Token;
     }
 
@@ -44,7 +46,9 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
         var previous = Current.Value;
         if (previous?.Lifetime == this)
             return default;
-        Current.Value = new Frame(this, previous);
+        // Root frames are immutable and identify the owner, not an individual operation.
+        // Preserve a distinct parent chain when another owner is already ambient.
+        Current.Value = previous == null ? _rootFrame : new Frame(this, previous);
         return new ContextScope(previous);
     }
 
