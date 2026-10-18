@@ -189,6 +189,31 @@ Library builds cover netstandard2.0/net8.0/net10.0, and trimmed plus NativeAOT s
 applications executed lifetime, bounded, keyed and annotation-only work on both
 .NET 8 and .NET 10. These are smoke checks, not exhaustive AOT application coverage.
 
+### Subsequent CI disposal-race finding
+
+A [later full-suite run](https://github.com/dombrovsky/TaskFlow/actions/runs/39146921191)
+on the documentation/probe-only update failed `DisposeAsync_ShouldWaitQueuedOperations`
+on both runtimes: the third returned task was still `WaitingForActivation` after
+`DisposeAsync` completed. Production sources are identical to the earlier passing
+implementation. This is stronger evidence than assuming every failure is a delay
+assertion, so it was investigated separately.
+
+A public-API probe ran 300 rounds of three dedicated-thread delegates, awaited
+flow disposal, inspected returned tasks and delegate-completion counters, and then
+awaited every task. Unchanged main had incomplete caller tasks in 104 rounds; the
+candidate had 61. Both had zero unfinished delegates after disposal. These counts
+show reproducibility, not a statistical comparison of race probability.
+
+`ThreadTaskFlow` signals its thread-completion promise after underlying execution
+items finish. Its `ExecutionItem.GetTypedTask<T>` and outer `Enqueue<T>` async
+wrappers can still have queued continuations publishing caller-facing completion.
+That explains the observed race between disposal and returned-task completion.
+The optimization preserves underlying-work quiescence; it does not repair this
+preexisting caller-task publication race. The probe source and outputs, both CI
+logs, and this limitation are retained with the investigation. The PR remains a
+draft, with no relaxed test assertions. A separate thread-flow completion/drain
+change should address the existing race with deterministic coverage.
+
 ## Experiments and remaining cost
 
 The isolated experiments compare current main with scope reduction (A), operation
