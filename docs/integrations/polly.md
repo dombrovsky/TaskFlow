@@ -42,7 +42,8 @@ await flow.Enqueue(
 
 Pass TaskFlow's scheduled token into Polly and Polly's attempt token into I/O. The method-group call above forwards both. Do not capture the original caller token inside the operation or repeatedly await a previously created Task/ValueTask.
 
-Shutdown cancellation through execution middleware has a [known limitation addressed by PR #46](https://github.com/dombrovsky/TaskFlow/pull/46), still unmerged on 2026-10-18. These examples use existing APIs.
+<!-- Revisit this compatibility link after the cancellation fix in PR #46 merges. -->
+For execution middleware, check the [cancellation compatibility tracking issue (#41)](https://github.com/dombrovsky/TaskFlow/issues/41) before relying on shutdown propagation.
 
 The nongeneric `ExecuteAsync` returns `ValueTask`. Use `.AsTask()` here: an ordinary `Enqueue` lambda returning a bare nongeneric `ValueTask` can select the synchronous-result overload and finish the queue turn early. Result-bearing `ValueTask<T>` uses the asynchronous generic overload.
 
@@ -143,7 +144,8 @@ Use sequential strategies with built-in delays/jitter or synchronously completin
 - `ShouldHandle` and `OnRetry` are awaited with Polly's capture setting, but application callbacks can still escape through their own awaits or detached work. Breaker transition callbacks use Polly's background executor.
 - Hedging and arbitrary concurrent/detached strategies can overlap callbacks within one scheduled operation. They are unsuitable for whole operations requiring non-overlap; one physical thread does not prevent asynchronous overlap.
 
-With a custom `TaskScheduler`, callback placement after a pending predecessor also has a known limitation; capture cannot repair context lost before Polly starts. See the [verified affinity findings](https://github.com/dombrovsky/TaskFlow/blob/b175d60e16057cb8e231dab4d53a24463c151e8e/docs/design/taskflow-polly-feasibility.md#c4-and-precise-execution-context-contracts) and [execution models](../execution-models.md).
+<!-- Revisit this compatibility link after the scheduler-affinity fix tracked by #48 merges. -->
+For custom schedulers, consult [execution models](../execution-models.md) and the [scheduler-affinity tracking issue (#48)](https://github.com/dombrovsky/TaskFlow/issues/48) for current compatibility guidance.
 
 ## Dependency injection
 
