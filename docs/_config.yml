@@ -10,6 +10,7 @@ relative_links:
   enabled: true
   collections: true
 header_pages:
+  - benchmarks/index.html
   - getting-started.md
   - recipes.md
   - execution-models.md
