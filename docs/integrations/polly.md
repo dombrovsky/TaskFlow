@@ -7,9 +7,9 @@ permalink: /integrations/polly/
 
 # Polly v8 resilience pipelines with TaskFlow
 
-Run Polly **inside the delegate submitted to TaskFlow** to retry an operation without giving up its queue position.
+Run Polly **inside the TaskFlow delegate** to keep retries in the same queue position.
 
-Install `TaskFlow` and `Polly.Core`. These examples use Polly 8.8.0 on .NET 8/10. `SaveAsync(CancellationToken)` is an application method returning `ValueTask`; `cancellationToken` is the caller's token.
+Install `TaskFlow` and `Polly.Core`. The examples use Polly 8.8.0 on .NET 8/10. `SaveAsync(CancellationToken)` returns `ValueTask`; `cancellationToken` comes from the caller.
 
 ## Retry an operation
 
@@ -38,17 +38,17 @@ await flow.Enqueue(
     cancellationToken);
 ```
 
-`MaxRetryAttempts` counts retries **after the initial attempt**: three allows at most four calls. Filter failures explicitly for your resource, exclude cancellation, and retry only repeatable operations or protect duplicate side effects.
+`MaxRetryAttempts = 3` allows **four calls**: the first attempt plus three retries. Retry only selected transient failures, never cancellation. Make sure repeating the operation is safe.
 
-Pass TaskFlow's scheduled token into Polly and Polly's attempt token into I/O. The method-group call above forwards both. Do not capture the original caller token inside the operation or repeatedly await a previously created Task/ValueTask.
+Pass TaskFlow's token to Polly, then Polly's token to your I/O, as above. Don't use the original caller token inside the operation or retry an existing Task/ValueTask.
 
-The nongeneric `ExecuteAsync` returns `ValueTask`. Use `.AsTask()` here: an ordinary `Enqueue` lambda returning a bare nongeneric `ValueTask` can select the synchronous-result overload and finish the queue turn early. Result-bearing `ValueTask<T>` uses the asynchronous generic overload.
+Keep `.AsTask()`: without it, TaskFlow can treat a nongeneric `ValueTask` as a result instead of waiting for it. `ValueTask<T>` uses the async result overload.
 
-### Retrying execution versus resubmitting
+### Retries and queue order
 
-All sequential attempts and backoff above occupy one FIFO turn. Later operations remain queued until the pipeline settles, even while no worker thread is needed for backoff.
+Retries and delays stay in one queue position. Later operations wait until the pipeline finishes.
 
-Wrapping `Enqueue` instead retries the submission:
+Putting Polly around `Enqueue` resubmits the work:
 
 ```csharp
 await pipeline.ExecuteAsync(
@@ -56,11 +56,11 @@ await pipeline.ExecuteAsync(
     cancellationToken);
 ```
 
-Each retry takes a new queue position and passes through admission again; later work can overtake it. This call also observes execution failures, so it is not automatically an admission-only retry policy. Resubmitting after a caller-facing TaskFlow timeout can duplicate work that is still running.
+Each retry takes a new queue position and checks admission again. Later work may run first. This retries operation failures too, not just scheduling failures. After a TaskFlow timeout, resubmitting can duplicate work that is still running.
 
 ## Keyed scheduling
 
-Reuse the retry pipeline with the native keyed API. Here `ReadVersionAsync(string, CancellationToken)` returns `ValueTask<int>`:
+Reuse the pipeline for keyed work. `ReadVersionAsync(string, CancellationToken)` returns `ValueTask<int>`:
 
 ```csharp
 await using var owner = new TaskFlow();
@@ -75,13 +75,13 @@ Task<int> otherKey = scheduler.Enqueue("document-18", read, cancellationToken);
 await Task.WhenAll(first, sameKey, otherKey);
 ```
 
-Retries retain the key's turn; later same-key operations stay queued. Different keys may progress concurrently when execution capacity permits. Backoff holds the logical execution slot, including the concurrency-limit slot.
+Same-key work waits through all retries. Other keys can run if capacity is free. Retry delays still use an execution slot.
 
-Adding [bounded admission](../extensions/admission.md) to this native snapshot still creates only one reservation per submission, not one per retry. `Outstanding` capacity lasts until underlying work settles; `Pending` capacity ends when the delegate starts. See [keyed scheduling](../extensions/keyed-scheduling.md) for supported owners, capacity ordering, and same-key deadlocks.
+Retries do not create extra admission reservations. See [keyed scheduling](../extensions/keyed-scheduling.md) and [bounded admission](../extensions/admission.md) for setup and capacity rules.
 
-## Total and per-attempt timeouts
+## Timeouts and retries
 
-Strategies nest in registration order: **total timeout → retry → per-attempt timeout → operation**.
+Add strategies in this order: **total timeout → retry → per-attempt timeout**.
 
 ```csharp
 using Polly.Timeout;
@@ -106,15 +106,15 @@ await bounded.Enqueue(
     cancellationToken);
 ```
 
-Polly throws `TimeoutRejectedException` when its timeout expires and the callback cooperates. Including that exception in the retry predicate allows per-attempt timeouts to retry; the outer timeout is outside retry and does not restart. Caller/shutdown cancellation normally propagates as cancellation.
+Handling Polly's `TimeoutRejectedException` lets per-attempt timeouts retry. The total timeout wraps retry, so its budget does not restart. Caller/shutdown cancellation still cancels the run.
 
-TaskFlow's `WithTimeout` throws `System.TimeoutException` and can include queue/admission waiting; a Polly timeout inside the delegate starts only when execution begins. Place TaskFlow's timeout outside admission to include that wait. See [TaskFlow timeout semantics](../extensions/reliability.md#timeout).
+TaskFlow's `WithTimeout` throws `System.TimeoutException` and can include queue/admission waits. Polly's timer starts when the operation runs. Put TaskFlow's timeout outside admission to include that wait. See [TaskFlow timeouts](../extensions/reliability.md#timeout).
 
-Neither timeout forcibly terminates code. Polly waits for its callback to settle; cancellation-ignoring code may even return success after the deadline. TaskFlow can complete the caller's task earlier while underlying work still holds its lane/key, execution slot, and outstanding reservation.
+Timeouts request cancellation; they cannot force code to stop. Polly waits for the callback and may return success if it ignores cancellation. TaskFlow may return a timeout earlier, while work still holds its lane/key, execution slot, and outstanding admission reservation.
 
-## Dedicated threads and context capture
+## Dedicated threads
 
-Polly defaults `ContinueOnCapturedContext` to `false`, so a retry after asynchronous backoff can leave TaskFlow's dedicated thread. Rent a capturing context inside the operation when thread affinity matters:
+Polly does not capture the context by default. For dedicated-thread work, enable it inside the operation:
 
 ```csharp
 await using var device = new DedicatedThreadTaskFlow("device-io");
@@ -133,13 +133,13 @@ await device.Enqueue(async scheduledToken =>
 }, cancellationToken);
 ```
 
-Dedicated/current-thread flows return captured continuations to their servicing thread. An outer `ConfigureAwait(true)` alone does not configure Polly's internal awaits or guarantee attempt placement. Explicit contexts must not be shared concurrently; they also bypass a pipeline's configured context-pool creation defaults.
+Dedicated/current-thread flows return captured continuations to their thread. An outer `ConfigureAwait(true)` does not control Polly's internal awaits. Don't share a context between concurrent calls; explicit contexts also bypass the pipeline's context-pool defaults.
 
-Use sequential strategies with built-in delays/jitter or synchronously completing delay generators for thread-affine work:
+When work must stay on that thread:
 
-- In Polly 8.8.0, an asynchronously completing custom `DelayGenerator` can move later attempts off-thread even with capture enabled.
-- `ShouldHandle` and `OnRetry` are awaited with Polly's capture setting, but application callbacks can still escape through their own awaits or detached work. Breaker transition callbacks use Polly's background executor.
-- Hedging and arbitrary concurrent/detached strategies can overlap callbacks within one scheduled operation. They are unsuitable for whole operations requiring non-overlap; one physical thread does not prevent asynchronous overlap.
+- Use built-in delays/jitter or synchronous delay generators. In Polly 8.8.0, an async `DelayGenerator` can move later attempts off-thread despite context capture.
+- `ShouldHandle` and `OnRetry` respect Polly's capture setting, but callback code can still leave the thread. Breaker transition callbacks run in the background.
+- Avoid hedging or strategies that start concurrent or detached work when operations must not overlap. One thread does not prevent async operations from overlapping.
 
 ## Dependency injection
 
@@ -163,9 +163,9 @@ await storage.Enqueue(
     cancellationToken);
 ```
 
-Pipeline ownership stays with the application/DI registry. Dispose flows before the provider. Reusing a pipeline shares its breaker/limiter state across operations and scheduling keys; separate registrations can isolate resources. Retry counters remain per execution. Do not rebuild pipelines per attempt or create unbounded registry entries for scheduling keys.
+The application owns the pipelines. Dispose flows before the provider. A shared pipeline shares breaker/limiter state across calls and keys; retry counts are per call. Use separate registrations to isolate resources. Don't rebuild pipelines per attempt or register one for every possible scheduling key.
 
-Named factory wrappers do not expose native keyed/admission capabilities. For those APIs, use the [scoped native registration](../dependency-injection.md#keyed-scheduling-and-admission) instead.
+For keyed scheduling or explicit admission with DI, use the [scoped native registration](../dependency-injection.md#keyed-scheduling-and-admission).
 
 ## Further reading
 
