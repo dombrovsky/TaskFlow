@@ -269,7 +269,9 @@ public static class KeyedBoundedAdmissionExtensions
     /// and execution/completion middleware. Other enqueue middleware is rejected before submission. Dispatch is asynchronous.
     /// Accepted Completion must be observed; rejection returns Full or Closed with null Completion.
     /// The controller must occur exactly once. The key remains typed and the original state is visible to middleware.
-    /// Dispatch requests share a drain; each operation preserves its captured ExecutionContext, including flow suppression.
+    /// Dispatch requests share a drain and restore each producer's captured ExecutionContext, including flow suppression.
+    /// Thread-affine terminals retain their execution thread's ambient context instead of the producer's context.
+    /// C# 13+ prefers Task overloads for ordinary async lambdas; older compilers require an explicit delegate type.
     /// Admission uses existing locks and invokes key hashing/equality synchronously; comparers must be fast and nonthrowing.
     /// </remarks>
     /// <exception cref="NotSupportedException">The pipeline cannot guarantee synchronous atomic admission.</exception>
@@ -312,6 +314,7 @@ public static class KeyedBoundedAdmissionExtensions
     }
 
     /// <summary>Immediately attempts combined keyed admission of a Task operation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, CancellationToken, Task> taskFunc, CancellationToken cancellationToken) where TKey : notnull
     {
@@ -320,6 +323,7 @@ public static class KeyedBoundedAdmissionExtensions
     }
 
     /// <summary>Immediately attempts combined keyed admission of a Task result-producing operation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
     {
@@ -364,11 +368,13 @@ public static class KeyedBoundedAdmissionExtensions
         => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, CancellationToken, Task> taskFunc) where TKey : notnull
         => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, CancellationToken, Task<TResult>> taskFunc) where TKey : notnull
         => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
@@ -384,6 +390,7 @@ public static class KeyedBoundedAdmissionExtensions
         => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts combined keyed admission of a Task operation without a delegate token parameter.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, Task> taskFunc, CancellationToken cancellationToken) where TKey : notnull
     {
@@ -392,11 +399,13 @@ public static class KeyedBoundedAdmissionExtensions
     }
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, Task> taskFunc) where TKey : notnull
         => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts combined keyed admission of a Task result-producing operation without a delegate token parameter.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, Task<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
     {
@@ -405,6 +414,7 @@ public static class KeyedBoundedAdmissionExtensions
     }
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
         Func<TKey, Task<TResult>> taskFunc) where TKey : notnull
         => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);

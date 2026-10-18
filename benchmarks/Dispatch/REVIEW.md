@@ -1,6 +1,6 @@
 # Dispatch ownership and keyed throughput review
 
-Reviewed `7fa12ae` against its parent `03273aa`. Production scheduling/context code is unchanged by this review. The changes are fault tests, measurement tools/data, and documentation.
+Reviewed `7fa12ae` against its parent `03273aa`. This historical review records the code at `7fa12ae`; subsequent review changes are described in the PR and current admission guide. Production scheduling/context code was unchanged by this measurement review. The changes are fault tests, measurement tools/data, and documentation.
 
 ## Ownership and exceptions
 
@@ -34,7 +34,7 @@ Throughput is end-to-end, including draining/disposal. Allocation is process-wid
 
 ### Distributions
 
-Operations/s; quartiles use inclusive interpolation. Raw observations: [review-throughput.csv](review-throughput.csv). Process commands, order, durations, and available CPU-quota deltas: [review-processes.json](review-processes.json).
+Operations/s; quartiles use inclusive interpolation. Raw observations: [review-throughput.csv](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/review-throughput.csv). Process commands, order, durations, and available CPU-quota deltas: [review-processes.json](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/review-processes.json).
 
 | Series / version | Samples | Minimum | P25 | Median | P75 | Maximum |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -64,11 +64,11 @@ The short-series drain medians were 20,000 versus 263.5 (head range 2–6,521). 
 
 Separate EventPipe traces used dotnet-trace 10.0.750501, `dotnet-sampled-thread-time`, and runtime contention/GC/threading events, with two 200,000-operation warmups and four samples per version (1.2 million operations including warmups). Profiling results are not mixed into the throughput distributions. This is sampled **thread wall time**, including waits, rather than a kernel CPU profile. In the inclusive stack report, `Monitor.Enter_Slowpath` accounted for 13.61% before and 10.63% after; `ExecutionContext.RunInternal` was 3.40% and 4.14%. Those percentages cannot isolate CPU overhead or establish a context-restoration regression.
 
-Contention starts were classified by the nearest coordinator/lifetime method in their stack, then paired with stop events on thread ID. [review-contention.json](review-contention.json) retains counts and aggregate wait durations. Baseline `Pump` accumulated 33,319 ms of contended waiting; head `Drain` + `Pump` + `RequestDispatch` accumulated 2,119 ms. Per-operation `Started`/`Complete` paths remain significant (11,949 ms before, 10,546 ms after). These sums span concurrently waiting threads and can exceed elapsed wall time; trace overhead and different scheduling prevent treating them as production latency estimates.
+Contention starts were classified by the nearest coordinator/lifetime method in their stack, then paired with stop events on thread ID. [review-contention.json](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/review-contention.json) retains counts and aggregate wait durations. Baseline `Pump` accumulated 33,319 ms of contended waiting; head `Drain` + `Pump` + `RequestDispatch` accumulated 2,119 ms. Per-operation `Started`/`Complete` paths remain significant (11,949 ms before, 10,546 ms after). These sums span concurrently waiting threads and can exceed elapsed wall time; trace overhead and different scheduling prevent treating them as production latency estimates.
 
 A separate intrusive timing run used `instrument-locks.py` in disposable copies of both revisions. It replaces coordinator locks with stack-only timestamp scopes, recording acquisition time and time inside the original critical-section body. It adds a metric lookup inside the lock; timing excludes that lookup and the counter update but necessarily perturbs scheduling. Time held includes preemption/GC pauses, not just executed CPU instructions. Two warmups plus four measured 200,000-operation samples per process ran in old/head/head/old order, giving eight samples per version. These binaries were not used for the uninstrumented throughput claims.
 
-Median summed critical-section body time per sample was 535.5 ms before and 425.0 ms after; summed acquisition time was 24,325 ms and 12,804 ms. The largest held-time category remained `Schedule` (299.5 → 243.3 ms, 400,000 acquisitions in each revision). `Started` held 30.5 → 32.8 ms; `Complete` 66.4 → 43.1 ms. Dispatch bookkeeping held 122.8 ms in old `Pump`; the head medians were 59.1 ms in `Drain`, 12.1 ms in `Pump`, and 6.1 ms in `RequestDispatch`. Category medians do not sum to the median of totals. Per-section observations: [review-locks.csv](review-locks.csv).
+Median summed critical-section body time per sample was 535.5 ms before and 425.0 ms after; summed acquisition time was 24,325 ms and 12,804 ms. The largest held-time category remained `Schedule` (299.5 → 243.3 ms, 400,000 acquisitions in each revision). `Started` held 30.5 → 32.8 ms; `Complete` 66.4 → 43.1 ms. Dispatch bookkeeping held 122.8 ms in old `Pump`; the head medians were 59.1 ms in `Drain`, 12.1 ms in `Pump`, and 6.1 ms in `RequestDispatch`. Category medians do not sum to the median of totals. Per-section observations: [review-locks.csv](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/review-locks.csv).
 
 Source review agrees with these observations: key lookup/allocation remains under `Schedule`'s existing lock; admission and fairness use the existing dictionaries/ready list. The producer's new dispatch request only probes its ready head and execution policies. There are no added key lookups or fairness scans per producer. Empty-waiter scans avoid the old temporary HashSet allocation. Both revisions already capture keyed operation contexts; the head restores each context on a shared context-free drain and avoids redundant lifetime frames. No new long critical section or measured context bottleneck justifies changing that behavior.
 

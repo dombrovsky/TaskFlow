@@ -10,7 +10,7 @@ internal sealed class DispatchCoalescingFixture
     [ThreadStatic]
     private static bool _submitting;
 
-    private static TaskCompletionSource<int> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static AdmissionTestGate Gate() => new();
     private static BoundedAdmissionController Budget(int capacity) => new(new BoundedAdmissionOptions { Capacity = capacity });
     private static PipelineTaskScheduler Configure(int kind, TaskFlow flow, BoundedAdmissionController budget, int concurrency)
     {
@@ -42,7 +42,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task ConcurrentBurst_UsesOneDrain_AndNeverCallsUserCodeOnProducer(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true);
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(513);
         var scheduler = Configure(kind, flow, budget, 513);
         var observer = new Observer();
@@ -51,7 +52,7 @@ internal sealed class DispatchCoalescingFixture
         tasks[0] = Submit(kind, budget, decorated, 0, () => new ValueTask<int>(0)).Completion!;
         try
         {
-            await backend.Entered.Task;
+            await backend.Entered.Task.WaitForTestAsync();
             await Task.WhenAll(Enumerable.Range(0, 8).Select(producer => Task.Run(() =>
             {
                 for (var i = producer + 1; i < tasks.Length; i += 8)
@@ -65,13 +66,13 @@ internal sealed class DispatchCoalescingFixture
                     Assert.That(attempt.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
                     tasks[i] = attempt.Completion!;
                 }
-            })));
+            }))).WaitForTestAsync();
             Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
             Assert.That(Submit(kind, budget, decorated, 900, () => new ValueTask<int>(0)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
-        Assert.That(await Task.WhenAll(tasks), Is.EqualTo(Enumerable.Range(0, tasks.Length)));
+        Assert.That(await Task.WhenAll(tasks).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(0, tasks.Length)));
         Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
         Assert.That(backend.InlineOnProducer, Is.Zero);
         Assert.That(observer.InlineOnProducer, Is.Zero);
@@ -82,7 +83,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task SaturatedExecution_DoesNotScheduleDrainsForBlockedArrivals(int kind)
     {
         using var backend = new InlineBackend();
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(257);
         var scheduler = Configure(kind, flow, budget, 1);
         var idle = Gate();
@@ -91,12 +93,12 @@ internal sealed class DispatchCoalescingFixture
         var first = Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(release.Task));
         try
         {
-            await idle.Task;
+            await idle.Task.WaitForTestAsync();
             var pending = Enumerable.Range(1, 256).Select(i => Submit(kind, budget, scheduler, i, () => new ValueTask<int>(i)).Completion!).ToArray();
             Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
             release.SetResult(0);
-            await first.Completion!;
-            Assert.That(await Task.WhenAll(pending), Is.EqualTo(Enumerable.Range(1, 256)));
+            await first.Completion!.WaitForTestAsync();
+            Assert.That(await Task.WhenAll(pending).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(1, 256)));
         }
         finally { release.TrySetResult(0); }
     }
@@ -108,7 +110,8 @@ internal sealed class DispatchCoalescingFixture
     {
         using var backend = new InlineBackend();
         using var retire = new ManualResetEventSlim();
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(2);
         var scheduler = Configure(kind, flow, budget, 2);
         var idle = Gate();
@@ -119,18 +122,19 @@ internal sealed class DispatchCoalescingFixture
             if (Interlocked.Increment(ref calls) != 1)
                 return;
             idle.SetResult(0);
-            retire.Wait();
-            retired.SetResult(0);
+            try
+            { retire.WaitForTest(); retired.TrySetResult(0); }
+            catch (OperationCanceledException error) { retired.TrySetException(error); }
+            catch (TimeoutException error) { retired.TrySetException(error); }
         };
         try
         {
-            await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(0)).Completion!;
-            await idle.Task;
-            Assert.That(await Submit(kind, budget, scheduler, 1, () => new ValueTask<int>(1)).Completion!, Is.EqualTo(1));
+            await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(0)).Completion!.WaitForTestAsync();
+            await idle.Task.WaitForTestAsync();
+            Assert.That(await Submit(kind, budget, scheduler, 1, () => new ValueTask<int>(1)).Completion!.WaitForTestAsync(), Is.EqualTo(1));
             Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(2));
         }
-        finally { retire.Set(); }
-        await retired.Task;
+        finally { retire.Set(); await retired.WaitForCleanupAsync(); }
     }
 
     [TestCase(0)]
@@ -139,7 +143,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task SharedDrain_RestoresEachContextIncludingSuppression_AndLifetimeOwnership(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true);
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var lifetime = flow.MiddlewareLifetime;
         var budget = Budget(4);
         var scheduler = Configure(kind, flow, budget, 4);
@@ -158,7 +163,7 @@ internal sealed class DispatchCoalescingFixture
         TaskSchedulerTrySubmission<string?> fourth;
         try
         {
-            await backend.Entered.Task;
+            await backend.Entered.Task.WaitForTestAsync();
             ambient.Value = "second";
             second = Submit(kind, budget, scheduler, 1, Read);
             using (ExecutionContext.SuppressFlow())
@@ -167,7 +172,7 @@ internal sealed class DispatchCoalescingFixture
             fourth = Submit(kind, budget, scheduler, 3, Read);
         }
         finally { backend.Release.Set(); }
-        Assert.That(await Task.WhenAll(first.Completion!, second.Completion!, suppressed.Completion!, fourth.Completion!), Is.EqualTo(new string?[] { "first", "second", null, "fourth" }));
+        Assert.That(await Task.WhenAll(first.Completion!, second.Completion!, suppressed.Completion!, fourth.Completion!).WaitForTestAsync(), Is.EqualTo(new string?[] { "first", "second", null, "fourth" }));
         Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
         Assert.That(backend.InlineOnProducer, Is.Zero);
     }
@@ -181,7 +186,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task ManyProducersAndShortOperations_DoNotStrandWork(int kind, bool inline)
     {
         using var backend = new InlineBackend();
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = inline ? backend : TaskScheduler.Default });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = inline ? backend : TaskScheduler.Default }));
+        var flow = flowCleanup.Value;
         var budget = Budget(8000);
         var scheduler = Configure(kind, flow, budget, 4);
         var active = new int[16];
@@ -205,10 +211,10 @@ internal sealed class DispatchCoalescingFixture
                 Assert.That(attempt.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
                 completions[i] = attempt.Completion!;
             }
-            await Task.WhenAll(completions);
-        })));
+            await Task.WhenAll(completions).WaitForTestAsync();
+        }))).WaitForTestAsync();
         Assert.That(executed, Is.EqualTo(8000));
-        Assert.That(await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(42)).Completion!, Is.EqualTo(42));
+        Assert.That(await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(42)).Completion!.WaitForTestAsync(), Is.EqualTo(42));
         Assert.That(backend.InlineOnProducer, Is.Zero);
     }
 
@@ -217,7 +223,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task LegacyInlineDrain_HandsOffBeforeSuppressedTrySubmit(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true);
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(2);
         var scheduler = Configure(kind, flow, budget, 2);
         var ambient = new AsyncLocal<string?>();
@@ -229,14 +236,14 @@ internal sealed class DispatchCoalescingFixture
         TaskSchedulerTrySubmission<string?> attempt;
         try
         {
-            await backend.Entered.Task;
+            await backend.Entered.Task.WaitForTestAsync();
             using (ExecutionContext.SuppressFlow())
                 attempt = Submit(kind, budget, scheduler, 1, () => new ValueTask<string?>(ambient.Value));
             Assert.That(scheduler.ScheduledDrainCount, Is.Zero);
         }
         finally { backend.Release.Set(); }
-        await legacy;
-        Assert.That(await attempt.Completion!, Is.Null);
+        await legacy.WaitForTestAsync();
+        Assert.That(await attempt.Completion!.WaitForTestAsync(), Is.Null);
         Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
     }
 
@@ -249,30 +256,35 @@ internal sealed class DispatchCoalescingFixture
         for (var iteration = 0; iteration < 12; iteration++)
         {
             using var backend = new InlineBackend();
-            await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+            await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+            var flow = flowCleanup.Value;
             using var cancellation = new CancellationTokenSource();
             var budget = Budget(129);
             var scheduler = Configure(kind, flow, budget, 1);
             var started = Gate();
             var release = Gate();
             var first = Submit(kind, budget, scheduler, 0, () => { started.SetResult(0); return new ValueTask<int>(release.Task); });
-            await started.Task;
-            var pending = Enumerable.Range(1, 128).Select(_ => Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1), cancellation.Token).Completion!).ToArray();
             var go = Gate();
-            await Task.WhenAll(
-                Task.Run(async () => { await go.Task; cancellation.Cancel(); }),
-                Task.Run(async () => { await go.Task; release.TrySetResult(0); }),
-                Task.Run(async () => { go.SetResult(0); await flow.DisposeAsync(); }));
-            await first.Completion!;
-            foreach (var task in pending)
+            try
             {
-                try
-                { await task; }
-                catch (OperationCanceledException) { }
-                catch (ObjectDisposedException) { }
+                await started.Task.WaitForTestAsync();
+                var pending = Enumerable.Range(1, 128).Select(_ => Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1), cancellation.Token).Completion!).ToArray();
+                await Task.WhenAll(
+                    Task.Run(async () => { await go.Task.WaitForTestAsync(); cancellation.Cancel(); }),
+                    Task.Run(async () => { await go.Task.WaitForTestAsync(); release.TrySetResult(0); }),
+                    Task.Run(async () => { go.SetResult(0); await flow.DisposeAsync().WaitForTestAsync(); })).WaitForTestAsync();
+                await first.Completion!.WaitForTestAsync();
+                foreach (var task in pending)
+                {
+                    try
+                    { await task.WaitForTestAsync(); }
+                    catch (OperationCanceledException) { }
+                    catch (ObjectDisposedException) { }
+                }
+                Assert.That(Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Closed));
+                Assert.That(scheduler.Coordinator?.KeyCount ?? 0, Is.Zero);
             }
-            Assert.That(Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Closed));
-            Assert.That(scheduler.Coordinator?.KeyCount ?? 0, Is.Zero);
+            finally { go.TrySetResult(0); release.TrySetResult(0); }
         }
     }
 
@@ -283,7 +295,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task CancellationRacingAdmission_DoesNotLeaveAStaleReadyHead(int kind)
     {
         using var backend = new InlineBackend();
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(1);
         var scheduler = Configure(kind, flow, budget, 1);
         for (var i = 0; i < 100; i++)
@@ -292,20 +305,20 @@ internal sealed class DispatchCoalescingFixture
             var go = Gate();
             var producer = Task.Run(async () =>
             {
-                await go.Task;
+                await go.Task.WaitForTestAsync();
                 try
                 {
                     var result = Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1), cancellation.Token);
                     Assert.That(result.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
-                    await result.Completion!;
+                    await result.Completion!.WaitForTestAsync();
                 }
                 catch (OperationCanceledException) { }
             });
-            var cancel = Task.Run(async () => { await go.Task; cancellation.Cancel(); });
+            var cancel = Task.Run(async () => { await go.Task.WaitForTestAsync(); cancellation.Cancel(); });
             go.SetResult(0);
-            await Task.WhenAll(producer, cancel);
+            await Task.WhenAll(producer, cancel).WaitForTestAsync();
         }
-        Assert.That(await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(42)).Completion!, Is.EqualTo(42));
+        Assert.That(await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(42)).Completion!.WaitForTestAsync(), Is.EqualTo(42));
     }
 
     [TestCase(0)]
@@ -313,7 +326,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task SuppressedRejectionCompletion_RetainsOwnershipAndRunsOffProducer(int kind)
     {
         using var backend = new InlineBackend();
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var lifetime = flow.MiddlewareLifetime;
         var budget = Budget(1);
         var scheduler = Configure(kind, flow, budget, 1);
@@ -325,10 +339,10 @@ internal sealed class DispatchCoalescingFixture
         {
             using (ExecutionContext.SuppressFlow())
                 Assert.That(Submit(kind, budget, decorated, 1, () => new ValueTask<int>(1)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
-            await completion.Checked.Task;
+            await completion.Checked.Task.WaitForTestAsync();
         }
         finally { release.TrySetResult(0); }
-        await first.Completion!;
+        await first.Completion!.WaitForTestAsync();
     }
 
     [TestCase(0)]
@@ -337,7 +351,8 @@ internal sealed class DispatchCoalescingFixture
     public async Task SynchronousSchedulingAndCallbackFailures_DoNotAbandonTheDrain(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true, rejectFirst: true);
-        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = backend });
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = flowCleanup.Value;
         var budget = Budget(64);
         var scheduler = Configure(kind, flow, budget, 64);
         ITaskScheduler decorated = scheduler.UseMiddleware(new FailingCompletion());
@@ -348,7 +363,7 @@ internal sealed class DispatchCoalescingFixture
         var pending = new Task<int>[63];
         try
         {
-            await backend.Entered.Task;
+            await backend.Entered.Task.WaitForTestAsync();
             pending[0] = Submit<int>(kind, budget, decorated, 1, () => throw new FormatException("Delegate failure")).Completion!;
             pending[1] = Submit(kind, budget, decorated, 2, () => new ValueTask<int>(2)).Completion!;
             for (var index = 2; index < pending.Length; index++)
@@ -359,16 +374,16 @@ internal sealed class DispatchCoalescingFixture
             Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
-        await Assert.ThatAsync(async () => await first.Completion!, Throws.TypeOf<TaskSchedulerException>());
-        await Assert.ThatAsync(async () => await pending[0], Throws.TypeOf<FormatException>());
-        await Assert.ThatAsync(async () => await pending[1], Throws.TypeOf<InvalidOperationException>());
-        Assert.That(await Task.WhenAll(pending.Skip(2)), Is.EqualTo(Enumerable.Range(3, 61)));
+        await Assert.ThatAsync(async () => await first.Completion!.WaitForTestAsync(), Throws.TypeOf<TaskSchedulerException>());
+        await Assert.ThatAsync(async () => await (pending[0]).WaitForTestAsync(), Throws.TypeOf<FormatException>());
+        await Assert.ThatAsync(async () => await (pending[1]).WaitForTestAsync(), Throws.TypeOf<InvalidOperationException>());
+        Assert.That(await Task.WhenAll(pending.Skip(2)).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(3, 61)));
         Assert.That(firstRan, Is.False);
         Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
         Assert.That(backend.InlineOnProducer, Is.Zero);
         // The failed key and all global reservations are reusable after observable completion.
-        Assert.That(await Submit(kind, budget, decorated, 0, () => new ValueTask<int>(42)).Completion!, Is.EqualTo(42));
-        await flow.DisposeAsync();
+        Assert.That(await Submit(kind, budget, decorated, 0, () => new ValueTask<int>(42)).Completion!.WaitForTestAsync(), Is.EqualTo(42));
+        await flow.DisposeAsync().WaitForTestAsync();
     }
 
     private sealed class FailingCompletion : ITaskSchedulerCompletionMiddleware
@@ -395,7 +410,7 @@ internal sealed class DispatchCoalescingFixture
 
     private sealed class RejectionObserver(TaskSchedulerMiddlewareLifetime lifetime) : ITaskSchedulerCompletionMiddleware
     {
-        public TaskCompletionSource<int> Checked { get; } = Gate();
+        public AdmissionTestGate Checked { get; } = Gate();
         public ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
         {
             if (outcome.Exception is AdmissionRejectedException)
@@ -417,7 +432,7 @@ internal sealed class DispatchCoalescingFixture
         private int _queued;
         private int _inlineOnProducer;
         public ManualResetEventSlim Release { get; } = new();
-        public TaskCompletionSource<int> Entered { get; } = Gate();
+        public AdmissionTestGate Entered { get; } = Gate();
         public Action? CheckOwnership { get; set; }
         public int InlineOnProducer => _inlineOnProducer;
         protected override IEnumerable<Task> GetScheduledTasks() => Array.Empty<Task>();
@@ -431,7 +446,7 @@ internal sealed class DispatchCoalescingFixture
             if (first && blockFirst)
             {
                 Entered.SetResult(0);
-                Release.Wait();
+                Release.WaitForTest();
             }
             if (first && rejectFirst)
                 throw new InvalidOperationException("Scheduler failure");
