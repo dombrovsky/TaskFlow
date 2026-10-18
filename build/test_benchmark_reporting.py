@@ -6,8 +6,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from benchmark_report import read_cases
+from benchmark_report import EXPECTED, read_cases, write_json
 from benchmark_compare import delta, evidence, render
+from benchmark_publish import append
 
 
 class ReportingTests(unittest.TestCase):
@@ -75,6 +76,37 @@ class ReportingTests(unittest.TestCase):
         text = render(report)
         self.assertIn("build failed", text)
         self.assertIn("middleware unsupported", text)
+
+    def test_immutable_publication_and_rerun_preservation(self):
+        results = self.root / "measurement"
+        raw = results / "raw"
+        (raw / "results").mkdir(parents=True)
+        benchmarks = [{**copy.deepcopy(self.benchmark), "FullName": key} for key in EXPECTED]
+        write_json(raw / "results/all-report-full.json", {"Benchmarks": benchmarks})
+        record = {"schema": 1, "series": "series", "cases": read_cases(raw),
+                  "provenance": {"measured_sha": "a" * 40, "run_id": "123", "attempt": "1",
+                                 "run_url": "https://github.com/example/repo/actions/runs/123",
+                                 "label": "test fixture", "timestamp": "2026-01-01"}}
+        write_json(results / "record.json", record)
+        write_json(results / "provenance.json", record["provenance"])
+        (results / "summary.md").write_text("test fixture, never performance evidence")
+        data = self.root / "data"
+        append(results, data)
+        original = (data / "index.json").read_bytes()
+        append(results, data)
+        self.assertEqual((data / "index.json").read_bytes(), original)
+        record["provenance"]["attempt"] = "2"
+        write_json(results / "record.json", record)
+        append(results, data)
+        self.assertEqual(len(json.loads((data / "index.json").read_text())["records"]), 2)
+        record["provenance"]["label"] = "different content, same key"
+        write_json(results / "record.json", record)
+        with self.assertRaisesRegex(ValueError, "Immutable"):
+            append(results, data)
+        record["provenance"]["synthetic_validation_patch"] = "temporary patch"
+        write_json(results / "record.json", record)
+        with self.assertRaisesRegex(ValueError, "Synthetic"):
+            append(results, data)
 
 
 if __name__ == "__main__":
