@@ -30,13 +30,13 @@ def tree(sha):
     return {path: git("rev-parse", f"{sha}:{path}") for path in PRODUCTION}
 
 
-def environment():
+def environment(cwd):
     files = ["/sys/fs/cgroup/cpu.max", "/sys/fs/cgroup/cpuset.cpus.effective", "/proc/cpuinfo"]
     info = {path: Path(path).read_text() for path in files if Path(path).exists()}
     return {"platform": platform.platform(), "machine": platform.machine(), "cpu_count": os.cpu_count(),
             "affinity": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
             "runner": {key: os.environ.get(key) for key in ["RUNNER_NAME", "RUNNER_OS", "RUNNER_ARCH", "ImageOS", "ImageVersion"]},
-            "cpu": info, "dotnet_info": command("dotnet", "--info", capture=True),
+            "cpu": info, "dotnet_info": command("dotnet", "--info", cwd=cwd, capture=True),
             "dotnet_variables": {k: v for k, v in os.environ.items() if k.startswith(("DOTNET_", "COMPlus_"))}}
 
 
@@ -46,7 +46,8 @@ def measure(source, output, label, release=False, filters=None):
     sha = git("rev-parse", "--verify", f"{source}^{{commit}}")
     if release and tree(sha) != tree(RELEASE):
         raise ValueError("Refusing 1.0.0 label: production tree does not match release")
-    sdk = command("dotnet", "--version", capture=True)
+    write_json(output / "global.json", {"sdk": {"version": SETTINGS["sdk"], "rollForward": "disable"}})
+    sdk = command("dotnet", "--version", cwd=output, capture=True)
     runtimes = command("dotnet", "--list-runtimes", capture=True)
     if sdk != SETTINGS["sdk"] or "Microsoft.NETCore.App 10.0.0 " not in runtimes:
         raise ValueError("Requires SDK 10.0.100 and runtime 10.0.0")
@@ -68,7 +69,7 @@ def measure(source, output, label, release=False, filters=None):
         # Runtime pin also applies to BenchmarkDotNet's generated executables through inherited env.
         raw = output / "raw"
         raw.mkdir()
-        env = environment()
+        env = environment(checkout)
         provenance = {"label": label, "measured_sha": sha, "production_tree": tree(sha),
                       "release_source_sha": RELEASE if release else None,
                       "release_tree_verified": release, "harness_sha": git("rev-parse", "HEAD"),
