@@ -12,7 +12,7 @@ Throughput includes draining all accepted completions and disposing owners. Allo
 
 ## Initial results at 7fa12ae
 
-Values below are medians of ten samples. Drain counts are per 20,000 accepted operations; fractional medians are the midpoint of the two central sample counts. Raw samples are in [results-before.csv](results-before.csv) and [results-after.csv](results-after.csv).
+Values below are medians of ten samples. Drain counts are per 20,000 accepted operations; fractional medians are the midpoint of the two central sample counts. Raw samples are in [results-before.csv](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/results-before.csv) and [results-after.csv](https://github.com/dombrovsky/TaskFlow/blob/20b7a53/benchmarks/Dispatch/results-after.csv).
 
 | Scenario | Keyed | Producers | Operations/s before → after | Bytes/op before → after | Drains before → after |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -33,7 +33,7 @@ The staged burst consistently reduced drain work items from 20,000 to one. Measu
 
 Remaining costs include normal terminal task scheduling and asynchronous promise continuations. Separate idle-to-runnable transitions may still require separate drains, including one transition per operation for isolated producers. Rejections or pre-execution cancellations with completion middleware retain their per-operation asynchronous callback handoff; those cases are not measured here. Busy-key, saturated-limit, shutdown, and lost-wakeup behavior is tested deterministically in `DispatchCoalescingFixture`, rather than inferred from throughput.
 
-The focused ownership audit and repeated keyed/default-scheduler measurements are in [REVIEW.md](REVIEW.md). They include distributions, runtime contention traces, lock timing, and a worker-minimum sensitivity check. The initial samples above remain unchanged.
+The focused ownership audit and repeated keyed/default-scheduler measurements are in [REVIEW.md](REVIEW.md). They include distributions, runtime contention traces, lock timing, and a worker-minimum sensitivity check. The initial samples above remain unchanged. Bulky raw observations are linked to immutable commit `20b7a53`; the current tree keeps summaries and reproduction tools.
 
 ## Reproduce
 

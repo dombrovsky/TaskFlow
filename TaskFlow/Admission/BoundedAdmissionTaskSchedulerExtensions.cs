@@ -32,7 +32,9 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     /// The controller must occur exactly once in a native pipeline. Only built-in admission/coordinated enqueue policies,
     /// annotations, and execution/completion middleware are supported. Multiple budgets require a coordinated branch.
     /// Dispatch is coalesced off the producer's stack, including terminal scheduler callbacks; accepted work can begin
-    /// before this method returns. Each operation preserves its captured ExecutionContext, including flow suppression.
+    /// before this method returns. Dispatch restores the producer's captured ExecutionContext, including flow suppression.
+    /// Thread-affine terminals retain their execution thread's ambient context instead of the producer's context.
+    /// C# 13+ prefers Task overloads for ordinary async lambdas; older compilers require an explicit delegate type.
     /// Existing admission/lifetime locks may contend. Observe accepted Completion tasks.
     /// Rejection returns Full or Closed with null Completion. A cancellation that wins before admission throws synchronously.
     /// </remarks>
@@ -75,6 +77,7 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     }
 
     /// <summary>Immediately attempts admission of a Task operation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
     {
@@ -83,6 +86,7 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     }
 
     /// <summary>Immediately attempts admission of a Task result-producing operation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken)
     {
@@ -127,11 +131,13 @@ public static class BoundedAdmissionTaskSchedulerExtensions
         => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<CancellationToken, Task> taskFunc)
         => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<CancellationToken, Task<TResult>> taskFunc)
         => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
@@ -148,6 +154,7 @@ public static class BoundedAdmissionTaskSchedulerExtensions
 
 
     /// <summary>Immediately attempts admission of a Task operation without a delegate token parameter.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<Task> taskFunc, CancellationToken cancellationToken)
     {
@@ -156,11 +163,13 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     }
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<Task> taskFunc)
         => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
 
     /// <summary>Immediately attempts admission of a Task result-producing operation without a delegate token parameter.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<Task<TResult>> taskFunc, CancellationToken cancellationToken)
     {
@@ -169,6 +178,7 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     }
 
     /// <summary>Immediately attempts admission without caller cancellation.</summary>
+    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
         Func<Task<TResult>> taskFunc)
         => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);

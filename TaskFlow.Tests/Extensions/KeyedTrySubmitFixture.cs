@@ -8,7 +8,7 @@ using System.Threading.Tasks.Flow.Internal;
 internal sealed class KeyedTrySubmitFixture
 {
     private static readonly string[] ExpectedOrder = ["A1", "B1", "C1", "A2", "B2", "A3"];
-    private static TaskCompletionSource<int> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static AdmissionTestGate Gate() => new();
     private static BoundedAdmissionController Budget(int capacity, TaskSchedulerCapacityMode mode = TaskSchedulerCapacityMode.Outstanding)
         => new(new BoundedAdmissionOptions { Capacity = capacity, CapacityMode = mode, MaxAdmissionWaiters = 1 });
 
@@ -16,7 +16,8 @@ internal sealed class KeyedTrySubmitFixture
     [TestCase(TaskSchedulerCapacityMode.Outstanding)]
     public async Task CombinedBudgets_RejectWithoutPartialReservations_AndAllowUnrelatedKeys(TaskSchedulerCapacityMode mode)
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var global = Budget(2, mode);
         var perKey = Budget(1, mode);
         var scheduler = flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1)
@@ -26,7 +27,7 @@ internal sealed class KeyedTrySubmitFixture
         var first = scheduler.Enqueue("A", (string _, CancellationToken _) => { started.SetResult(0); return release.Task; });
         try
         {
-            await started.Task;
+            await started.Task.WaitForTestAsync();
             Task? pendingCompletion = null;
             if (mode == TaskSchedulerCapacityMode.Pending)
             {
@@ -43,22 +44,23 @@ internal sealed class KeyedTrySubmitFixture
             Assert.That(other.Completion!.IsCompleted, Is.False);
             Assert.That(perKey.TrySubmit(scheduler, "C", _ => 0).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             release.SetResult(1);
-            await first;
+            await first.WaitForTestAsync();
             if (pendingCompletion != null)
-                await pendingCompletion;
-            Assert.That(await other.Completion, Is.EqualTo("B"));
-            Assert.That(await waiting.Completion, Is.EqualTo(2));
-            Assert.That(await global.TrySubmit(scheduler, "C", _ => 3).Completion!, Is.EqualTo(3));
+                await pendingCompletion.WaitForTestAsync();
+            Assert.That(await other.Completion.WaitForTestAsync(), Is.EqualTo("B"));
+            Assert.That(await waiting.Completion.WaitForTestAsync(), Is.EqualTo(2));
+            Assert.That(await global.TrySubmit(scheduler, "C", _ => 3).Completion!.WaitForTestAsync(), Is.EqualTo(3));
         }
         finally { release.TrySetResult(0); }
-        await flow.DisposeAsync();
+        await flow.DisposeAsync().WaitForTestAsync();
         Assert.That(((PipelineTaskScheduler)scheduler).Coordinator!.KeyCount, Is.Zero);
     }
 
     [Test]
     public async Task ConcurrentProducers_ReserveEveryBudgetAtomically()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var global = Budget(6);
         var perKey = Budget(2);
         var scheduler = flow.WithKeyedScheduling<int>().WithConcurrencyLimit(2)
@@ -76,37 +78,38 @@ internal sealed class KeyedTrySubmitFixture
             if (count == 2)
                 twoStarted.TrySetResult(0);
             try
-            { return await release.Task; }
+            { return await release.Task.WaitForTestAsync(); }
             finally { Interlocked.Decrement(ref active[key]); Interlocked.Decrement(ref total); }
         }
         var producers = Enumerable.Range(0, 100).Select(i => Task.Run(async () =>
         {
-            await start.Task;
+            await start.Task.WaitForTestAsync();
             return (key: i % 4, submission: global.TrySubmit(scheduler, i % 4, Hold));
         })).ToArray();
         try
         {
             start.SetResult(0);
-            var results = await Task.WhenAll(producers);
+            var results = await Task.WhenAll(producers).WaitForTestAsync();
             var accepted = results.Where(r => r.submission.Admission == TaskSchedulerAdmissionResult.Accepted).ToArray();
             Assert.That(accepted, Has.Length.EqualTo(6));
             Assert.That(accepted.GroupBy(r => r.key).Select(g => g.Count()), Is.All.LessThanOrEqualTo(2));
-            await twoStarted.Task;
+            await twoStarted.Task.WaitForTestAsync();
             release.SetResult(42);
-            Assert.That(await Task.WhenAll(accepted.Select(r => r.submission.Completion!)), Is.All.EqualTo(42));
+            Assert.That(await Task.WhenAll(accepted.Select(r => r.submission.Completion!)).WaitForTestAsync(), Is.All.EqualTo(42));
             // A rejected key must not have retained a partial per-key reservation.
             foreach (var key in Enumerable.Range(0, 4))
-                Assert.That(await perKey.TrySubmit(scheduler, key, k => k).Completion!, Is.EqualTo(key));
+                Assert.That(await perKey.TrySubmit(scheduler, key, k => k).Completion!.WaitForTestAsync(), Is.EqualTo(key));
         }
         finally { start.TrySetResult(0); release.TrySetResult(0); }
-        await flow.DisposeAsync();
+        await flow.DisposeAsync().WaitForTestAsync();
         Assert.That(((PipelineTaskScheduler)scheduler).Coordinator!.KeyCount, Is.Zero);
     }
 
     [Test]
     public async Task MixedTrySubmitSubmitAndEnqueue_PreserveFifoRoundRobinAndSameKeyExclusion()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var admission = Budget(10);
         var scheduler = flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1).WithBoundedAdmission(admission);
         var release = Gate();
@@ -116,7 +119,7 @@ internal sealed class KeyedTrySubmitFixture
         var tasks = new List<Task>();
         try
         {
-            await started.Task;
+            await started.Task.WaitForTestAsync();
             Task Record(string key, string label)
             {
                 var submitted = admission.TrySubmit(scheduler, key, _ => order.Add(label));
@@ -130,7 +133,7 @@ internal sealed class KeyedTrySubmitFixture
             tasks.Add(Record("B", "B2"));
             tasks.Add(Record("C", "C1"));
             release.SetResult(0);
-            await Task.WhenAll(tasks.Append(blocker));
+            await Task.WhenAll(tasks.Append(blocker)).WaitForTestAsync();
             Assert.That(order, Is.EqualTo(ExpectedOrder));
         }
         finally { release.TrySetResult(0); }
@@ -139,7 +142,8 @@ internal sealed class KeyedTrySubmitFixture
     [Test]
     public async Task EligibleWaiter_CannotBeOvertakenByTrySubmit()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var admission = Budget(1);
         var scheduler = flow.WithKeyedScheduling<string>().WithBoundedAdmission(admission);
         var release = Gate();
@@ -148,16 +152,16 @@ internal sealed class KeyedTrySubmitFixture
         var first = scheduler.Enqueue("A", (string _, CancellationToken _) => { started.SetResult(0); return release.Task; });
         try
         {
-            await started.Task;
+            await started.Task.WaitForTestAsync();
             Task<int> Hold(string key, CancellationToken token) => waiterRelease.Task;
             var waiting = admission.Submit(scheduler, "B", Hold, TaskSchedulerAdmissionMode.Wait);
             Assert.That(waiting.Admission.IsCompleted, Is.False);
             Assert.That(admission.TrySubmit(scheduler, "C", _ => 3).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             release.SetResult(1);
-            Assert.That(await waiting.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
+            Assert.That(await waiting.Admission.WaitForTestAsync(), Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             Assert.That(admission.TrySubmit(scheduler, "C", _ => 3).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             waiterRelease.SetResult(2);
-            await Task.WhenAll(first, waiting.Completion);
+            await Task.WhenAll(first, waiting.Completion).WaitForTestAsync();
         }
         finally { release.TrySetResult(0); waiterRelease.TrySetResult(0); }
     }
@@ -165,7 +169,8 @@ internal sealed class KeyedTrySubmitFixture
     [Test]
     public async Task CancellationOfAcceptedUndispatchedWork_ReleasesAllBudgetsWithoutInvocation()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var global = Budget(2);
         var perKey = Budget(2);
         var scheduler = flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1)
@@ -175,17 +180,17 @@ internal sealed class KeyedTrySubmitFixture
         var first = scheduler.Enqueue("A", (string _, CancellationToken _) => { started.SetResult(0); return release.Task; });
         try
         {
-            await started.Task;
+            await started.Task.WaitForTestAsync();
             using var cancellation = new CancellationTokenSource();
             var queued = global.TrySubmit(scheduler, "A", (Action<string>)(_ => throw new AssertionException("Canceled work executed")), cancellation.Token);
             Assert.That(queued.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
-            await cancellation.CancelAsync();
-            await Assert.ThatAsync(async () => await queued.Completion!, Throws.InstanceOf<OperationCanceledException>());
+            await cancellation.CancelAsync().WaitForTestAsync();
+            await Assert.ThatAsync(async () => await queued.Completion!.WaitForTestAsync(), Throws.InstanceOf<OperationCanceledException>());
             var replacement = global.TrySubmit(scheduler, "A", _ => 2);
             Assert.That(replacement.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             release.SetResult(1);
-            await first;
-            Assert.That(await replacement.Completion!, Is.EqualTo(2));
+            await first.WaitForTestAsync();
+            Assert.That(await replacement.Completion!.WaitForTestAsync(), Is.EqualTo(2));
         }
         finally { release.TrySetResult(0); }
     }
@@ -193,7 +198,8 @@ internal sealed class KeyedTrySubmitFixture
     [Test]
     public async Task Shutdown_CancelsPendingAcceptedWork_AndReturnsClosedForNewWork()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var admission = Budget(2);
         var scheduler = flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1).WithBoundedAdmission(admission);
         var release = Gate();
@@ -201,17 +207,17 @@ internal sealed class KeyedTrySubmitFixture
         var first = scheduler.Enqueue("A", (string _, CancellationToken _) => { started.SetResult(0); return release.Task; });
         try
         {
-            await started.Task;
+            await started.Task.WaitForTestAsync();
             var pending = admission.TrySubmit(scheduler, "B", (Action<string>)(_ => throw new AssertionException("Shutdown work executed")));
             Assert.That(pending.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             var shutdown = flow.DisposeAsync().AsTask();
             var closed = admission.TrySubmit(scheduler, "C", _ => 3);
             Assert.That(closed.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Closed));
             Assert.That(closed.Completion, Is.Null);
-            await Assert.ThatAsync(async () => await pending.Completion!, Throws.InstanceOf<OperationCanceledException>());
+            await Assert.ThatAsync(async () => await pending.Completion!.WaitForTestAsync(), Throws.InstanceOf<OperationCanceledException>());
             Assert.That(shutdown.IsCompleted, Is.False);
             release.SetResult(1);
-            await Task.WhenAll(first, shutdown);
+            await Task.WhenAll(first, shutdown).WaitForTestAsync();
             Assert.That(((PipelineTaskScheduler)scheduler).Coordinator!.KeyCount, Is.Zero);
         }
         finally { release.TrySetResult(0); }
@@ -223,14 +229,15 @@ internal sealed class KeyedTrySubmitFixture
     {
         for (var iteration = 0; iteration < 30; iteration++)
         {
-            await using var flow = new TaskFlow();
+            await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+            var flow = flowCleanup.Value;
             var admission = Budget(2);
             var scheduler = (keyed ? flow.WithKeyedScheduling<string>().WithConcurrencyLimit(1) : (ITaskScheduler)flow).WithBoundedAdmission(admission);
             using var cancellation = new CancellationTokenSource();
             var start = Gate();
             var submit = Task.Run(async () =>
             {
-                await start.Task;
+                await start.Task.WaitForTestAsync();
                 try
                 {
                     var result = keyed ? admission.TrySubmit(scheduler, "A", _ => 1, cancellation.Token)
@@ -239,17 +246,17 @@ internal sealed class KeyedTrySubmitFixture
                     if (result.Completion != null)
                     {
                         try
-                        { await result.Completion; }
+                        { await result.Completion.WaitForTestAsync(); }
                         catch (OperationCanceledException) { }
                         catch (ObjectDisposedException) { }
                     }
                 }
                 catch (OperationCanceledException) { }
             });
-            var dispose = Task.Run(async () => { await start.Task; await flow.DisposeAsync(); });
-            var cancel = Task.Run(async () => { await start.Task; await cancellation.CancelAsync(); });
+            var dispose = Task.Run(async () => { await start.Task.WaitForTestAsync(); await flow.DisposeAsync().WaitForTestAsync(); });
+            var cancel = Task.Run(async () => { await start.Task.WaitForTestAsync(); await cancellation.CancelAsync().WaitForTestAsync(); });
             start.SetResult(0);
-            await Task.WhenAll(submit, dispose, cancel);
+            await Task.WhenAll(submit, dispose, cancel).WaitForTestAsync();
             if (keyed)
                 Assert.That(((PipelineTaskScheduler)scheduler).Coordinator!.KeyCount, Is.Zero);
         }
@@ -258,7 +265,8 @@ internal sealed class KeyedTrySubmitFixture
     [Test]
     public async Task TypedKeyStateAndAsyncOverloads_RetainContextAndExposeFailure()
     {
-        await using var flow = new TaskFlow();
+        await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
+        var flow = flowCleanup.Value;
         var admission = Budget(1);
         var scheduler = flow.WithKeyedScheduling<Guid>().WithBoundedAdmission(admission);
         var key = Guid.NewGuid();
@@ -271,22 +279,22 @@ internal sealed class KeyedTrySubmitFixture
             Assert.That(token.CanBeCanceled, Is.True);
             return new ValueTask<Guid>(k);
         }, state, cancellation.Token);
-        Assert.That(await result.Completion!, Is.EqualTo(key));
+        Assert.That(await result.Completion!.WaitForTestAsync(), Is.EqualTo(key));
         Task<Guid> TaskResult(Guid k, CancellationToken _) => Task.FromResult(k);
         ValueTask<Guid> ValueResult(Guid k, CancellationToken _) => new(k);
         Task TaskAction(Guid key, CancellationToken token) => Task.CompletedTask;
         ValueTask ValueAction(Guid key, CancellationToken token) => default;
-        Assert.That(await admission.TrySubmit(scheduler, key, TaskResult).Completion!, Is.EqualTo(key));
-        Assert.That(await admission.TrySubmit(scheduler, key, ValueResult, cancellation.Token).Completion!, Is.EqualTo(key));
-        await admission.TrySubmit(scheduler, key, TaskAction, cancellation.Token).Completion!;
-        await admission.TrySubmit(scheduler, key, ValueAction).Completion!;
-        await admission.TrySubmit(scheduler, key, static (Guid _, object _, CancellationToken _) => default(ValueTask), state).Completion!;
+        Assert.That(await admission.TrySubmit(scheduler, key, TaskResult).Completion!.WaitForTestAsync(), Is.EqualTo(key));
+        Assert.That(await admission.TrySubmit(scheduler, key, ValueResult, cancellation.Token).Completion!.WaitForTestAsync(), Is.EqualTo(key));
+        await admission.TrySubmit(scheduler, key, TaskAction, cancellation.Token).Completion!.WaitForTestAsync();
+        await admission.TrySubmit(scheduler, key, ValueAction).Completion!.WaitForTestAsync();
+        await admission.TrySubmit(scheduler, key, static (Guid _, object _, CancellationToken _) => default(ValueTask), state).Completion!.WaitForTestAsync();
         var failed = admission.TrySubmit(scheduler, key, (Func<Guid, int>)(_ => throw new FormatException()));
         Assert.That(failed.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
-        await Assert.ThatAsync(async () => await failed.Completion!, Throws.TypeOf<FormatException>());
+        await Assert.ThatAsync(async () => await failed.Completion!.WaitForTestAsync(), Throws.TypeOf<FormatException>());
         Assert.That(() => admission.TrySubmit(scheduler, () => 1), Throws.TypeOf<InvalidOperationException>());
         Assert.That(() => admission.TrySubmit(scheduler, 1, _ => 1), Throws.TypeOf<InvalidOperationException>());
-        await cancellation.CancelAsync();
+        await cancellation.CancelAsync().WaitForTestAsync();
         Assert.That(() => admission.TrySubmit(scheduler, key, _ => 0, cancellation.Token), Throws.InstanceOf<OperationCanceledException>());
     }
 }

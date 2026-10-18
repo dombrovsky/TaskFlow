@@ -14,6 +14,9 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
     private int _scheduledDrains;
     private int _used;
+    // _sync protects ownership and both queues. True means one queued OR active drain.
+    // Handoff keeps ownership; only an empty-queue observation under _sync publishes idle.
+    // Invoke continuations outside _sync. A racing arrival joins this owner or claims the next.
     private bool _pumping;
     private bool _closed;
 
@@ -137,7 +140,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                 return;
             }
             // One dispatcher invokes continuations in FIFO order, outside the admission lock.
-            next.Dispatch();
+            next.Dispatch(onWorker);
         }
     }
 
@@ -159,14 +162,14 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         protected Submission(AdmissionRequest? request)
         {
             Request = request;
-            RequiresWorker = request?.Synchronous == true || ExecutionContext.IsFlowSuppressed();
+            RequiresWorker = request?.Synchronous == true;
         }
         public bool RequiresWorker { get; }
         public AdmissionRequest? Request { get; }
         public LinkedListNode<Submission>? Waiter { get; set; }
         public bool Reserved { get; set; }
         public bool Settled { get; set; }
-        public abstract void Dispatch();
+        public abstract void Dispatch(bool onWorker);
         public abstract void Reject(TaskSchedulerAdmissionResult result);
         public abstract void Cancel();
     }
@@ -192,14 +195,18 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         public override void Reject(TaskSchedulerAdmissionResult result) => _completion.TrySetException(new AdmissionRejectedException(result));
         public override void Cancel() => _completion.TrySetCanceled();
 
-        public override void Dispatch()
+        public override void Dispatch(bool onWorker)
         {
             if (_owner.Controller.CapacityMode == TaskSchedulerCapacityMode.Pending)
                 _context.Operation.OnStarted(ReleaseOnce);
-            if (_executionContext != null)
+            // Legacy-only inline drains retain the pump caller's context. A shared worker
+            // must restore each queued producer instead of borrowing the TrySubmit owner's context.
+            if (!onWorker)
+                _ = ExecuteAsync();
+            else if (_executionContext != null)
                 ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ExecuteAsync(); }, this);
             else
-                // Suppressed captures only dispatch on a context-free drain worker.
+                // A suppressed producer starts from the context-free worker.
                 _ = ExecuteAsync();
         }
 

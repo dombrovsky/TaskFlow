@@ -95,7 +95,7 @@ else
     ReportRejected(attempt.Admission); // Completion is null.
 ```
 
-Dispatch requests share one guarded drain per coordinator. Busy keys and saturated execution limits do not schedule independent workers for new arrivals. The existing ready-key list still determines round-robin order; each dispatched operation restores its own producer context, including context-flow suppression. See [dispatch guarantees and limitations](admission.md#dispatch-and-producer-context).
+Dispatch requests share one guarded drain per coordinator. Busy keys and saturated execution limits do not schedule independent workers for new arrivals. The existing ready-key list still determines round-robin order; each dispatched operation restores its own producer context, including context-flow suppression. Legacy-only suppressed submissions retain inline terminal scheduling; mixed pipelines hand off at TrySubmit. See [dispatch guarantees and limitations](admission.md#dispatch-and-producer-context).
 
 `TrySubmit` validates the entire native pipeline before creating work. Other enqueue middleware, including the timeout in the earlier example, is unsupported at every position. Execution/completion middleware and annotations remain supported. Keep `Submit(Reject)` when enqueue middleware must run, or `Submit(Wait)` for backpressure; neither requires a synchronous admission decision. See [bounded admission compatibility](admission.md#supported-trysubmit-pipelines).
 

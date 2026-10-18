@@ -53,7 +53,9 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
 
     private int _scheduledDrains;
     private bool _closed;
-    // Owned from the idle-to-queued transition until the drain publishes idle under _sync.
+    // _sync protects ready/waiter queues, accounting, and the single queued OR active owner.
+    // A handoff never clears ownership. Only observing no runnable work under _sync retires it;
+    // a racing arrival joins that owner or claims the next. Dispatch callbacks run outside _sync.
     private bool _pumping;
 
     public KeyedCoordinator(IEqualityComparer<TKey> comparer, TaskSchedulerMiddlewareLifetime lifetime)
@@ -380,7 +382,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                     DrainIdle?.Invoke();
                 return;
             }
-            dispatch.Dispatch();
+            dispatch.Dispatch(onWorker);
         }
     }
     private void Close()
@@ -422,13 +424,13 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
         public CoordinatedPolicy[] Policies { get; } = policies;
         public bool[] Reserved { get; } = new bool[policies.Length];
         public AdmissionRequest? Request { get; } = request;
-        public bool RequiresWorker { get; } = request?.Synchronous == true || ExecutionContext.IsFlowSuppressed();
+        public bool RequiresWorker { get; } = request?.Synchronous == true;
         public bool Accepted { get; set; }
         public bool Dispatched { get; set; }
         public bool Settled { get; set; }
         public LinkedListNode<Submission>? Waiter { get; set; }
         public LinkedListNode<Submission>? Queued { get; set; }
-        public abstract void Dispatch();
+        public abstract void Dispatch(bool onWorker);
         public abstract void Reject(TaskSchedulerAdmissionResult result);
         public abstract void Cancel();
         public abstract void Cleanup();
@@ -448,13 +450,19 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 Request?.Cancel();
             _completion.TrySetCanceled();
         }
-        public override void Dispatch()
+        public override void Dispatch(bool onWorker)
         {
             if (_executionContext != null)
                 ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ExecuteAsync(); }, this);
-            else
-                // Suppressed captures only dispatch on a context-free drain worker.
+            else if (onWorker || ExecutionContext.IsFlowSuppressed())
                 _ = ExecuteAsync();
+            else
+            {
+                // Preserve legacy inline dispatch: suppression prevents the terminal from
+                // capturing the current pump caller, without introducing a worker handoff.
+                using var suppression = ExecutionContext.SuppressFlow();
+                _ = ExecuteAsync();
+            }
         }
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Operation failures are returned to the submitting caller.")]
         private async Task ExecuteAsync()
