@@ -13,7 +13,7 @@
     const a = document.createElement('a');
     a.textContent = label;
     a.href = url;
-    parent.append(a, ' ');
+    parent.append(' ', a, ' ');
   };
   const num = value => value == null ? 'unsupported / missing' : value.toLocaleString(undefined, {maximumFractionDigits: 2});
   try {
@@ -91,6 +91,7 @@
         svg('text', {x, y: 285, 'text-anchor': 'middle', 'font-size': 10}, p.measured_sha.slice(0, 8));
         previous = {x, y};
       });
+      if (!get('chart').querySelector('circle')) svg('text', {x: 100, y: 150, 'font-size': 16}, 'No supported measurement for this metric.');
       get('provenance').textContent = JSON.stringify(selected.map(x => x.record.provenance), null, 2);
       status.textContent = `${selected.length} measured runs in this compatible series. ${baseline ? 'TaskFlow 1.0.0 baseline is available.' : 'TaskFlow 1.0.0 baseline has not been published.'}`;
     }
