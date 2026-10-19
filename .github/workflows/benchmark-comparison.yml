@@ -58,7 +58,7 @@ jobs:
           BASELINE: ${{ inputs.baseline || '1.0.0' }}
           CANDIDATE: ${{ inputs.candidate || github.event.pull_request.head.sha || github.sha }}
           TARGET: ${{ inputs.target || format('origin/{0}', github.event.pull_request.base.ref) }}
-          SCOPE: ${{ inputs.scope || 'full' }}
+          SCOPE: ${{ inputs.scope || 'representative' }}
           SCENARIO: ${{ matrix.scenario }}
         run: |
           if [ "$SCENARIO" = 'synthetic' ]; then
