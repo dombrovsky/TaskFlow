@@ -207,7 +207,6 @@ public abstract class TaskFlowBase : ITaskFlow
     /// </remarks>
     protected virtual ValueTask DisposeAsyncCore()
     {
-        MiddlewareLifetime.CheckReentrantDisposal();
         TaskCompletionSource<bool> completion;
         Task initializationTask;
         Task completionTask;

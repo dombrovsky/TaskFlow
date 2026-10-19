@@ -96,7 +96,20 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         Annotations.Argument.NotNull(taskFunc);
         if (Coordinator?.RequiresKey == true)
             throw new InvalidOperationException("A keyed pipeline requires a keyed Enqueue or Submit overload.");
+        // A built-in terminal already rejects closed entry and drains every accepted delegate.
+        // An annotation-only snapshot has no middleware or admission outcome to track.
+        if (_registrations.Length == 0 && request == null && Coordinator == null && _terminal is TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow)
+            return EnqueueTerminal(taskFunc, state, cancellationToken);
         return SubmitOperation(new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken), request);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Pipeline submission reports terminal failures through its returned task.")]
+    private Task<TResult> EnqueueTerminal<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
+        object? state, CancellationToken cancellationToken)
+    {
+        try
+        { return _terminal.Enqueue(taskFunc, state, cancellationToken); }
+        catch (Exception exception) { return EnqueueFailure<TResult>(exception); }
     }
 
     internal Task<TResult> SubmitKeyed<TKey, TResult>(TKey key, Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
@@ -117,10 +130,26 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
     private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation)
     {
-        using var context = Lifetime?.EnterContext();
         try
         {
-            var result = await EnqueueWithCompletion(operation).ConfigureAwait(false);
+            TResult result;
+            try
+            {
+                if (Lifetime != null)
+                {
+                    Lifetime.Enter();
+                    operation.Lifetime = Lifetime;
+                }
+                // The root activity already covers this invocation, including completion middleware.
+                result = await InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                if ((Lifetime != null && operation.Lifetime == null) || !operation.TryClaimCompletion())
+                    throw;
+                var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
+                result = outcome.GetResultOrThrow();
+            }
             operation.AdmissionRequest?.RecordCallerOutcome(null);
             return result;
         }
@@ -132,32 +161,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         finally { operation.ReleaseActivity(); }
     }
 
-    private async ValueTask<TResult> EnqueueWithCompletion<TResult>(PipelineOperation<TResult> operation)
-    {
-        try
-        {
-            if (Lifetime != null)
-            {
-                Lifetime.Enter();
-                operation.LifetimeExit = Lifetime.Exit;
-            }
-            return await InvokeEnqueue(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            // Entry rejection must not invoke middleware whose resources may already be cleaned up.
-            if (Lifetime != null && operation.LifetimeExit == null)
-                throw;
-            if (!operation.TryClaimCompletion())
-            {
-                throw;
-            }
-
-            var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
-            return outcome.GetResultOrThrow();
-        }
-    }
-
     private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         operation.AddActivity();
@@ -165,6 +168,9 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         { return await InvokeEnqueueCore(operation, index, cancellationToken).ConfigureAwait(false); }
         finally { operation.ReleaseActivity(); }
     }
+
+    private static async Task<TResult> EnqueueFailure<TResult>(Exception exception)
+        => await Task.FromException<TResult>(exception).ConfigureAwait(false);
 
     private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
@@ -215,25 +221,29 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The pipeline converts every operation failure into a completion outcome.")]
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
-        // Reestablish ownership even when the submitting caller suppressed ExecutionContext flow.
-        using var executionContext = Coordinator != null ? Lifetime?.EnterContext() : null;
-        TaskSchedulerOperationOutcome<TResult> outcome;
+        // The envelope owns the root execution activity, including completion middleware.
+        operation.AddActivity();
         try
         {
-            var result = await InvokeExecution(operation, 0, cancellationToken).ConfigureAwait(true);
-            outcome = TaskSchedulerOperationOutcome<TResult>.FromResult(result);
-        }
-        catch (Exception exception)
-        {
-            outcome = TaskSchedulerOperationOutcome<TResult>.FromException(exception);
-        }
+            TaskSchedulerOperationOutcome<TResult> outcome;
+            try
+            {
+                var result = await InvokeExecutionCore(operation, 0, cancellationToken).ConfigureAwait(true);
+                outcome = TaskSchedulerOperationOutcome<TResult>.FromResult(result);
+            }
+            catch (Exception exception)
+            {
+                outcome = TaskSchedulerOperationOutcome<TResult>.FromException(exception);
+            }
 
-        if (operation.TryClaimCompletion())
-        {
-            outcome = await InvokeCompletion(operation, 0, outcome, cancellationToken).ConfigureAwait(true);
-        }
+            if (operation.TryClaimCompletion())
+            {
+                outcome = await InvokeCompletion(operation, 0, outcome, cancellationToken).ConfigureAwait(true);
+            }
 
-        return outcome.GetResultOrThrow();
+            return outcome.GetResultOrThrow();
+        }
+        finally { operation.ReleaseActivity(); }
     }
 
     private async ValueTask<TResult> InvokeExecution<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)

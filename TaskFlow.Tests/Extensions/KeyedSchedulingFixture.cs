@@ -398,16 +398,6 @@ internal sealed class KeyedSchedulingFixture
     }
 
     [Test]
-    public async Task DisposalFromKeyedDelegate_IsRejectedWithoutDeadlock()
-    {
-        await using var flow = new TaskFlow();
-        var scheduler = flow.WithKeyedScheduling<string>();
-        Task Dispose(string _, CancellationToken token) => flow.DisposeAsync().AsTask();
-        await Assert.ThatAsync(async () => await scheduler.Enqueue("A", Dispose), Throws.TypeOf<InvalidOperationException>());
-        Assert.That(await scheduler.Enqueue("A", () => 1), Is.EqualTo(1));
-    }
-
-    [Test]
     public async Task NativeFactoryRegistration_StillParticipatesInAtomicAdmission()
     {
         await using var flow = new TaskFlow();
@@ -506,7 +496,7 @@ internal sealed class KeyedSchedulingFixture
     }
 
     [Test]
-    public async Task SuppressedContext_DoesNotInheritPredecessor_AndStillGuardsSelfDisposal()
+    public async Task SuppressedContext_DoesNotInheritPredecessorAcrossAwait()
     {
         await using var flow = new TaskFlow();
         var scheduler = flow.WithKeyedScheduling<string>();
@@ -520,7 +510,8 @@ internal sealed class KeyedSchedulingFixture
             async Task<string?> Probe(string key, CancellationToken token)
             {
                 var value = ambient.Value;
-                await Assert.ThatAsync(async () => await flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
+                await Task.Yield();
+                Assert.That(ambient.Value, Is.EqualTo(value));
                 return value;
             }
             Task<string?> second;

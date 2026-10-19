@@ -16,7 +16,7 @@ internal abstract class PipelineOperation
     private List<Action>? _onStarted;
     private List<Action>? _onQuiesced;
 
-    public Action? LifetimeExit { get; set; }
+    public TaskSchedulerMiddlewareLifetime? Lifetime { get; set; }
 
     public AdmissionRequest? AdmissionRequest { get; set; }
     public bool Coordinated { get; set; }
@@ -53,7 +53,7 @@ internal abstract class PipelineOperation
             }
         }
         if (quiesced)
-            LifetimeExit?.Invoke();
+            Lifetime?.Exit();
     }
 
     public void OnQuiesced(Action callback)

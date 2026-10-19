@@ -7,8 +7,6 @@ using System.Diagnostics.CodeAnalysis;
 /// <remarks>Flows own their implicit lifetime. Explicit lifetimes are disposed by their caller, before the terminal scheduler.</remarks>
 public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 {
-    private static readonly AsyncLocal<Frame?> Current = new AsyncLocal<Frame?>();
-
     private readonly object _sync;
     private readonly CancellationTokenSource _stopping = new CancellationTokenSource();
     private readonly List<ITaskSchedulerMiddleware?> _owned = new List<ITaskSchedulerMiddleware?>();
@@ -29,22 +27,6 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 
     /// <summary>Gets a token canceled when shutdown closes entry, before work is drained.</summary>
     public CancellationToken StoppingToken { get; }
-
-    internal void CheckReentrantDisposal()
-    {
-        for (var frame = Current.Value; frame != null; frame = frame.Parent)
-        {
-            if (frame.Lifetime == this)
-                throw new InvalidOperationException("A middleware lifetime cannot be disposed from its own submission, factory, or cleanup.");
-        }
-    }
-
-    internal IDisposable EnterContext()
-    {
-        var previous = Current.Value;
-        Current.Value = new Frame(this, previous);
-        return Internal.Disposable.Create(() => Current.Value = previous);
-    }
 
     private void ThrowIfClosed()
     {
@@ -93,7 +75,6 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 
         try
         {
-            using var context = EnterContext();
             var middleware = factory.Create(this) ?? throw new InvalidOperationException("The middleware factory returned null.");
             lock (_sync)
             {
@@ -127,7 +108,6 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "All owned cleanups must be attempted and their failures aggregated.")]
     internal async Task CleanupAsync()
     {
-        using var context = EnterContext();
         var errors = new List<Exception>();
         for (var index = _owned.Count - 1; index >= 0; index--)
         {
@@ -149,7 +129,6 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     /// <summary>Closes entry, signals stopping, drains work, and attempts cleanup once in reverse registration order.</summary>
     public ValueTask DisposeAsync()
     {
-        CheckReentrantDisposal();
         TaskCompletionSource<bool> completion;
         lock (_sync)
         {
@@ -178,12 +157,5 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
             completion.TrySetResult(true);
         else
             completion.TrySetException(new AggregateException(errors));
-    }
-
-    private sealed class Frame
-    {
-        public Frame(TaskSchedulerMiddlewareLifetime lifetime, Frame? parent) { Lifetime = lifetime; Parent = parent; }
-        public TaskSchedulerMiddlewareLifetime Lifetime { get; }
-        public Frame? Parent { get; }
     }
 }

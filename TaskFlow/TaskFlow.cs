@@ -180,7 +180,6 @@ public sealed partial class TaskFlow : TaskFlowBase
             // suppressed
         }
 
-        using var context = MiddlewareLifetime.EnterContext();
         using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
         return await taskFunc(state, linkedToken.Token).ConfigureAwait(false);
     }
