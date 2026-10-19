@@ -59,8 +59,6 @@ An operation failure is exposed through its returned task. Built-in flows wait f
 
 After disposal begins, new submissions throw `ObjectDisposedException`. Retain operation tasks if callers need their individual shutdown or failure outcomes; disposal intentionally does not surface every operation exception.
 
-Dispose the flow from its external owner, outside enqueue delegates and middleware invocations. Disposal from work running on that flow is unsupported and may deadlock because shutdown waits for that work to finish. No runtime self-disposal check is guaranteed.
-
 ## Synchronization context
 
 Thread-backed flows install a synchronization context that marshals captured continuations back to their execution thread. The standard `TaskFlow` schedules each operation through its configured `TaskScheduler`; code inside a delegate follows normal `await` and synchronization-context rules.

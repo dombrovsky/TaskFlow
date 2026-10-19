@@ -10,6 +10,7 @@ internal sealed class MiddlewareLifetimeFixture
     private static readonly int[] SharedCleanupOrder = [1, 1];
     private static readonly int[] ReverseCleanupOrder = [3, 2, 1];
     private static readonly int[] SingleCleanup = [1];
+    private static readonly int[] NestedCleanupOrder = [2, 1];
     private static TaskCompletionSource<bool> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     [Test]
@@ -70,6 +71,24 @@ internal sealed class MiddlewareLifetimeFixture
         Assert.That(await operation, Is.EqualTo(17));
         await shutdown;
         Assert.That(middleware.Cleaned, Is.True);
+    }
+
+    [Test]
+    public async Task NestedFactories_ShareOwnershipAndCleanUpInReverseRegistrationOrder()
+    {
+        var flow = new TaskFlow();
+        var cleanups = new List<int>();
+        _ = flow.UseMiddleware(new Factory(lifetime =>
+        {
+            _ = flow.UseMiddleware(new Factory(nested =>
+            {
+                Assert.That(nested, Is.SameAs(lifetime));
+                return new OwnedMiddleware(2, cleanups);
+            }));
+            return new OwnedMiddleware(1, cleanups);
+        }));
+        await flow.DisposeAsync();
+        Assert.That(cleanups, Is.EqualTo(NestedCleanupOrder));
     }
 
     [Test]

@@ -88,10 +88,6 @@ public abstract class TaskFlowBase : ITaskFlow
     /// their failures while completing disposal. Callers should still await or otherwise deliberately observe
     /// every task returned by <c>Enqueue</c> to receive operation failures.
     /// </para>
-    /// <para>
-    /// Dispose the flow from its external owner. Calling disposal from an enqueue delegate or middleware
-    /// invocation running on this flow is unsupported and may deadlock; no reentrancy exception is guaranteed.
-    /// </para>
     /// </remarks>
     /// <returns>A <see cref="ValueTask"/> representing the asynchronous disposal operation.</returns>
     public async ValueTask DisposeAsync()
@@ -109,7 +105,6 @@ public abstract class TaskFlowBase : ITaskFlow
     /// the maximum wait time for task completion during disposal. The default timeout is
     /// <see cref="Timeout.InfiniteTimeSpan"/>. If a finite timeout expires, this method returns while
     /// asynchronous cleanup continues; use <see cref="Dispose(TimeSpan)"/> when the completion result is required.
-    /// Dispose the flow from its external owner; disposal from its enqueue delegates or middleware invocations is unsupported.
     /// </remarks>
     [SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "GC.SuppressFinalize called in Dispose(TimeSpan)")]
     [SuppressMessage("Design", "CA1063:Implement IDisposable Correctly", Justification = "DisposeUnmanagedResources method")]
@@ -135,7 +130,6 @@ public abstract class TaskFlowBase : ITaskFlow
     /// <para>
     /// Once disposal begins, new operations are rejected. Cancellation is cooperative, and operation failures
     /// remain observable through the tasks returned by <c>Enqueue</c> rather than through disposal.
-    /// Dispose the flow from its external owner; disposal from its enqueue delegates or middleware invocations is unsupported.
     /// </para>
     /// </remarks>
     [SuppressMessage("Usage", "CA1816:Dispose methods should call SuppressFinalize", Justification = "It is also Dispose")]
@@ -213,7 +207,6 @@ public abstract class TaskFlowBase : ITaskFlow
     /// </remarks>
     protected virtual ValueTask DisposeAsyncCore()
     {
-        MiddlewareLifetime.CheckReentrantDisposal();
         TaskCompletionSource<bool> completion;
         Task initializationTask;
         Task completionTask;
