@@ -125,7 +125,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
     private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation)
     {
-        using var context = Lifetime?.EnterContext();
         try
         {
             TResult result;
@@ -246,9 +245,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The pipeline converts every operation failure into a completion outcome.")]
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
-        // Opaque terminals and suppressed ExecutionContext flow may drop the submitting scope.
-        // EnterContext is a no-op when this owner is already current.
-        using var executionContext = Lifetime?.EnterContext();
         // The envelope owns the root execution activity, including completion middleware.
         operation.AddActivity();
         try

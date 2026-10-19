@@ -1,3 +1,8 @@
+> Current contract: [External-owner disposal](middleware-external-owner-disposal.md).
+> On 2026-10-19, operation self-disposal was explicitly designated unsupported.
+> Per-operation ambient tracking has been removed; recommendations and measurements
+> below describe the earlier investigation and its then-current contract.
+
 # Further lifetime overhead investigation
 
 Baseline: draft PR #54 at `c50eed3000916b83342e285421df203f5895bd84`,

@@ -54,6 +54,12 @@ The timeout is cooperative. A delegate that ignores the token can continue runni
 
 Prefer asynchronous disposal for component-owned background work and make long-running delegates observe cancellation promptly.
 
+## Disposal belongs to the external owner
+
+Do not call `Dispose()`, `Dispose(TimeSpan)`, or `DisposeAsync()` from an enqueue delegate or middleware invocation running on that flow. The same rule applies to disposing an explicit middleware lifetime from its operations. This usage is unsupported; shutdown waits for the operation, so waiting for shutdown there can deadlock. No `InvalidOperationException` is guaranteed.
+
+Initiate shutdown from the component or application that owns the flow, outside its queued work. Runtime reentrancy checks remain limited to registration factories and resource-cleanup callbacks; normal submissions and execution do not set ambient lifetime state.
+
 ## Disposal owns lifetime, not operation outcomes
 
 Disposal waits for lane completion and suppresses operation failures internally. This makes deliberate fire-and-forget possible: a component can discard selected operation tasks and still use flow disposal to request cancellation and wait for accepted work.

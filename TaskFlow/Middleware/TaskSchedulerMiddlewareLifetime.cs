@@ -7,10 +7,9 @@ using System.Diagnostics.CodeAnalysis;
 /// <remarks>Flows own their implicit lifetime. Explicit lifetimes are disposed by their caller, before the terminal scheduler.</remarks>
 public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 {
-    private static readonly AsyncLocal<Frame?> Current = new AsyncLocal<Frame?>();
+    private static readonly AsyncLocal<Frame?> CurrentCallback = new AsyncLocal<Frame?>();
 
     private readonly object _sync;
-    private readonly Frame _rootFrame;
     private readonly CancellationTokenSource _stopping = new CancellationTokenSource();
     private readonly List<ITaskSchedulerMiddleware?> _owned = new List<ITaskSchedulerMiddleware?>();
     private readonly TaskCompletionSource<bool> _drained = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -25,7 +24,6 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     internal TaskSchedulerMiddlewareLifetime(object sync)
     {
         _sync = sync;
-        _rootFrame = new Frame(this, null);
         StoppingToken = _stopping.Token;
     }
 
@@ -34,21 +32,21 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 
     internal void CheckReentrantDisposal()
     {
-        for (var frame = Current.Value; frame != null; frame = frame.Parent)
+        for (var frame = CurrentCallback.Value; frame != null; frame = frame.Parent)
         {
             if (frame.Lifetime == this)
-                throw new InvalidOperationException("A middleware lifetime cannot be disposed from its own submission, factory, or cleanup.");
+                throw new InvalidOperationException("A middleware lifetime cannot be disposed from its own factory or cleanup.");
         }
     }
 
-    internal ContextScope EnterContext()
+    internal ContextScope EnterOwnerCallback()
     {
-        var previous = Current.Value;
+        var previous = CurrentCallback.Value;
         if (previous?.Lifetime == this)
             return default;
-        // Root frames are immutable and identify the owner, not an individual operation.
-        // Preserve a distinct parent chain when another owner is already ambient.
-        Current.Value = previous == null ? _rootFrame : new Frame(this, previous);
+        // Ambient tracking is confined to registration and cleanup callbacks.
+        // Operations use explicit ownership; disposal from their delegates is unsupported.
+        CurrentCallback.Value = new Frame(this, previous);
         return new ContextScope(previous);
     }
 
@@ -62,7 +60,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
         public void Dispose()
         {
             if (_entered)
-                Current.Value = _previous;
+                CurrentCallback.Value = _previous;
         }
     }
 
@@ -113,7 +111,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
 
         try
         {
-            using var context = EnterContext();
+            using var context = EnterOwnerCallback();
             var middleware = factory.Create(this) ?? throw new InvalidOperationException("The middleware factory returned null.");
             lock (_sync)
             {
@@ -147,7 +145,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "All owned cleanups must be attempted and their failures aggregated.")]
     internal async Task CleanupAsync()
     {
-        using var context = EnterContext();
+        using var context = EnterOwnerCallback();
         var errors = new List<Exception>();
         for (var index = _owned.Count - 1; index >= 0; index--)
         {
@@ -167,6 +165,7 @@ public sealed class TaskSchedulerMiddlewareLifetime : IAsyncDisposable
     }
 
     /// <summary>Closes entry, signals stopping, drains work, and attempts cleanup once in reverse registration order.</summary>
+    /// <remarks>Dispose this lifetime from its external owner. Disposal from an operation delegate or middleware invocation is unsupported and may deadlock.</remarks>
     public ValueTask DisposeAsync()
     {
         CheckReentrantDisposal();

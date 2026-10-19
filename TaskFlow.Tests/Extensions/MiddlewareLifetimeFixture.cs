@@ -115,19 +115,6 @@ internal sealed class MiddlewareLifetimeFixture
     }
 
     [Test]
-    public async Task ReentrantDisposal_IsRejectedWithoutStoppingOwner()
-    {
-        await using var flow = new TaskFlow();
-        var scheduler = flow.WithOperationName("reentrant");
-        await scheduler.Enqueue(async (CancellationToken _) =>
-        {
-            await Assert.ThatAsync(async () => await flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
-            await Task.CompletedTask;
-        });
-        Assert.That(await scheduler.Enqueue(() => 42), Is.EqualTo(42));
-    }
-
-    [Test]
     public async Task PendingCapacity_IsHeldDuringExecutionMiddlewareDelay()
     {
         await using var flow = new TaskFlow();

@@ -105,7 +105,6 @@ public abstract class ThreadTaskFlow : TaskFlowBase
 
         async Task<object?> TaskFunc(object? stateObject, CancellationToken token)
         {
-            using var context = MiddlewareLifetime.EnterContext();
             var result = await taskFunc(stateObject, token).ConfigureAwait(false);
             return result;
         }

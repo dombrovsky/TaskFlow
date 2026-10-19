@@ -48,9 +48,9 @@ internal static class Program
         {
             var lifetime = new TaskSchedulerMiddlewareLifetime();
             await using var lifetimeCleanup = lifetime.ConfigureAwait(false);
-            Measure("scope/root", () => { using var scope = lifetime.EnterContext(); });
-            using (lifetime.EnterContext())
-                Measure("scope/nested", () => { using var scope = lifetime.EnterContext(); });
+            Measure("owner-callback/root", () => { using var scope = lifetime.EnterOwnerCallback(); });
+            using (lifetime.EnterOwnerCallback())
+                Measure("owner-callback/nested", () => { using var scope = lifetime.EnterOwnerCallback(); });
             Measure("Task/default-context-construction", ConstructTask);
             var local = new AsyncLocal<object?>();
             var first = new object();

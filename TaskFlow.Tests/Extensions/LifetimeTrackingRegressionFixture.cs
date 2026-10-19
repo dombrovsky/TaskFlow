@@ -11,15 +11,15 @@ internal sealed class LifetimeTrackingRegressionFixture
     private static TaskCompletionSource<bool> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     [Test]
-    public async Task NestedOwnersAndSameOwnerScopes_RestoreAcrossAwait()
+    public async Task NestedOwnerCallbacks_RestoreAcrossAwait()
     {
         await using var first = new TaskSchedulerMiddlewareLifetime();
         await using var second = new TaskSchedulerMiddlewareLifetime();
-        using (first.EnterContext())
+        using (first.EnterOwnerCallback())
         {
-            using (first.EnterContext())
-            using (second.EnterContext())
-            using (first.EnterContext())
+            using (first.EnterOwnerCallback())
+            using (second.EnterOwnerCallback())
+            using (first.EnterOwnerCallback())
             {
                 await Task.Yield();
                 Assert.That(first.CheckReentrantDisposal, Throws.TypeOf<InvalidOperationException>());
@@ -36,43 +36,64 @@ internal sealed class LifetimeTrackingRegressionFixture
     [TestCase(false, true)]
     [TestCase(true, false)]
     [TestCase(true, true)]
-    public async Task BareAndAnnotatedFlows_RejectDisposalAfterRealSuspension_WithSuppressedSubmission(bool dedicated, bool annotated)
+    public async Task BareAndAnnotatedFlows_ExternalDisposalDrainsSuppressedSubmission(bool dedicated, bool annotated)
     {
         await using TaskFlowBase flow = dedicated ? new DedicatedThreadTaskFlow() : new TaskFlow();
-        ITaskScheduler scheduler = annotated ? flow.WithOperationName("guard") : flow;
+        ITaskScheduler scheduler = annotated ? flow.WithOperationName("external-owner") : flow;
+        var ambient = new AsyncLocal<string?> { Value = "caller" };
         var entered = Gate();
         var release = Gate();
         Task<int> pending;
         using (ExecutionContext.SuppressFlow())
             pending = scheduler.Enqueue<int>(async (_, _) =>
             {
+                Assert.That(ambient.Value, Is.Null);
                 entered.SetResult(true);
                 await release.Task;
                 await Task.Yield();
-                Assert.That(() => flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
+                Assert.That(ambient.Value, Is.Null);
                 return 42;
             }, null, default);
-        await entered.Task;
-        release.SetResult(true);
-        Assert.That(await pending, Is.EqualTo(42));
-        Assert.That(await scheduler.Enqueue(() => 43), Is.EqualTo(43));
+        try
+        {
+            await entered.Task;
+            var shutdown = flow.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            release.SetResult(true);
+            Assert.That(await pending, Is.EqualTo(42));
+            await shutdown;
+            Assert.That(ambient.Value, Is.EqualTo("caller"));
+        }
+        finally { release.TrySetResult(true); }
     }
 
     [Test]
-    public async Task ExplicitLifetime_ReestablishesOwnershipAtOpaqueTerminalAfterSuppressedFlow()
+    public async Task ExplicitLifetime_ExternalDisposalDrainsOpaqueTerminalAfterSuppressedFlow()
     {
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
         var scheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default)
             .UseMiddleware(new Factory(_ => new Forwarding()), lifetime);
+        var entered = Gate();
+        var release = Gate();
         Task<int> pending;
         using (ExecutionContext.SuppressFlow())
             pending = scheduler.Enqueue<int>(async (_, _) =>
             {
                 await Task.Yield();
-                Assert.That(() => lifetime.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
+                entered.SetResult(true);
+                await release.Task;
                 return 42;
             }, null, default);
-        Assert.That(await pending, Is.EqualTo(42));
+        try
+        {
+            await entered.Task;
+            var shutdown = lifetime.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            release.SetResult(true);
+            Assert.That(await pending, Is.EqualTo(42));
+            await shutdown;
+        }
+        finally { release.TrySetResult(true); }
     }
 
     [Test]
@@ -106,50 +127,82 @@ internal sealed class LifetimeTrackingRegressionFixture
     {
         await using var flow = new CustomFlow();
         var scheduler = flow.WithOperationName("custom");
-        Assert.That(await scheduler.Enqueue<int>(async (_, _) =>
+        var entered = Gate();
+        var release = Gate();
+        var pending = scheduler.Enqueue<int>(async (_, _) =>
         {
             await Task.Yield();
-            Assert.That(flow.MiddlewareLifetime.CheckReentrantDisposal, Throws.TypeOf<InvalidOperationException>());
+            entered.SetResult(true);
+            await release.Task;
             return 42;
-        }, null, default), Is.EqualTo(42));
+        }, null, default);
+        try
+        {
+            await entered.Task;
+            var shutdown = flow.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            release.SetResult(true);
+            Assert.That(await pending, Is.EqualTo(42));
+            await shutdown;
+        }
+        finally { release.TrySetResult(true); }
     }
 
     [Test]
-    public async Task NestedFlows_PreserveBothOwnersAfterAwait()
+    public async Task NestedFlows_ExternalDisposalDrainsBothOwnersAfterAwait()
     {
         await using var outer = new TaskFlow();
         await using var inner = new TaskFlow();
-        await outer.Enqueue(async (CancellationToken _) =>
+        var entered = Gate();
+        var release = Gate();
+        var pending = outer.Enqueue(async (CancellationToken _) =>
         {
             await Task.Yield();
             await inner.Enqueue(async (CancellationToken _) =>
             {
                 await Task.Yield();
-                Assert.That(() => outer.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
-                Assert.That(() => inner.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
+                entered.SetResult(true);
+                await release.Task;
             }, CancellationToken.None);
-            Assert.That(() => outer.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
         });
-        Assert.That(await inner.Enqueue(() => 42), Is.EqualTo(42));
+        try
+        {
+            await entered.Task;
+            var outerShutdown = outer.DisposeAsync().AsTask();
+            var innerShutdown = inner.DisposeAsync().AsTask();
+            Assert.That(outerShutdown.IsCompleted, Is.False);
+            Assert.That(innerShutdown.IsCompleted, Is.False);
+            release.SetResult(true);
+            await pending;
+            await Task.WhenAll(outerShutdown, innerShutdown);
+        }
+        finally { release.TrySetResult(true); }
     }
 
-    [Test]
-    public async Task InheritedChildContext_RetainsDisposalGuardAfterParentSettles()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task InheritedChildContext_CanDisposeExternallyAfterParentSettles(bool middleware)
     {
         await using var flow = new TaskFlow();
+        ITaskScheduler scheduler = middleware ? flow.UseMiddleware(new Forwarding()) : flow;
         var release = Gate();
+        var ambient = new AsyncLocal<string?> { Value = "caller" };
         Task? child = null;
-        await flow.Enqueue((CancellationToken _) =>
+        try
         {
-            child = Task.Run(async () =>
+            await scheduler.Enqueue((CancellationToken _) =>
             {
-                await release.Task;
-                Assert.That(() => flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
-            }, CancellationToken.None);
-        });
-        release.SetResult(true);
+                child = Task.Run(async () =>
+                {
+                    await release.Task;
+                    Assert.That(ambient.Value, Is.EqualTo("caller"));
+                    await flow.DisposeAsync();
+                }, CancellationToken.None);
+            });
+        }
+        finally { release.TrySetResult(true); }
         await child!;
-        Assert.That(await flow.Enqueue(() => 42), Is.EqualTo(42));
+        await Assert.ThatAsync(async () => await scheduler.Enqueue(() => 42), Throws.TypeOf<ObjectDisposedException>());
     }
 
     [Test]
@@ -172,7 +225,7 @@ internal sealed class LifetimeTrackingRegressionFixture
     }
 
     [Test]
-    public async Task ConcurrentSubmissions_KeepTheirExecutionContextsAndOwnerGuards()
+    public async Task ConcurrentSubmissions_KeepTheirExecutionContextsAcrossAwait()
     {
         await using var flow = new TaskFlow();
         var scheduler = flow.UseMiddleware(new Forwarding()).UseMiddleware(new Forwarding());
@@ -184,7 +237,6 @@ internal sealed class LifetimeTrackingRegressionFixture
             {
                 await Task.Yield();
                 Assert.That(ambient.Value, Is.EqualTo(index));
-                Assert.That(() => flow.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
                 return index;
             }, null, default);
         })).ToArray();
