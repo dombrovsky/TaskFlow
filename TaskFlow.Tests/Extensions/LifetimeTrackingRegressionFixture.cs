@@ -172,6 +172,7 @@ internal sealed class LifetimeTrackingRegressionFixture
         }, null, default);
         try
         {
+            await middleware.Started.Task;
             await entered.Task;
             if (childFirst)
             {
@@ -235,11 +236,13 @@ internal sealed class LifetimeTrackingRegressionFixture
     private sealed class IndependentEnqueue(bool concurrentNext) : ITaskSchedulerEnqueueMiddleware, IDisposable
     {
         public TaskCompletionSource<bool> Complete { get; } = Gate();
+        public TaskCompletionSource<bool> Started { get; } = Gate();
         public Task? Underlying { get; private set; }
         public bool Cleaned { get; private set; }
         public Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
         {
             Underlying = concurrentNext ? Task.Run(() => next(context)) : next(context);
+            Started.SetResult(true);
             return Finish<T>();
         }
         private async Task<T> Finish<T>() { await Complete.Task; return default!; }
