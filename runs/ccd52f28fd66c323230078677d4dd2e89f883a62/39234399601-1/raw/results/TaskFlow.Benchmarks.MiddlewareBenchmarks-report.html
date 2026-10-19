@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>TaskFlow.Benchmarks.MiddlewareBenchmarks-20261019-100201</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.5 LTS (Noble Numbat)
+AMD EPYC 9V45 4.17GHz, 1 CPU, 4 logical and 2 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+  Job-YZJABG : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+</code></pre>
+<pre><code>IterationCount=8  LaunchCount=1  WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method      </th><th>Layers</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Op/s </th><th>Gen0</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>PipelineCompletion</td><td>0</td><td>753.2 ns</td><td>52.60 ns</td><td>27.51 ns</td><td>1,327,751.7</td><td>0.0439</td><td>736 B</td>
+</tr><tr><td>PipelineCompletion</td><td>1</td><td>1,859.5 ns</td><td>40.26 ns</td><td>17.88 ns</td><td>537,777.7</td><td>0.1659</td><td>2784 B</td>
+</tr><tr><td>PipelineCompletion</td><td>2</td><td>2,071.9 ns</td><td>72.53 ns</td><td>32.20 ns</td><td>482,637.5</td><td>0.1984</td><td>3416 B</td>
+</tr><tr><td>PipelineCompletion</td><td>4</td><td>2,642.5 ns</td><td>118.21 ns</td><td>61.83 ns</td><td>378,427.1</td><td>0.2785</td><td>4680 B</td>
+</tr><tr><td>PipelineCompletion</td><td>8</td><td>3,795.2 ns</td><td>189.82 ns</td><td>99.28 ns</td><td>263,491.9</td><td>0.4272</td><td>7208 B</td>
+</tr></tbody></table>
+</body>
+</html>
