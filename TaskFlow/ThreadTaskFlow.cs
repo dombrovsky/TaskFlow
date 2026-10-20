@@ -212,6 +212,8 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     private abstract class ExecutionItem
     {
         public abstract void Execute(CancellationToken cancellationToken);
+
+        public abstract void Cancel(CancellationToken token);
     }
 
     // Complete the caller-facing typed task before Execute returns and the queue can shut down.
@@ -308,6 +310,15 @@ public abstract class ThreadTaskFlow : TaskFlowBase
                     blockingCollection.CompleteAdding();
                 }
             }
+        }
+
+        /// <summary>
+        /// Cancels the execution of this item.
+        /// </summary>
+        /// <param name="token">The cancellation token that caused the cancellation.</param>
+        public override void Cancel(CancellationToken token)
+        {
+            _taskCompletionSource.TrySetCanceled(token);
         }
     }
 
