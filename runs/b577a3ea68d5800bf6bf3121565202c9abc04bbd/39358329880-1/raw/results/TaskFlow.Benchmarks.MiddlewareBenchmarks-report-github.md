@@ -1,0 +1,18 @@
+```
+
+BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.5 LTS (Noble Numbat)
+AMD EPYC 9V74 2.86GHz, 1 CPU, 4 logical and 2 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+  Job-YZJABG : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+
+IterationCount=8  LaunchCount=1  WarmupCount=3  
+
+```
+| Method             | Layers | Mean       | Error    | StdDev   | Op/s        | Gen0   | Allocated |
+|------------------- |------- |-----------:|---------:|---------:|------------:|-------:|----------:|
+| **PipelineCompletion** | **0**      |   **994.9 ns** | **38.75 ns** | **20.27 ns** | **1,005,118.8** | **0.0305** |     **512 B** |
+| **PipelineCompletion** | **1**      | **2,413.3 ns** | **50.51 ns** | **22.43 ns** |   **414,374.1** | **0.1068** |    **1791 B** |
+| **PipelineCompletion** | **2**      | **2,937.8 ns** | **44.31 ns** | **23.17 ns** |   **340,395.1** | **0.1373** |    **2424 B** |
+| **PipelineCompletion** | **4**      | **3,937.3 ns** | **34.50 ns** | **15.32 ns** |   **253,978.9** | **0.2136** |    **3688 B** |
+| **PipelineCompletion** | **8**      | **6,165.2 ns** | **48.24 ns** | **25.23 ns** |   **162,201.2** | **0.3662** |    **6216 B** |
