@@ -308,8 +308,14 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             return await middleware.InvokeAsync(context, outcome, async (nextContext, nextOutcome) =>
             {
                 ValidateOperationContext(operation, nextContext);
-                nextCalled = true;
-                return await InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken, producerToken).ConfigureAwait(true);
+                // A middleware may return its own outcome while this continuation is still running.
+                operation.AddActivity();
+                try
+                {
+                    nextCalled = true;
+                    return await InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken, producerToken).ConfigureAwait(true);
+                }
+                finally { operation.ReleaseActivity(); }
             }).ConfigureAwait(true);
         }
         catch (Exception exception)
