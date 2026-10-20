@@ -90,7 +90,7 @@ internal sealed class CompletionContinuationLifetimeFixture
     }
 
     [Test]
-    public async Task SubmissionFailure_IndependentCompletionStillDrains()
+    public async Task ReturnedSubmissionFailure_IndependentCompletionStillDrains()
     {
         var events = new ConcurrentQueue<string>();
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();

@@ -119,11 +119,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             operation.OnQuiesced(request.OnQuiesced);
             return EnqueueCore(operation);
         }
-        return EnqueueOperation(operation);
-    }
-
-    private Task<TResult> EnqueueOperation<TResult>(PipelineOperation<TResult> operation)
-    {
+        // Plain enqueue invokes forwarding before handing ownership to the task observer.
         try
         {
             if (Lifetime != null)

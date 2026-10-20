@@ -66,9 +66,18 @@ completion middleware; they are never promoted into synchronous exceptions.
 
 Admission middleware can short-circuit or defer forwarding according to its own
 state. It does not inspect terminal disposal to manufacture an early rejection.
-If it returns a task and forwards later, a later terminal rejection faults that
-task. Explicit Submit continues to report admission and scheduling outcomes
-through its decision/completion tasks.
+Transparent wrappers preserve exceptions from synchronous forwarding. Middleware
+that owns asynchronous admission or scheduling, including timeout and queuing,
+may report forwarding failures through its returned task even if it invokes the
+continuation immediately. Such task failures still enter completion middleware.
+Explicit Submit continues to report admission and scheduling outcomes through
+its decision/completion tasks.
+
+Cancellation scope and cancel-previous wrappers separate forwarding from task
+observation so synchronous rejection disposes their linked tokens immediately,
+while accepted operations retain those resources until their tasks settle.
+Timeout retains its competing-task semantics and does not require a synchronous
+startup path in the general-purpose task-racing helper.
 
 ## Annotation-only forwarding
 

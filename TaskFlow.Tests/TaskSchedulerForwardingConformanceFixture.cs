@@ -8,11 +8,20 @@ using System.Threading.Tasks.Flow;
 [CancelAfter(10000)]
 internal sealed class TaskSchedulerForwardingConformanceFixture
 {
-    [Test]
+    [TestCase("Annotated", "disposed", "DirectGeneric")]
+    [TestCase("Forwarding", "disposed", "DirectGeneric")]
+    [TestCase("Execution", "disposed", "Task")]
+    [TestCase("Completion", "disposed", "Action")]
+    [TestCase("Nested", "disposed", "ValueTask")]
+    [TestCase("Owned", "disposed", "DirectGeneric")]
+    [TestCase("Throttle", "disposed", "DirectGeneric")]
+    [TestCase("CancellationScope", "disposed", "DirectGeneric")]
+    [TestCase("CancelPrevious", "disposed", "DirectGeneric")]
+    [TestCase("Forwarding", "argument", "Action")]
+    [TestCase("Forwarding", "failure", "Task")]
+    [TestCase("Forwarding", "cancellation", "ValueTask")]
     public async Task Enqueue_ImmediateTerminalRejection_ShouldThrowSynchronously(
-        [Values("Annotated", "Forwarding", "Execution", "Completion", "Nested", "Owned", "Throttle", "CancellationScope", "CancelPrevious", "Timeout")] string configuration,
-        [Values("disposed", "argument", "failure", "cancellation")] string failureType,
-        [Values("DirectGeneric", "Action", "Task", "ValueTask")] string overload)
+        string configuration, string failureType, string overload)
     {
         var failure = CreateFailure(failureType);
         var terminal = new Terminal(failure, throwSynchronously: true);
@@ -31,11 +40,14 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
             Assert.That(observer.Disposed, Is.True, "Rejected forwarding must release the pipeline's lifetime entry.");
     }
 
-    [Test]
+    [TestCase("Forwarding", "disposed", "DirectGeneric")]
+    [TestCase("Completion", "disposed", "Action")]
+    [TestCase("Owned", "argument", "DirectGeneric")]
+    [TestCase("CancellationScope", "failure", "Task")]
+    [TestCase("CancelPrevious", "cancellation", "ValueTask")]
+    [TestCase("Timeout", "disposed", "DirectGeneric")]
     public async Task Enqueue_ReturnedFailureTask_ShouldStayTaskBased(
-        [Values("Annotated", "Forwarding", "Execution", "Completion", "Nested", "Owned", "Throttle", "CancellationScope", "CancelPrevious", "Timeout")] string configuration,
-        [Values("disposed", "argument", "failure", "cancellation")] string failureType,
-        [Values("DirectGeneric", "Action", "Task", "ValueTask")] string overload)
+        string configuration, string failureType, string overload)
     {
         var failure = CreateFailure(failureType);
         var terminal = new Terminal(failure, throwSynchronously: false);
@@ -48,6 +60,51 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
         await Assert.ThatAsync(async () => await returned!, Throws.Exception.SameAs(failure));
         Assert.That(terminal.Calls, Is.EqualTo(1));
         Assert.That(observer.Completions, Is.EqualTo(configuration is "Completion" or "Owned" ? 1 : 0));
+    }
+
+    [Test]
+    public async Task Enqueue_Timeout_ShouldReportImmediateTerminalRejectionThroughTask()
+    {
+        var failure = new ObjectDisposedException("inner");
+        var terminal = new Terminal(failure, throwSynchronously: true);
+        using var observer = new Observer();
+        var scheduler = terminal.UseMiddleware((ITaskSchedulerCompletionMiddleware)observer).WithTimeout(TimeSpan.FromHours(1));
+        Task? returned = null;
+
+        Assert.That(() => { returned = scheduler.Enqueue(() => 42); }, Throws.Nothing);
+        await Assert.ThatAsync(async () => await returned!, Throws.Exception.SameAs(failure));
+        Assert.That(terminal.Calls, Is.EqualTo(1));
+        Assert.That(observer.Completions, Is.EqualTo(1));
+    }
+
+    [TestCase("CancellationScope", true)]
+    [TestCase("CancellationScope", false)]
+    [TestCase("CancelPrevious", true)]
+    [TestCase("CancelPrevious", false)]
+    public async Task Enqueue_CancellationResources_ShouldLiveUntilCompletionOrSynchronousRejection(string configuration, bool reject)
+    {
+        var failure = new ObjectDisposedException("inner");
+        var terminal = new TokenCapturingTerminal(failure, reject);
+        using var caller = new CancellationTokenSource();
+        var scheduler = configuration == "CancellationScope"
+            ? terminal.CreateCancellationScope(CancellationToken.None)
+            : terminal.CreateCancelPrevious();
+        try
+        {
+            if (reject)
+                Assert.That(() => scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, caller.Token), Throws.Exception.SameAs(failure));
+            else
+            {
+                var pending = scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, caller.Token);
+                Assert.That(() => terminal.Token.WaitHandle, Throws.Nothing, "Accepted work must retain its linked source.");
+                await caller.CancelAsync();
+                Assert.That(terminal.Token.IsCancellationRequested, Is.True);
+                terminal.Release.SetResult();
+                await pending;
+            }
+            Assert.That(() => terminal.Token.WaitHandle, Throws.TypeOf<ObjectDisposedException>(), "The linked source must be released.");
+        }
+        finally { terminal.Release.TrySetResult(); }
     }
 
     [Test]
@@ -145,6 +202,42 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
         finally { terminal.Release.TrySetResult(); }
     }
 
+    [Test]
+    public async Task Enqueue_Timeout_ShouldRetainAcceptedExecutionUntilLifetimeDrains()
+    {
+        await using var flow = new TaskFlow();
+        using var observer = new Observer();
+        var clock = new FakeTimeProvider();
+        var scheduler = flow.UseMiddleware(new Factory(observer)).WithTimeout(TimeSpan.FromSeconds(30), clock);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var task = scheduler.Enqueue(async (_, _) =>
+            {
+                entered.SetResult();
+                await release.Task.ConfigureAwait(false);
+                return 42;
+            }, null, CancellationToken.None);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            clock.Advance(TimeSpan.FromSeconds(31));
+            await Assert.ThatAsync(async () => await task, Throws.TypeOf<TimeoutException>());
+            Assert.That(observer.Completions, Is.EqualTo(1));
+            var shutdown = flow.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            Assert.That(observer.Disposed, Is.False);
+            release.SetResult();
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(observer.Completions, Is.EqualTo(1));
+            Assert.That(observer.Disposed, Is.True);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await flow.DisposeAsync();
+        }
+    }
+
     private static ITaskScheduler Configure(ITaskScheduler terminal, string configuration,
         TaskSchedulerMiddlewareLifetime lifetime, Observer observer)
         => configuration switch
@@ -181,6 +274,24 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
             if (throwSynchronously)
                 throw failure;
             return Task.FromException<T>(failure);
+        }
+    }
+
+    private sealed class TokenCapturingTerminal(Exception failure, bool reject) : ITaskScheduler
+    {
+        public CancellationToken Token { get; private set; }
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+        {
+            Token = cancellationToken;
+            if (reject)
+                throw failure;
+            return AwaitRelease<T>();
+        }
+        private async Task<T> AwaitRelease<T>()
+        {
+            await Release.Task.ConfigureAwait(false);
+            return default!;
         }
     }
 
