@@ -43,6 +43,10 @@ public interface ITaskScheduler
     /// exceptions thrown by the function.
     /// </para>
     /// <para>
+    /// A forwarding scheduler preserves synchronous rejection from calls to its underlying scheduler. If admission defers forwarding,
+    /// later scheduling failures are reported through the returned task. A returned faulted task is not synchronous rejection.
+    /// </para>
+    /// <para>
     /// Implementations should ensure that:
     /// </para>
     /// <list type="bullet">

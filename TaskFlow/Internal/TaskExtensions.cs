@@ -50,40 +50,71 @@ internal static class TaskExtensions
         }
     }
 
-    public static async Task<TResult> WhenAnyCancelRest<TResult>(this IEnumerable<Func<CancellationToken, Task<TResult>>> taskFactories, CancellationToken cancellationToken)
+    public static Task<TResult> WhenAnyCancelRest<TResult>(this IEnumerable<Func<CancellationToken, Task<TResult>>> taskFactories, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskFactories);
+        var (tasks, cts, linkedCancellationTokenSource) = StartTasks(taskFactories, cancellationToken);
+        return AwaitFirst(tasks, cts, linkedCancellationTokenSource);
+    }
 
-        using var cts = new CancellationTokenSource();
-        using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
-
+    private static (Task<TResult>[] Tasks, CancellationTokenSource Cancellation, CancellationTokenSource LinkedCancellation) StartTasks<TResult>(
+        IEnumerable<Func<CancellationToken, Task<TResult>>> taskFactories, CancellationToken cancellationToken)
+    {
+        var cts = new CancellationTokenSource();
+        CancellationTokenSource? linkedCancellationTokenSource = null;
+        var tasks = new List<Task<TResult>>();
         try
         {
-            var tasks = taskFactories.Select(func => func(linkedCancellationTokenSource.Token)).ToArray();
-            var firstFinishedTask = await Task.WhenAny(tasks).ConfigureAwait(false);
-
-            foreach (var task in tasks.Where(task => task != firstFinishedTask))
+            linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
+            foreach (var factory in taskFactories)
+                tasks.Add(factory(linkedCancellationTokenSource.Token));
+            return (tasks.ToArray(), cts, linkedCancellationTokenSource);
+        }
+        catch
+        {
+            foreach (var task in tasks)
+                ObserveFailure(task);
+            try
+            { cts.Cancel(throwOnFirstException: false); }
+            finally
             {
-                HandleException(task);
+                linkedCancellationTokenSource?.Dispose();
+                cts.Dispose();
             }
-
-            return await firstFinishedTask.ConfigureAwait(false);
+            throw;
         }
-        finally
+    }
+
+    private static async Task<TResult> AwaitFirst<TResult>(Task<TResult>[] tasks, CancellationTokenSource cts, CancellationTokenSource linkedCancellationTokenSource)
+    {
+        using (cts)
+        using (linkedCancellationTokenSource)
         {
+            try
+            {
+                var firstFinishedTask = await Task.WhenAny(tasks).ConfigureAwait(false);
+                foreach (var task in tasks.Where(task => task != firstFinishedTask))
+                {
+                    ObserveFailure(task);
+                }
+                return await firstFinishedTask.ConfigureAwait(false);
+            }
+            finally
+            {
 #if NET8_0_OR_GREATER
-            await cts.CancelAsync().ConfigureAwait(false);
+                await cts.CancelAsync().ConfigureAwait(false);
 #else
-            cts.Cancel();
+                cts.Cancel();
 #endif
+            }
         }
+    }
 
-        static void HandleException(Task<TResult> task)
-        {
-            task.ContinueWith(t => t.Exception!,
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
+    private static void ObserveFailure<TResult>(Task<TResult> task)
+    {
+        _ = task.ContinueWith(t => t.Exception!,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 }

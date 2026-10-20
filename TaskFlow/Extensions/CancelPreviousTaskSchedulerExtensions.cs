@@ -196,15 +196,35 @@ public static class CancelPreviousTaskSchedulerExtensions
             _cancelAllTokensAllocator = new CancelAllTokensAllocator();
         }
 
-        public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
+        public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
             _cancelAllTokensAllocator.Cancel();
+            var (pending, linkedToken, allocation) = Forward(context, continuation);
+            return AwaitOperation(pending, linkedToken, allocation);
+        }
 
-            using (_cancelAllTokensAllocator.AllocateCancellationToken(out var allocatedToken))
+        private (Task<TResult> Pending, CancellationTokenSource LinkedToken, IDisposable Allocation) Forward<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
+        {
+            var allocation = _cancelAllTokensAllocator.AllocateCancellationToken(out var allocatedToken);
+            CancellationTokenSource? linkedToken = null;
+            try
             {
-                using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, allocatedToken);
-                return await continuation(context.WithCancellationToken(linkedToken.Token)).ConfigureAwait(false);
+                linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, allocatedToken);
+                return (continuation(context.WithCancellationToken(linkedToken.Token)), linkedToken, allocation);
             }
+            catch
+            {
+                linkedToken?.Dispose();
+                allocation.Dispose();
+                throw;
+            }
+        }
+
+        private static async Task<TResult> AwaitOperation<TResult>(Task<TResult> pending, CancellationTokenSource linkedToken, IDisposable allocation)
+        {
+            using (allocation)
+            using (linkedToken)
+                return await pending.ConfigureAwait(false);
         }
     }
 }

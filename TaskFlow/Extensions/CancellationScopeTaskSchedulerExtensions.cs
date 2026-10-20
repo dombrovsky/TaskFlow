@@ -150,10 +150,28 @@ public static class CancellationScopeTaskSchedulerExtensions
             _scopedCancellationToken = scopedCancellationToken;
         }
 
-        public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
+        public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
-            using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _scopedCancellationToken);
-            return await continuation(context.WithCancellationToken(linkedToken.Token)).ConfigureAwait(false);
+            var (pending, linkedToken) = Forward(context, continuation);
+            return AwaitOperation(pending, linkedToken);
+        }
+
+        private (Task<TResult> Pending, CancellationTokenSource LinkedToken) Forward<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
+        {
+            var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _scopedCancellationToken);
+            try
+            { return (continuation(context.WithCancellationToken(linkedToken.Token)), linkedToken); }
+            catch
+            {
+                linkedToken.Dispose();
+                throw;
+            }
+        }
+
+        private static async Task<TResult> AwaitOperation<TResult>(Task<TResult> pending, CancellationTokenSource linkedToken)
+        {
+            using (linkedToken)
+                return await pending.ConfigureAwait(false);
         }
     }
 }

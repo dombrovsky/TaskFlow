@@ -115,39 +115,51 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     {
         operation.AdmissionRequest = request;
         if (request != null)
-            operation.OnQuiesced(request.OnQuiesced);
-        else if (Lifetime != null)
         {
-            // Enqueue entry is synchronous and atomic with closing the owning lifetime.
-            // Explicit admission submissions keep their separate decision/completion contract.
-            try
+            operation.OnQuiesced(request.OnQuiesced);
+            return EnqueueCore(operation);
+        }
+        return EnqueueOperation(operation);
+    }
+
+    private Task<TResult> EnqueueOperation<TResult>(PipelineOperation<TResult> operation)
+    {
+        try
+        {
+            if (Lifetime != null)
             {
                 Lifetime.Enter();
                 operation.Lifetime = Lifetime;
             }
-            catch (ObjectDisposedException)
-            {
-                operation.ReleaseActivity();
-                throw;
-            }
+            var pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
+            Annotations.Argument.NotNull(pending);
+            return EnqueueCore(operation, pending);
         }
-        return EnqueueCore(operation);
+        catch
+        {
+            operation.ReleaseActivity();
+            throw;
+        }
     }
 
-    private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation)
+    private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation, Task<TResult>? pending = null)
     {
         try
         {
             TResult result;
             try
             {
-                if (Lifetime != null && operation.Lifetime == null)
+                if (pending == null)
                 {
-                    Lifetime.Enter();
-                    operation.Lifetime = Lifetime;
+                    if (Lifetime != null)
+                    {
+                        Lifetime.Enter();
+                        operation.Lifetime = Lifetime;
+                    }
+                    // Explicit submissions report admission and scheduling failures through their tasks.
+                    pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
                 }
-                // The root activity already covers this invocation, including completion middleware.
-                result = await InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
+                result = await pending.ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -167,12 +179,25 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         finally { operation.ReleaseActivity(); }
     }
 
-    private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         operation.AddActivity();
         try
-        { return await InvokeEnqueueCore(operation, index, cancellationToken).ConfigureAwait(false); }
-        finally { operation.ReleaseActivity(); }
+        {
+            return AwaitActivity(operation, InvokeEnqueueCore(operation, index, cancellationToken));
+        }
+        catch
+        {
+            operation.ReleaseActivity();
+            throw;
+        }
+
+        static async Task<TResult> AwaitActivity(PipelineOperation<TResult> operation, Task<TResult> pending)
+        {
+            try
+            { return await pending.ConfigureAwait(false); }
+            finally { operation.ReleaseActivity(); }
+        }
     }
 
     private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)

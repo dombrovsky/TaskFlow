@@ -231,9 +231,9 @@ public static class TimeoutTaskSchedulerExtensions
             _timeout = timeout;
         }
 
-        public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
+        public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
-            return await Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, context.CancellationToken).ConfigureAwait(false);
+            return Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, context.CancellationToken);
 
             async Task<TResult> TimeoutAsync(CancellationToken token)
             {

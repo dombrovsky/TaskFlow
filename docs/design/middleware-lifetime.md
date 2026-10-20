@@ -29,12 +29,13 @@ its explicit middleware lifetime has finished draining and cleaning up.
 ## Operation activities
 
 PipelineOperation starts with one activity. Plain Enqueue enters its lifetime
-synchronously before starting EnqueueCore, so a closed owner throws directly from
-the enqueue call. Entry and closure use the same lock: accepted work is counted
-before shutdown can drain it. After successful entry, the operation stores its
-owner directly and EnqueueCore owns the initial activity. If entry fails, the
-submission releases that activity without invoking completion middleware or
-exiting a lifetime it never entered. Explicit admission Submit retains its
+synchronously to protect its own middleware resources before forwarding. It does
+not probe the terminal scheduler's disposal state. Entry and closure use the same
+lock: accepted work is counted before shutdown can drain it. After successful entry, the operation stores its
+owner directly and EnqueueCore owns the initial activity once forwarding returns
+a task. If entry or synchronous forwarding fails first, submission releases the
+activity and propagates the exception without invoking completion middleware.
+A failed entry never exits a lifetime it did not enter. Explicit admission Submit retains its
 separate asynchronous decision/completion contract.
 
 Every invocation of an enqueue or execution continuation acquires an activity
@@ -56,9 +57,18 @@ can race to report it; the winning outcome drives completion middleware. Caller
 admission outcomes are recorded after completion middleware has processed failures
 or recovery, rather than from the raw terminal outcome.
 
-Each enqueue continuation uses async try/finally to retain its activity until its
-own returned task settles, even if middleware independently completes the
-caller-facing task earlier. This also preserves normal async exception semantics.
+Each enqueue continuation forwards synchronously before observing the returned
+task. Immediate scheduling rejection releases its activity and propagates directly
+through forwarding pipelines, preserving the original exception. Once a task is
+returned, observation retains the activity until that task settles, even when
+middleware completes the caller-facing task earlier. Returned task failures enter
+completion middleware; they are never promoted into synchronous exceptions.
+
+Admission middleware can short-circuit or defer forwarding according to its own
+state. It does not inspect terminal disposal to manufacture an early rejection.
+If it returns a task and forwards later, a later terminal rejection faults that
+task. Explicit Submit continues to report admission and scheduling outcomes
+through its decision/completion tasks.
 
 ## Annotation-only forwarding
 

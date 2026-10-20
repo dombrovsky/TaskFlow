@@ -96,7 +96,7 @@ internal sealed class CompletionContinuationLifetimeFixture
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
         var outer = new IndependentCompletion(events);
         var inner = new GatedCompletion(events);
-        var scheduler = new FailingTerminal().UseMiddleware(new Factory(outer), lifetime)
+        var scheduler = new FaultedTerminal().UseMiddleware(new Factory(outer), lifetime)
             .UseMiddleware(new Factory(inner));
         var operation = scheduler.Enqueue(() => 42);
         try
@@ -250,10 +250,10 @@ internal sealed class CompletionContinuationLifetimeFixture
         }
     }
 
-    private sealed class FailingTerminal : ITaskScheduler
+    private sealed class FaultedTerminal : ITaskScheduler
     {
         public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
-            => throw new FormatException("submission");
+            => Task.FromException<T>(new FormatException("submission"));
     }
 
     private sealed class Factory(ITaskSchedulerMiddleware middleware) : ITaskSchedulerMiddlewareFactory

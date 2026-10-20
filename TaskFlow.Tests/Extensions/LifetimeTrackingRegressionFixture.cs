@@ -223,7 +223,8 @@ internal sealed class LifetimeTrackingRegressionFixture
             {
                 await Assert.ThatAsync(async () => await task, Throws.Exception.SameAs(failure));
                 Assert.That(task.IsCanceled, Is.EqualTo(failure is OperationCanceledException));
-                Assert.That(observer.Status, Is.EqualTo(failure is OperationCanceledException ? TaskStatus.Canceled : TaskStatus.Faulted));
+                // A synchronous next rejection returns no continuation task for this observer to inspect.
+                Assert.That(observer.Status, Is.EqualTo(!faultedTask ? TaskStatus.Created : failure is OperationCanceledException ? TaskStatus.Canceled : TaskStatus.Faulted));
             }
         }
     }
