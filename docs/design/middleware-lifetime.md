@@ -28,10 +28,14 @@ its explicit middleware lifetime has finished draining and cleaning up.
 
 ## Operation activities
 
-PipelineOperation starts with one activity owned by EnqueueCore. After successful
-lifetime entry it stores the owner directly, without a bound exit delegate.
-Failure to enter must not invoke completion middleware whose resources may already
-have been cleaned up, or decrement a lifetime it never entered.
+PipelineOperation starts with one activity. Plain Enqueue enters its lifetime
+synchronously before starting EnqueueCore, so a closed owner throws directly from
+the enqueue call. Entry and closure use the same lock: accepted work is counted
+before shutdown can drain it. After successful entry, the operation stores its
+owner directly and EnqueueCore owns the initial activity. If entry fails, the
+submission releases that activity without invoking completion middleware or
+exiting a lifetime it never entered. Explicit admission Submit retains its
+separate asynchronous decision/completion contract.
 
 Every invocation of an enqueue or execution continuation acquires an activity
 before calling user code. Independently pending work retains its activity even
@@ -65,10 +69,10 @@ terminals retain pipeline activity tracking; their completion hooks may not drai
 all submitted work. Context-aware submissions still construct an operation so the
 final annotations remain available to the delegate.
 
-The successful forwarding path returns the terminal task directly. A cold catch
-preserves pipeline submission's asynchronous failure behavior when a terminal
-throws before returning a task. Its async failure helper also preserves the
-canceled-task semantics of OperationCanceledException, including uncanceled tokens.
+Forwarding returns the terminal task directly. Enqueue-time validation and
+scheduler rejection propagate synchronously, including ObjectDisposedException
+when the terminal has closed entry. Failures and cancellation from accepted
+operations remain observable through their returned tasks.
 
 ExecutionContext flow, caller cancellation and terminal scheduler selection are
 left to the existing scheduling paths. No lifetime scope needs to flow with them.

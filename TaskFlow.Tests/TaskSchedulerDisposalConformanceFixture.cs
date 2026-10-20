@@ -25,7 +25,7 @@ internal sealed class TaskSchedulerDisposalConformanceFixture
     public static IEnumerable<TestFixtureData> Scenarios()
     {
         foreach (var implementation in new[] { "TaskFlow", "DedicatedThread", "CurrentThread" })
-            foreach (var configuration in new[] { "Plain", "Pipeline", "ExtendedState", "Bounded" })
+            foreach (var configuration in new[] { "Plain", "Annotated", "Pipeline", "ExtendedState", "Bounded" })
                 yield return new TestFixtureData(implementation, configuration);
         foreach (var configuration in new[] { "Concurrent", "Keyed", "KeyedBounded" })
             yield return new TestFixtureData("TaskFlow", configuration);
@@ -60,6 +60,7 @@ internal sealed class TaskSchedulerDisposalConformanceFixture
         _scheduler = _configuration switch
         {
             "Plain" => _scheduler,
+            "Annotated" => _scheduler.WithOperationName("disposal-conformance"),
             "Pipeline" => _scheduler.UseMiddleware(_observer),
             "ExtendedState" => _scheduler.WithExtendedState(42),
             "Bounded" => _scheduler.WithBoundedAdmission(new BoundedAdmissionOptions { Capacity = 1 }).UseMiddleware(_observer),
