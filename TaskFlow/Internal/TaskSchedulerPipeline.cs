@@ -120,6 +120,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             return EnqueueCore(operation);
         }
         // Plain enqueue invokes forwarding before handing ownership to the task observer.
+        Task<TResult> pending;
         try
         {
             if (Lifetime != null)
@@ -127,15 +128,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
                 Lifetime.Enter();
                 operation.Lifetime = Lifetime;
             }
-            var pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
+            pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
             Annotations.Argument.NotNull(pending);
-            return EnqueueCore(operation, pending);
         }
         catch
         {
             operation.ReleaseActivity();
             throw;
         }
+        return EnqueueCore(operation, pending);
     }
 
     private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation, Task<TResult>? pending = null)
@@ -178,15 +179,17 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         operation.AddActivity();
+        Task<TResult> pending;
         try
         {
-            return AwaitActivity(operation, InvokeEnqueueCore(operation, index, cancellationToken));
+            pending = InvokeEnqueueCore(operation, index, cancellationToken);
         }
         catch
         {
             operation.ReleaseActivity();
             throw;
         }
+        return AwaitActivity(operation, pending);
 
         static async Task<TResult> AwaitActivity(PipelineOperation<TResult> operation, Task<TResult> pending)
         {

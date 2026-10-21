@@ -73,11 +73,12 @@ continuation immediately. Such task failures still enter completion middleware.
 Explicit Submit continues to report admission and scheduling outcomes through
 its decision/completion tasks.
 
-Cancellation scope and cancel-previous wrappers separate forwarding from task
-observation so synchronous rejection disposes their linked tokens immediately,
-while accepted operations retain those resources until their tasks settle.
-Timeout retains its competing-task semantics and does not require a synchronous
-startup path in the general-purpose task-racing helper.
+Cancellation scope and cancel-previous retain their existing async wrappers and
+linked-token ownership. An immediate forwarding failure is represented by their
+returned task, and their using scopes release resources when that task settles.
+Timeout likewise retains its competing-task semantics. The pipeline does not
+impose a new exception-timing contract on these wrappers or reinterpret the
+exceptions produced by Task.Factory.StartNew in TaskFlowSchedulerAdapter.
 
 ## Annotation-only forwarding
 

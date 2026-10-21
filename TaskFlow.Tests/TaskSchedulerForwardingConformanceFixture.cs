@@ -15,8 +15,6 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
     [TestCase("Nested", "disposed", "ValueTask")]
     [TestCase("Owned", "disposed", "DirectGeneric")]
     [TestCase("Throttle", "disposed", "DirectGeneric")]
-    [TestCase("CancellationScope", "disposed", "DirectGeneric")]
-    [TestCase("CancelPrevious", "disposed", "DirectGeneric")]
     [TestCase("Forwarding", "argument", "Action")]
     [TestCase("Forwarding", "failure", "Task")]
     [TestCase("Forwarding", "cancellation", "ValueTask")]
@@ -62,13 +60,16 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
         Assert.That(observer.Completions, Is.EqualTo(configuration is "Completion" or "Owned" ? 1 : 0));
     }
 
-    [Test]
-    public async Task Enqueue_Timeout_ShouldReportImmediateTerminalRejectionThroughTask()
+    [TestCase("Timeout")]
+    [TestCase("CancellationScope")]
+    [TestCase("CancelPrevious")]
+    public async Task Enqueue_ExistingAsyncWrapper_ShouldReportImmediateTerminalRejectionThroughTask(string configuration)
     {
         var failure = new ObjectDisposedException("inner");
         var terminal = new Terminal(failure, throwSynchronously: true);
         using var observer = new Observer();
-        var scheduler = terminal.UseMiddleware((ITaskSchedulerCompletionMiddleware)observer).WithTimeout(TimeSpan.FromHours(1));
+        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
+        var scheduler = Configure(terminal.UseMiddleware((ITaskSchedulerCompletionMiddleware)observer), configuration, lifetime, observer);
         Task? returned = null;
 
         Assert.That(() => { returned = scheduler.Enqueue(() => 42); }, Throws.Nothing);
@@ -81,7 +82,7 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
     [TestCase("CancellationScope", false)]
     [TestCase("CancelPrevious", true)]
     [TestCase("CancelPrevious", false)]
-    public async Task Enqueue_CancellationResources_ShouldLiveUntilCompletionOrSynchronousRejection(string configuration, bool reject)
+    public async Task Enqueue_CancellationResources_ShouldLiveUntilCompletionOrRejection(string configuration, bool reject)
     {
         var failure = new ObjectDisposedException("inner");
         var terminal = new TokenCapturingTerminal(failure, reject);
@@ -92,7 +93,11 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
         try
         {
             if (reject)
-                Assert.That(() => scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, caller.Token), Throws.Exception.SameAs(failure));
+            {
+                Task? pending = null;
+                Assert.That(() => { pending = scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, caller.Token); }, Throws.Nothing);
+                await Assert.ThatAsync(async () => await pending!, Throws.Exception.SameAs(failure));
+            }
             else
             {
                 var pending = scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, caller.Token);

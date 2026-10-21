@@ -1,6 +1,5 @@
 namespace System.Threading.Tasks.Flow;
 
-using System.Runtime.ExceptionServices;
 using System.Threading.Tasks.Flow.Annotations;
 
 /// <summary>
@@ -82,7 +81,7 @@ public sealed class TaskFlowSchedulerAdapter : ITaskScheduler
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued task function.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the underlying task scheduler rejects the task.</exception>
-    /// <exception cref="ObjectDisposedException">Thrown synchronously if the underlying task scheduler rejects scheduling because it has been disposed.</exception>
+    /// <exception cref="ObjectDisposedException">Thrown if the underlying task scheduler has been disposed.</exception>
     /// <remarks>
     /// <para>
     /// This method uses <c>Task.Factory.StartNew</c>
@@ -110,26 +109,11 @@ public sealed class TaskFlowSchedulerAdapter : ITaskScheduler
     /// scheduler starts the task, the task function may not be invoked.
     /// </para>
     /// </remarks>
-    public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+    public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskFunc);
 
-        try
-        {
-            var scheduled = Task.Factory.StartNew(() => taskFunc(state, cancellationToken), cancellationToken, TaskCreationOptions.None, _taskScheduler);
-            return AwaitOperation(scheduled);
-        }
-        catch (TaskSchedulerException exception) when (exception.InnerException is ObjectDisposedException disposed)
-        {
-            // Task.Factory.StartNew wraps exceptions from TaskScheduler.QueueTask.
-            ExceptionDispatchInfo.Capture(disposed).Throw();
-            throw;
-        }
-
-        static async Task<T> AwaitOperation(Task<ValueTask<T>> scheduled)
-        {
-            var operation = await scheduled.ConfigureAwait(false);
-            return await operation.ConfigureAwait(false);
-        }
+        var task = await Task.Factory.StartNew(() => taskFunc(state, cancellationToken), cancellationToken, TaskCreationOptions.None, _taskScheduler).ConfigureAwait(false);
+        return await task.ConfigureAwait(false);
     }
 }

@@ -20,8 +20,8 @@ public interface ITaskSchedulerEnqueueMiddleware : ITaskSchedulerMiddleware
     /// <para>Return a completed, failed, or canceled task without calling <paramref name="continuation"/> to satisfy or reject the request without
     /// submitting a terminal delegate. Do not call the continuation more than once.</para>
     /// <para>Failures reported through the returned task enter the completion pipeline even though terminal execution has not started.
-    /// Transparent forwarding preserves synchronous exceptions without converting them into completion outcomes. Middleware that owns
-    /// asynchronous admission or scheduling (for example, queuing or timeout) may report forwarding failures through its returned task.</para>
+    /// Exceptions thrown by this method before it returns a task propagate from enqueue without being converted into completion outcomes.
+    /// Middleware and wrappers that return their own tasks retain their exception timing and resource ownership.</para>
     /// </remarks>
     Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation);
 }

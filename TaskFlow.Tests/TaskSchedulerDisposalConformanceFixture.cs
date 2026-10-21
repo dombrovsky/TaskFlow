@@ -29,7 +29,6 @@ internal sealed class TaskSchedulerDisposalConformanceFixture
                 yield return new TestFixtureData(implementation, configuration);
         foreach (var configuration in new[] { "Concurrent", "Keyed", "KeyedBounded" })
             yield return new TestFixtureData("TaskFlow", configuration);
-        yield return new TestFixtureData("Adapter", "Plain");
         yield return new TestFixtureData("Adapter", "ExplicitLifetime");
     }
 

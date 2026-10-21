@@ -43,10 +43,6 @@ public interface ITaskScheduler
     /// exceptions thrown by the function.
     /// </para>
     /// <para>
-    /// Transparent forwarding preserves synchronous exceptions from the underlying enqueue call. Middleware that owns asynchronous
-    /// admission or scheduling, such as timeout or queuing, may report scheduling failures through its returned task.
-    /// </para>
-    /// <para>
     /// Implementations should ensure that:
     /// </para>
     /// <list type="bullet">
@@ -55,8 +51,6 @@ public interface ITaskScheduler
     ///   <item>Resources are properly managed when the scheduler is disposed</item>
     /// </list>
     /// </remarks>
-    /// <exception cref="ArgumentNullException">Thrown synchronously if <paramref name="taskFunc"/> is <c>null</c>.</exception>
-    /// <exception cref="ObjectDisposedException">Thrown synchronously if the scheduler or its owning lifetime has been disposed.
-    /// An exception from an accepted operation is instead reported through its returned task.</exception>
+    /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken);
 }
