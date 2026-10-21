@@ -28,10 +28,15 @@ its explicit middleware lifetime has finished draining and cleaning up.
 
 ## Operation activities
 
-PipelineOperation starts with one activity owned by EnqueueCore. After successful
-lifetime entry it stores the owner directly, without a bound exit delegate.
-Failure to enter must not invoke completion middleware whose resources may already
-have been cleaned up, or decrement a lifetime it never entered.
+PipelineOperation starts with one activity. Plain Enqueue enters its lifetime
+synchronously to protect its own middleware resources before forwarding. It does
+not probe the terminal scheduler's disposal state. Entry and closure use the same
+lock: accepted work is counted before shutdown can drain it. After successful entry, the operation stores its
+owner directly and EnqueueCore owns the initial activity once forwarding returns
+a task. If entry or synchronous forwarding fails first, submission releases the
+activity and propagates the exception without invoking completion middleware.
+A failed entry never exits a lifetime it did not enter. Explicit admission Submit retains its
+separate asynchronous decision/completion contract.
 
 Every invocation of an enqueue or execution continuation acquires an activity
 before calling user code. Independently pending work retains its activity even
@@ -52,9 +57,28 @@ can race to report it; the winning outcome drives completion middleware. Caller
 admission outcomes are recorded after completion middleware has processed failures
 or recovery, rather than from the raw terminal outcome.
 
-Each enqueue continuation uses async try/finally to retain its activity until its
-own returned task settles, even if middleware independently completes the
-caller-facing task earlier. This also preserves normal async exception semantics.
+Each enqueue continuation forwards synchronously before observing the returned
+task. Immediate scheduling rejection releases its activity and propagates directly
+through forwarding pipelines, preserving the original exception. Once a task is
+returned, observation retains the activity until that task settles, even when
+middleware completes the caller-facing task earlier. Returned task failures enter
+completion middleware; they are never promoted into synchronous exceptions.
+
+Admission middleware can short-circuit or defer forwarding according to its own
+state. It does not inspect terminal disposal to manufacture an early rejection.
+Transparent wrappers preserve exceptions from synchronous forwarding. Middleware
+that owns asynchronous admission or scheduling, including timeout and queuing,
+may report forwarding failures through its returned task even if it invokes the
+continuation immediately. Such task failures still enter completion middleware.
+Explicit Submit continues to report admission and scheduling outcomes through
+its decision/completion tasks.
+
+Cancellation scope and cancel-previous retain their existing async wrappers and
+linked-token ownership. An immediate forwarding failure is represented by their
+returned task, and their using scopes release resources when that task settles.
+Timeout likewise retains its competing-task semantics. The pipeline does not
+impose a new exception-timing contract on these wrappers or reinterpret the
+exceptions produced by Task.Factory.StartNew in TaskFlowSchedulerAdapter.
 
 ## Annotation-only forwarding
 
@@ -65,10 +89,10 @@ terminals retain pipeline activity tracking; their completion hooks may not drai
 all submitted work. Context-aware submissions still construct an operation so the
 final annotations remain available to the delegate.
 
-The successful forwarding path returns the terminal task directly. A cold catch
-preserves pipeline submission's asynchronous failure behavior when a terminal
-throws before returning a task. Its async failure helper also preserves the
-canceled-task semantics of OperationCanceledException, including uncanceled tokens.
+Forwarding returns the terminal task directly. Enqueue-time validation and
+scheduler rejection propagate synchronously, including ObjectDisposedException
+when the terminal has closed entry. Failures and cancellation from accepted
+operations remain observable through their returned tasks.
 
 ExecutionContext flow, caller cancellation and terminal scheduler selection are
 left to the existing scheduling paths. No lifetime scope needs to flow with them.

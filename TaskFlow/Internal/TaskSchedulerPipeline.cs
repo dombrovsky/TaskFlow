@@ -99,17 +99,8 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         // A built-in terminal already rejects closed entry and drains every accepted delegate.
         // An annotation-only snapshot has no middleware or admission outcome to track.
         if (_registrations.Length == 0 && request == null && Coordinator == null && _terminal is TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow)
-            return EnqueueTerminal(taskFunc, state, cancellationToken);
+            return _terminal.Enqueue(taskFunc, state, cancellationToken);
         return SubmitOperation(new PipelineOperation<TResult>(taskFunc, state, _registrations.Length, _annotations, cancellationToken), request);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Pipeline submission reports terminal failures through its returned task.")]
-    private Task<TResult> EnqueueTerminal<TResult>(Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
-        object? state, CancellationToken cancellationToken)
-    {
-        try
-        { return _terminal.Enqueue(taskFunc, state, cancellationToken); }
-        catch (Exception exception) { return EnqueueFailure<TResult>(exception); }
     }
 
     internal Task<TResult> SubmitKeyed<TKey, TResult>(TKey key, Func<object?, CancellationToken, ValueTask<TResult>> taskFunc,
@@ -124,24 +115,48 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     {
         operation.AdmissionRequest = request;
         if (request != null)
+        {
             operation.OnQuiesced(request.OnQuiesced);
-        return EnqueueCore(operation);
+            return EnqueueCore(operation);
+        }
+        // Plain enqueue invokes forwarding before handing ownership to the task observer.
+        Task<TResult> pending;
+        try
+        {
+            if (Lifetime != null)
+            {
+                Lifetime.Enter();
+                operation.Lifetime = Lifetime;
+            }
+            pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
+            Annotations.Argument.NotNull(pending);
+        }
+        catch
+        {
+            operation.ReleaseActivity();
+            throw;
+        }
+        return EnqueueCore(operation, pending);
     }
 
-    private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation)
+    private async Task<TResult> EnqueueCore<TResult>(PipelineOperation<TResult> operation, Task<TResult>? pending = null)
     {
         try
         {
             TResult result;
             try
             {
-                if (Lifetime != null)
+                if (pending == null)
                 {
-                    Lifetime.Enter();
-                    operation.Lifetime = Lifetime;
+                    if (Lifetime != null)
+                    {
+                        Lifetime.Enter();
+                        operation.Lifetime = Lifetime;
+                    }
+                    // Explicit submissions report admission and scheduling failures through their tasks.
+                    pending = InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken);
                 }
-                // The root activity already covers this invocation, including completion middleware.
-                result = await InvokeEnqueueCore(operation, _registrations.Length - 1, operation.CallerCancellationToken).ConfigureAwait(false);
+                result = await pending.ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -161,16 +176,28 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         finally { operation.ReleaseActivity(); }
     }
 
-    private async Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         operation.AddActivity();
+        Task<TResult> pending;
         try
-        { return await InvokeEnqueueCore(operation, index, cancellationToken).ConfigureAwait(false); }
-        finally { operation.ReleaseActivity(); }
-    }
+        {
+            pending = InvokeEnqueueCore(operation, index, cancellationToken);
+        }
+        catch
+        {
+            operation.ReleaseActivity();
+            throw;
+        }
+        return AwaitActivity(operation, pending);
 
-    private static async Task<TResult> EnqueueFailure<TResult>(Exception exception)
-        => await Task.FromException<TResult>(exception).ConfigureAwait(false);
+        static async Task<TResult> AwaitActivity(PipelineOperation<TResult> operation, Task<TResult> pending)
+        {
+            try
+            { return await pending.ConfigureAwait(false); }
+            finally { operation.ReleaseActivity(); }
+        }
+    }
 
     private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {

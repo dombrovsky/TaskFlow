@@ -86,24 +86,27 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     /// continuations within the task function will also be marshaled back to the same thread.
     /// </para>
     /// <para>
+    /// Calls made after disposal are rejected synchronously with <see cref="ObjectDisposedException"/>.
+    /// Failures from accepted operations are reported through their returned tasks.
+    /// </para>
+    /// <para>
     /// Cancellation does not remove the queued item. The delegate is invoked with a linked token that may already
     /// be canceled so queue progression remains deterministic.
     /// </para>
     /// </remarks>
-    public override async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+    public override Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskFunc);
 
-        ExecutionItem executionItem;
         lock (ThisLock)
         {
             CheckDisposed();
-            executionItem = new ExecutionItem(TaskFunc, state, _synchronizationContext, cancellationToken);
+            var executionItem = new ExecutionItem<T>(TaskFunc, state, _synchronizationContext, cancellationToken);
             _blockingCollection.Add(executionItem, CancellationToken.None);
+            return executionItem.Task;
         }
-        return await executionItem.GetTypedTask<T>().ConfigureAwait(false);
 
-        async Task<object?> TaskFunc(object? stateObject, CancellationToken token)
+        async Task<T> TaskFunc(object? stateObject, CancellationToken token)
         {
             var result = await taskFunc(stateObject, token).ConfigureAwait(false);
             return result;
@@ -206,13 +209,21 @@ public abstract class ThreadTaskFlow : TaskFlowBase
     /// This class encapsulates the task function, state, and completion source for an enqueued task.
     /// It handles the execution of the task and propagation of results and exceptions.
     /// </remarks>
-    private sealed class ExecutionItem
+    private abstract class ExecutionItem
     {
-        private readonly Func<object?, CancellationToken, Task<object?>> _taskFunc;
+        public abstract void Execute(CancellationToken cancellationToken);
+
+        public abstract void Cancel(CancellationToken token);
+    }
+
+    // Complete the caller-facing typed task before Execute returns and the queue can shut down.
+    private sealed class ExecutionItem<T> : ExecutionItem
+    {
+        private readonly Func<object?, CancellationToken, Task<T>> _taskFunc;
         private readonly object? _state;
         private readonly SynchronizationContext? _synchronizationContext;
         private readonly CancellationToken _cancellationToken;
-        private readonly TaskCompletionSource<object?> _taskCompletionSource;
+        private readonly TaskCompletionSource<T> _taskCompletionSource;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ExecutionItem"/> class.
@@ -222,7 +233,7 @@ public abstract class ThreadTaskFlow : TaskFlowBase
         /// <param name="synchronizationContext">The synchronization context to use for continuations.</param>
         /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
         public ExecutionItem(
-            Func<object?, CancellationToken, Task<object?>> taskFunc,
+            Func<object?, CancellationToken, Task<T>> taskFunc,
             object? state,
             SynchronizationContext? synchronizationContext,
             CancellationToken cancellationToken)
@@ -231,19 +242,14 @@ public abstract class ThreadTaskFlow : TaskFlowBase
             _state = state;
             _synchronizationContext = synchronizationContext;
             _cancellationToken = cancellationToken;
-            _taskCompletionSource = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _taskCompletionSource = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
         /// <summary>
         /// Gets a task that represents the completion of this execution item with the expected result type.
         /// </summary>
-        /// <typeparam name="T">The expected result type.</typeparam>
         /// <returns>A task that completes with the result of the execution item.</returns>
-        public async Task<T> GetTypedTask<T>()
-        {
-            var result = await _taskCompletionSource.Task.ConfigureAwait(false);
-            return (T)result!;
-        }
+        public Task<T> Task => _taskCompletionSource.Task;
 
         /// <summary>
         /// Executes the task function and handles the result.
@@ -251,7 +257,7 @@ public abstract class ThreadTaskFlow : TaskFlowBase
         /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Exception propagated to TaskCompletionSource")]
         [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "linkedCts disposed after awaiter is done")]
-        public void Execute(CancellationToken cancellationToken)
+        public override void Execute(CancellationToken cancellationToken)
         {
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationToken);
             var blockingCollection = new BlockingCollection<(SendOrPostCallback Callback, object? State)>();
@@ -285,7 +291,7 @@ public abstract class ThreadTaskFlow : TaskFlowBase
 
             return;
 
-            void HandleAwaiterCompletion(TaskAwaiter<object?> awaiter)
+            void HandleAwaiterCompletion(TaskAwaiter<T> awaiter)
             {
                 try
                 {
@@ -310,7 +316,7 @@ public abstract class ThreadTaskFlow : TaskFlowBase
         /// Cancels the execution of this item.
         /// </summary>
         /// <param name="token">The cancellation token that caused the cancellation.</param>
-        public void Cancel(CancellationToken token)
+        public override void Cancel(CancellationToken token)
         {
             _taskCompletionSource.TrySetCanceled(token);
         }

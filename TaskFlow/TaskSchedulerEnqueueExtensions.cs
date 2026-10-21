@@ -16,6 +16,10 @@ using System.Threading.Tasks.Flow.Internal;
 /// synchronous functions, and actions) and provide convenient overloads for common scenarios.
 /// </para>
 /// <para>
+/// Argument validation and scheduler rejection exceptions, including <see cref="ObjectDisposedException"/>,
+/// are propagated synchronously. Failures from accepted operations remain observable through their returned tasks.
+/// </para>
+/// <para>
 /// All extension methods perform argument validation and ensure proper exception propagation.
 /// Methods that don't specify a <see cref="CancellationToken"/> will use <see cref="CancellationToken.None"/>.
 /// </para>
@@ -73,7 +77,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskFunc">The function to execute that accepts a cancellation token and returns a <see cref="ValueTask{TResult}"/>.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method adapts a function that takes only a cancellation token to the scheduler's signature
@@ -84,6 +88,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> taskFunc, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
 
@@ -101,7 +106,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskFunc">The function to execute that accepts a cancellation token and returns a <see cref="Task{TResult}"/>.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the <see cref="Task{TResult}"/> returned by the function in a <see cref="ValueTask{TResult}"/>
@@ -112,6 +117,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
 
@@ -131,7 +137,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="state">The state object to pass to the function.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method adapts a strongly-typed state parameter function to the scheduler's object-based state signature
@@ -140,6 +146,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T, TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, ValueTask<T>> taskFunc, TState state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
 
@@ -158,7 +165,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="state">The state object to pass to the function.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a
@@ -167,6 +174,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task Enqueue<TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
 
@@ -187,7 +195,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="state">The state object to pass to the function.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the <see cref="Task{TResult}"/> returned by the function in a <see cref="ValueTask{TResult}"/>
@@ -196,6 +204,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T, TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, Task<T>> taskFunc, TState state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, state, cancellationToken);
 
@@ -214,7 +223,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="state">The state object to pass to the function.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the non-generic <see cref="Task"/> in a <see cref="ValueTask"/> to match the scheduler's
@@ -223,6 +232,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task Enqueue<TState>(this ITaskScheduler taskScheduler, Func<TState, CancellationToken, Task> taskFunc, TState state, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(TaskFunc, (object?)state, cancellationToken);
 
@@ -239,19 +249,20 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskFunc">The function to execute that accepts a cancellation token and returns a <see cref="Task"/>.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the non-generic <see cref="Task"/> in a <see cref="ValueTask{TResult}"/> with a
     /// <see cref="Unit"/> result to match the scheduler's signature requirement.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
-        await taskScheduler.Enqueue(TaskFunc, cancellationToken).ConfigureAwait(false);
+        return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
 
-        async ValueTask<Unit> TaskFunc(CancellationToken token)
+        async ValueTask<Unit> TaskFunc(object? state, CancellationToken token)
         {
             await taskFunc(token).ConfigureAwait(false);
             return default;
@@ -264,16 +275,14 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="taskFunc">The function to execute that accepts a cancellation token and returns a <see cref="Task"/>.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, Task> taskFunc)
     {
-        Argument.NotNull(taskScheduler);
-
-        await taskScheduler.Enqueue(taskFunc, CancellationToken.None).ConfigureAwait(false);
+        return taskScheduler.Enqueue(taskFunc, CancellationToken.None);
     }
 
     /// <summary>
@@ -283,7 +292,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="taskFunc">The function to execute that accepts a cancellation token and returns a <see cref="Task{TResult}"/>.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the
@@ -294,6 +303,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, Task<T>> taskFunc)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(token => new ValueTask<T>(taskFunc(token)), CancellationToken.None);
     }
@@ -305,7 +315,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="taskFunc">The function to execute that returns a <see cref="Task{TResult}"/>.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and ignores the
@@ -314,6 +324,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<Task<T>> taskFunc)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(_ => new ValueTask<T>(taskFunc()), CancellationToken.None);
     }
@@ -324,7 +335,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="taskFunc">The function to execute that returns a <see cref="Task"/>.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="taskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and ignores the
@@ -333,6 +344,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<Task> taskFunc)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(taskFunc);
 
         return taskScheduler.Enqueue(_ => taskFunc(), CancellationToken.None);
     }
@@ -345,7 +357,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <param name="_">Dummy parameter to disambiguate from other overloads. Should always be <c>null</c>.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="valueTaskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the non-generic <see cref="ValueTask"/> in a <see cref="ValueTask{TResult}"/> with a
@@ -353,13 +365,14 @@ public static class TaskSchedulerEnqueueExtensions
     /// to avoid method signature conflicts with other overloads.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, CancellationToken cancellationToken, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(valueTaskFunc);
 
-        await taskScheduler.Enqueue(TaskFunc, cancellationToken).ConfigureAwait(false);
+        return taskScheduler.Enqueue(TaskFunc, null, cancellationToken);
 
-        async ValueTask<Unit> TaskFunc(CancellationToken token)
+        async ValueTask<Unit> TaskFunc(object? state, CancellationToken token)
         {
             await valueTaskFunc(token).ConfigureAwait(false);
             return default;
@@ -373,7 +386,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="valueTaskFunc">The function to execute that accepts a cancellation token and returns a <see cref="ValueTask"/>.</param>
     /// <param name="_">Dummy parameter to disambiguate from other overloads. Should always be <c>null</c>.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="valueTaskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter
@@ -382,11 +395,9 @@ public static class TaskSchedulerEnqueueExtensions
     /// <see cref="Task"/> overload; use a named function or an explicit delegate cast.
     /// </remarks>
     [SuppressMessage("ApiDesign", "RS0027:Public API with optional parameter(s) should have the most parameters amongst its public overloads", Justification = "The released optional dummy parameter disambiguates Task and ValueTask lambdas and cannot be removed without a source break.")]
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask> valueTaskFunc, DummyParameter? _ = null)
     {
-        Argument.NotNull(taskScheduler);
-
-        await taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None).ConfigureAwait(false);
+        return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None, _);
     }
 
     /// <summary>
@@ -397,7 +408,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="valueTaskFunc">The function to execute that accepts a cancellation token and returns a <see cref="ValueTask{TResult}"/>.</param>
     /// <param name="_">Dummy parameter to disambiguate from other overloads. Should always be <c>null</c>.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="valueTaskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token. The dummy parameter
@@ -407,6 +418,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(valueTaskFunc);
 
         return taskScheduler.Enqueue(valueTaskFunc, CancellationToken.None);
     }
@@ -419,7 +431,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="valueTaskFunc">The function to execute that returns a <see cref="ValueTask{TResult}"/>.</param>
     /// <param name="_">Dummy parameter to disambiguate from other overloads. Should always be <c>null</c>.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="valueTaskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and ignores the
@@ -430,6 +442,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<ValueTask<T>> valueTaskFunc, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(valueTaskFunc);
 
         return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None);
     }
@@ -441,7 +454,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="valueTaskFunc">The function to execute that returns a <see cref="ValueTask"/>.</param>
     /// <param name="_">Dummy parameter to disambiguate from other overloads. Should always be <c>null</c>.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="valueTaskFunc"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and ignores the
@@ -452,6 +465,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task Enqueue(this ITaskScheduler taskScheduler, Func<ValueTask> valueTaskFunc, DummyParameter? _ = null)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(valueTaskFunc);
 
         return taskScheduler.Enqueue(_ => valueTaskFunc(), CancellationToken.None, _);
     }
@@ -463,24 +477,25 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="action">The action to execute that accepts a cancellation token.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued action.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="action"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the synchronous action in a <see cref="ValueTask"/> to match the scheduler's
     /// asynchronous interface.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(action);
 
-        await taskScheduler.Enqueue(
-                token =>
-                {
-                    action(token);
-                    return new ValueTask(Task.CompletedTask);
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
+        return taskScheduler.Enqueue(
+            (_, token) =>
+            {
+                action(token);
+                return new ValueTask<Unit>(default(Unit));
+            },
+            null,
+            cancellationToken);
     }
 
     /// <summary>
@@ -489,24 +504,15 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="action">The action to execute that accepts a cancellation token.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued action.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="action"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token and wraps the
     /// synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action<CancellationToken> action)
     {
-        Argument.NotNull(taskScheduler);
-
-        await taskScheduler.Enqueue(
-                token =>
-                {
-                    action(token);
-                    return new ValueTask(Task.CompletedTask);
-                },
-                CancellationToken.None)
-            .ConfigureAwait(false);
+        return taskScheduler.Enqueue(action, CancellationToken.None);
     }
 
     /// <summary>
@@ -515,24 +521,15 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="action">The action to execute.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued action.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="action"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token, ignores the
     /// cancellation token parameter when calling the action, and wraps the synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action action)
     {
-        Argument.NotNull(taskScheduler);
-
-        await taskScheduler.Enqueue(
-                _ =>
-                {
-                    action();
-                    return new ValueTask(Task.CompletedTask);
-                },
-                CancellationToken.None)
-            .ConfigureAwait(false);
+        return taskScheduler.Enqueue(action, CancellationToken.None);
     }
 
     /// <summary>
@@ -542,24 +539,25 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="action">The action to execute.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task"/> representing the completion of the enqueued action.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="action"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method ignores the cancellation token parameter when calling the action and wraps the
     /// synchronous action in a <see cref="ValueTask"/>.
     /// </remarks>
-    public static async Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
+    public static Task Enqueue(this ITaskScheduler taskScheduler, Action action, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(action);
 
-        await taskScheduler.Enqueue(
-                _ =>
-                {
-                    action();
-                    return new ValueTask(Task.CompletedTask);
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
+        return taskScheduler.Enqueue(
+            (_, token) =>
+            {
+                action();
+                return new ValueTask<Unit>(default(Unit));
+            },
+            null,
+            cancellationToken);
     }
 
     /// <summary>
@@ -569,7 +567,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="taskScheduler">The task scheduler to enqueue the operation on.</param>
     /// <param name="func">The synchronous function to execute.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="func"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method uses <see cref="CancellationToken.None"/> for the cancellation token, ignores the
@@ -578,6 +576,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<T> func)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(func);
 
         return taskScheduler.Enqueue(_ => new ValueTask<T>(func()), CancellationToken.None);
     }
@@ -590,7 +589,7 @@ public static class TaskSchedulerEnqueueExtensions
     /// <param name="func">The synchronous function to execute that accepts a cancellation token.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the enqueued function.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="taskScheduler"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentNullException">Thrown synchronously when <paramref name="taskScheduler"/> or <paramref name="func"/> is <c>null</c>.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the scheduler has been disposed.</exception>
     /// <remarks>
     /// This method wraps the synchronous result in a <see cref="ValueTask{TResult}"/> to match the scheduler's
@@ -599,6 +598,7 @@ public static class TaskSchedulerEnqueueExtensions
     public static Task<T> Enqueue<T>(this ITaskScheduler taskScheduler, Func<CancellationToken, T> func, CancellationToken cancellationToken)
     {
         Argument.NotNull(taskScheduler);
+        Argument.NotNull(func);
 
         return taskScheduler.Enqueue(token => new ValueTask<T>(func(token)), cancellationToken);
     }
