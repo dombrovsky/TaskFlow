@@ -31,25 +31,25 @@ internal sealed class KeyedTrySubmitFixture
             Task? pendingCompletion = null;
             if (mode == TaskSchedulerCapacityMode.Pending)
             {
-                var pending = global.TrySubmit(scheduler, "A", key => key);
+                var pending = global.TrySubmit(scheduler, "A", key => Task.FromResult(key));
                 Assert.That(pending.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
                 pendingCompletion = pending.Completion;
             }
-            Assert.That(global.TrySubmit(scheduler, "A", _ => 0).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
+            Assert.That(global.TrySubmit(scheduler, "A", _ => Task.FromResult(0)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             var waiting = global.Submit(scheduler, "A", _ => 2, TaskSchedulerAdmissionMode.Wait);
             Assert.That(waiting.Admission.IsCompleted, Is.False);
             // A's full per-key budget must not reserve the remaining global budget or execution slot.
-            var other = perKey.TrySubmit(scheduler, "B", key => key);
+            var other = perKey.TrySubmit(scheduler, "B", key => Task.FromResult(key));
             Assert.That(other.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             Assert.That(other.Completion!.IsCompleted, Is.False);
-            Assert.That(perKey.TrySubmit(scheduler, "C", _ => 0).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
+            Assert.That(perKey.TrySubmit(scheduler, "C", _ => Task.FromResult(0)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             release.SetResult(1);
             await first.WaitForTestAsync();
             if (pendingCompletion != null)
                 await pendingCompletion.WaitForTestAsync();
             Assert.That(await other.Completion.WaitForTestAsync(), Is.EqualTo("B"));
             Assert.That(await waiting.Completion.WaitForTestAsync(), Is.EqualTo(2));
-            Assert.That(await global.TrySubmit(scheduler, "C", _ => 3).Completion!.WaitForTestAsync(), Is.EqualTo(3));
+            Assert.That(await global.TrySubmit(scheduler, "C", _ => Task.FromResult(3)).Completion!.WaitForTestAsync(), Is.EqualTo(3));
         }
         finally { release.TrySetResult(0); }
         await flow.DisposeAsync().WaitForTestAsync();
@@ -98,7 +98,7 @@ internal sealed class KeyedTrySubmitFixture
             Assert.That(await Task.WhenAll(accepted.Select(r => r.submission.Completion!)).WaitForTestAsync(), Is.All.EqualTo(42));
             // A rejected key must not have retained a partial per-key reservation.
             foreach (var key in Enumerable.Range(0, 4))
-                Assert.That(await perKey.TrySubmit(scheduler, key, k => k).Completion!.WaitForTestAsync(), Is.EqualTo(key));
+                Assert.That(await perKey.TrySubmit(scheduler, key, k => Task.FromResult(k)).Completion!.WaitForTestAsync(), Is.EqualTo(key));
         }
         finally { start.TrySetResult(0); release.TrySetResult(0); }
         await flow.DisposeAsync().WaitForTestAsync();
@@ -122,7 +122,11 @@ internal sealed class KeyedTrySubmitFixture
             await started.Task.WaitForTestAsync();
             Task Record(string key, string label)
             {
-                var submitted = admission.TrySubmit(scheduler, key, _ => order.Add(label));
+                var submitted = admission.TrySubmit(scheduler, key, _ =>
+{
+    order.Add(label);
+    return Task.CompletedTask;
+});
                 Assert.That(submitted.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
                 return submitted.Completion!;
             }
@@ -156,10 +160,10 @@ internal sealed class KeyedTrySubmitFixture
             Task<int> Hold(string key, CancellationToken token) => waiterRelease.Task;
             var waiting = admission.Submit(scheduler, "B", Hold, TaskSchedulerAdmissionMode.Wait);
             Assert.That(waiting.Admission.IsCompleted, Is.False);
-            Assert.That(admission.TrySubmit(scheduler, "C", _ => 3).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
+            Assert.That(admission.TrySubmit(scheduler, "C", _ => Task.FromResult(3)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             release.SetResult(1);
             Assert.That(await waiting.Admission.WaitForTestAsync(), Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
-            Assert.That(admission.TrySubmit(scheduler, "C", _ => 3).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
+            Assert.That(admission.TrySubmit(scheduler, "C", _ => Task.FromResult(3)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             waiterRelease.SetResult(2);
             await Task.WhenAll(first, waiting.Completion).WaitForTestAsync();
         }
@@ -182,11 +186,11 @@ internal sealed class KeyedTrySubmitFixture
         {
             await started.Task.WaitForTestAsync();
             using var cancellation = new CancellationTokenSource();
-            var queued = global.TrySubmit(scheduler, "A", (Action<string>)(_ => throw new AssertionException("Canceled work executed")), cancellation.Token);
+            var queued = global.TrySubmit(scheduler, "A", (Func<string, Task>)(_ => throw new AssertionException("Canceled work executed")), cancellation.Token);
             Assert.That(queued.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             await cancellation.CancelAsync().WaitForTestAsync();
             await Assert.ThatAsync(async () => await queued.Completion!.WaitForTestAsync(), Throws.InstanceOf<OperationCanceledException>());
-            var replacement = global.TrySubmit(scheduler, "A", _ => 2);
+            var replacement = global.TrySubmit(scheduler, "A", _ => Task.FromResult(2));
             Assert.That(replacement.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             release.SetResult(1);
             await first.WaitForTestAsync();
@@ -208,10 +212,10 @@ internal sealed class KeyedTrySubmitFixture
         try
         {
             await started.Task.WaitForTestAsync();
-            var pending = admission.TrySubmit(scheduler, "B", (Action<string>)(_ => throw new AssertionException("Shutdown work executed")));
+            var pending = admission.TrySubmit(scheduler, "B", (Func<string, Task>)(_ => throw new AssertionException("Shutdown work executed")));
             Assert.That(pending.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             var shutdown = flow.DisposeAsync().AsTask();
-            var closed = admission.TrySubmit(scheduler, "C", _ => 3);
+            var closed = admission.TrySubmit(scheduler, "C", _ => Task.FromResult(3));
             Assert.That(closed.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Closed));
             Assert.That(closed.Completion, Is.Null);
             await Assert.ThatAsync(async () => await pending.Completion!.WaitForTestAsync(), Throws.InstanceOf<OperationCanceledException>());
@@ -240,8 +244,8 @@ internal sealed class KeyedTrySubmitFixture
                 await start.Task.WaitForTestAsync();
                 try
                 {
-                    var result = keyed ? admission.TrySubmit(scheduler, "A", _ => 1, cancellation.Token)
-                        : admission.TrySubmit(scheduler, () => 1, cancellation.Token);
+                    var result = keyed ? admission.TrySubmit(scheduler, "A", _ => Task.FromResult(1), cancellation.Token)
+                        : admission.TrySubmit(scheduler, () => Task.FromResult(1), cancellation.Token);
                     Assert.That(result.Admission, Is.AnyOf(TaskSchedulerAdmissionResult.Accepted, TaskSchedulerAdmissionResult.Closed));
                     if (result.Completion != null)
                     {
@@ -285,16 +289,16 @@ internal sealed class KeyedTrySubmitFixture
         Task TaskAction(Guid key, CancellationToken token) => Task.CompletedTask;
         ValueTask ValueAction(Guid key, CancellationToken token) => default;
         Assert.That(await admission.TrySubmit(scheduler, key, TaskResult).Completion!.WaitForTestAsync(), Is.EqualTo(key));
-        Assert.That(await admission.TrySubmit(scheduler, key, ValueResult, cancellation.Token).Completion!.WaitForTestAsync(), Is.EqualTo(key));
+        Assert.That(await admission.TrySubmit(scheduler, key, (Guid k, object? _, CancellationToken token) => ValueResult(k, token), null, cancellation.Token).Completion!.WaitForTestAsync(), Is.EqualTo(key));
         await admission.TrySubmit(scheduler, key, TaskAction, cancellation.Token).Completion!.WaitForTestAsync();
-        await admission.TrySubmit(scheduler, key, ValueAction).Completion!.WaitForTestAsync();
+        await admission.TrySubmit(scheduler, key, (Guid k, object? _, CancellationToken token) => ValueAction(k, token), null).Completion!.WaitForTestAsync();
         await admission.TrySubmit(scheduler, key, static (Guid _, object _, CancellationToken _) => default(ValueTask), state).Completion!.WaitForTestAsync();
-        var failed = admission.TrySubmit(scheduler, key, (Func<Guid, int>)(_ => throw new FormatException()));
+        var failed = admission.TrySubmit(scheduler, key, (Func<Guid, Task<int>>)(_ => throw new FormatException()));
         Assert.That(failed.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
         await Assert.ThatAsync(async () => await failed.Completion!.WaitForTestAsync(), Throws.TypeOf<FormatException>());
-        Assert.That(() => admission.TrySubmit(scheduler, () => 1), Throws.TypeOf<InvalidOperationException>());
-        Assert.That(() => admission.TrySubmit(scheduler, 1, _ => 1), Throws.TypeOf<InvalidOperationException>());
+        Assert.That(() => admission.TrySubmit(scheduler, () => Task.FromResult(1)), Throws.TypeOf<InvalidOperationException>());
+        Assert.That(() => admission.TrySubmit(scheduler, 1, _ => Task.FromResult(1)), Throws.TypeOf<InvalidOperationException>());
         await cancellation.CancelAsync().WaitForTestAsync();
-        Assert.That(() => admission.TrySubmit(scheduler, key, _ => 0, cancellation.Token), Throws.InstanceOf<OperationCanceledException>());
+        Assert.That(() => admission.TrySubmit(scheduler, key, _ => Task.FromResult(0), cancellation.Token), Throws.InstanceOf<OperationCanceledException>());
     }
 }

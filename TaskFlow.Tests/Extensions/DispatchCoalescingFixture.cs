@@ -7,6 +7,7 @@ using System.Threading.Tasks.Flow.Internal;
 [CancelAfter(30000)]
 internal sealed class DispatchCoalescingFixture
 {
+    private static readonly string[] MixedContextOrder = ["inline owner", "TrySubmit", "queued legacy"];
     [ThreadStatic]
     private static bool _submitting;
 
@@ -30,8 +31,8 @@ internal sealed class DispatchCoalescingFixture
         try
         {
             return kind == 1
-                ? budget.TrySubmit(scheduler, key, (_, _) => operation(), token)
-                : budget.TrySubmit(scheduler, _ => operation(), token);
+                ? budget.TrySubmit(scheduler, key, static (int _, Func<ValueTask<T>> action, CancellationToken _) => action(), operation, token)
+                : budget.TrySubmit(scheduler, static (Func<ValueTask<T>> action, CancellationToken _) => action(), operation, token);
         }
         finally { _submitting = false; }
     }
@@ -242,6 +243,47 @@ internal sealed class DispatchCoalescingFixture
         await legacy.WaitForTestAsync();
         Assert.That(await attempt.Completion!.WaitForTestAsync(), Is.Null);
         Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    public async Task LegacyInlineOwner_HandsOffWithoutLosingQueuedLegacyContextOrOrder(int kind)
+    {
+        using var backend = new InlineBackend(blockFirst: true);
+        await using var cleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
+        var flow = cleanup.Value;
+        var budget = Budget(3);
+        var scheduler = Configure(kind, flow, budget, 3);
+        var ambient = new AsyncLocal<string?>();
+        var order = new List<string?>();
+        Task<string?> Read(CancellationToken _)
+        {
+            order.Add(ambient.Value);
+            return Task.FromResult<string?>(ambient.Value);
+        }
+        var first = Task.Run(() =>
+        {
+            ambient.Value = "inline owner";
+            return kind == 1 ? scheduler.Enqueue(0, Read) : scheduler.Enqueue(Read);
+        });
+        TaskSchedulerTrySubmission<string?> immediate;
+        Task<string?> queued;
+        try
+        {
+            await backend.Entered.Task.WaitForTestAsync();
+            ambient.Value = "TrySubmit";
+            immediate = Submit(kind, budget, scheduler, 1, () => { order.Add(ambient.Value); return new ValueTask<string?>(ambient.Value); });
+            ambient.Value = "queued legacy";
+            queued = kind == 1 ? scheduler.Enqueue(2, Read) : scheduler.Enqueue(Read);
+            Assert.That(scheduler.ScheduledDrainCount, Is.Zero);
+        }
+        finally { backend.Release.Set(); }
+        Assert.That(await Task.WhenAll(first, immediate.Completion!, queued).WaitForTestAsync(),
+            Is.EqualTo(MixedContextOrder));
+        Assert.That(order, Is.EqualTo(MixedContextOrder));
+        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.InlineOnProducer, Is.Zero);
     }
 
     [TestCase(0)]

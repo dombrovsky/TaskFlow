@@ -37,6 +37,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         var submission = new Submission<T>(this, context, next, request);
         context.Operation.OnQuiesced(submission.Quiesced);
         using var cancellation = context.CancellationToken.Register(() => Cancel(submission));
+        var ownsDrain = false;
         lock (_sync)
         {
             if (submission.Settled)
@@ -51,8 +52,19 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                 Reject(submission, TaskSchedulerAdmissionResult.WaiterLimitReached);
             else
                 submission.Waiter = _waiters.AddLast(submission);
+
+            // Claim inline ownership before releasing the lock. An immediate legacy operation
+            // is guaranteed to dispatch on this stack, so it needs no context snapshot.
+            if (!_pumping && _dispatch.Count != 0)
+            {
+                _pumping = true;
+                ownsDrain = true;
+            }
+            if (!submission.Settled && (request?.Synchronous == true || !ownsDrain || _dispatch.Peek() != submission))
+                submission.CaptureContext();
         }
-        Pump(defer: request?.Synchronous == true);
+        if (ownsDrain)
+            Drain(onWorker: false, defer: request?.Synchronous == true);
         return await submission.Task.ConfigureAwait(false);
     }
 
@@ -174,12 +186,12 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
     private sealed class Submission<T> : Submission
     {
-        private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();
         private readonly BoundedAdmissionMiddleware _owner;
         private readonly TaskSchedulerEnqueueContext<T> _context;
         private readonly TaskSchedulerEnqueueDelegate<T> _next;
         private readonly TaskCompletionSource<T> _completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        private ExecutionContext? _executionContext;
         private int _released;
 
         public Submission(BoundedAdmissionMiddleware owner, TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next, AdmissionRequest? request) : base(request)
@@ -192,6 +204,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
         public Task<T> Task => _completion.Task;
         public override void Reject(TaskSchedulerAdmissionResult result) => _completion.TrySetException(new AdmissionRejectedException(result));
         public override void Cancel() => _completion.TrySetCanceled();
+        public void CaptureContext() => _executionContext = ExecutionContext.Capture();
 
         public override void Dispatch(bool onWorker)
         {

@@ -64,8 +64,8 @@ internal static class Program
         void Submit(int index)
         {
             var attempt = keyed
-                ? budget.TrySubmit(scheduler, index, static _ => new ValueTask<int>(1))
-                : budget.TrySubmit(scheduler, static () => new ValueTask<int>(1));
+                ? budget.TrySubmit(scheduler, index, static (int _, object? _, CancellationToken _) => new ValueTask<int>(1), null, default)
+                : budget.TrySubmit(scheduler, static (object? _, CancellationToken _) => new ValueTask<int>(1), null, default);
             if (attempt.Admission != TaskSchedulerAdmissionResult.Accepted)
                 throw new InvalidOperationException("Unexpected rejection");
             completions[index] = attempt.Completion!;

@@ -31,183 +31,101 @@ public static class BoundedAdmissionTaskSchedulerExtensions
     /// <remarks>
     /// The controller must occur exactly once in a native pipeline. Only built-in admission/coordinated enqueue policies,
     /// annotations, and execution/completion middleware are supported. Multiple budgets require a coordinated branch.
-    /// Dispatch is coalesced off the producer's stack, including terminal scheduler callbacks; accepted work can begin
-    /// before this method returns. Dispatch restores the producer's captured ExecutionContext, including flow suppression.
-    /// Thread-affine terminals retain their execution thread's ambient context instead of the producer's context.
-    /// C# 13+ prefers Task overloads for ordinary async lambdas; older compilers require an explicit delegate type.
-    /// Existing admission/lifetime locks may contend. Observe accepted Completion tasks.
-    /// Rejection returns Full or Closed with null Completion. A cancellation that wins before admission throws synchronously.
+    /// Dispatch runs off the producer's stack, including terminal scheduler callbacks; accepted work can begin before return.
+    /// Dispatch restores the producer's captured ExecutionContext, including flow suppression. Thread-affine terminals
+    /// retain their execution thread's ambient context. Existing admission/lifetime locks may contend.
+    /// Observe accepted Completion tasks. Full/Closed rejections have null Completion. Pre-admission cancellation throws.
     /// </remarks>
     /// <exception cref="NotSupportedException">The pipeline cannot guarantee synchronous atomic admission. Validation occurs before work is submitted.</exception>
     /// <exception cref="ArgumentException">The controller is missing or registered more than once.</exception>
     /// <exception cref="OperationCanceledException">The caller canceled before admission.</exception>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TState, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state, CancellationToken cancellationToken)
+        Func<TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         var pipeline = ValidateTrySubmit(admission, scheduler);
         cancellationToken.ThrowIfCancellationRequested();
         var request = new Internal.AdmissionRequest(admission, TaskSchedulerAdmissionMode.Reject, synchronous: true);
         var completion = pipeline.Submit((s, token) => taskFunc((TState)s!, token), state, request, cancellationToken);
-        return Internal.PipelineTaskScheduler.FinishTrySubmit(request, completion);
+        return FinishTrySubmit(request, completion);
     }
 
     /// <summary>Immediately attempts admission of a ValueTask operation with typed state. See the result-producing overload for pipeline requirements.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit<TState>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken)
+        Func<TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TState, Internal.Unit>(scheduler, async (s, token) => { await taskFunc(s, token).ConfigureAwait(true); return default; }, state, cancellationToken);
     }
 
-    /// <summary>Immediately attempts admission of a synchronous operation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Action taskFunc, CancellationToken cancellationToken)
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, Internal.Unit>(scheduler, (_, _) => { taskFunc(); return new ValueTask<Internal.Unit>(default(Internal.Unit)); }, null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission of a synchronous result-producing operation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TResult> taskFunc, CancellationToken cancellationToken)
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, TResult>(scheduler, (_, _) => new ValueTask<TResult>(taskFunc()), null, cancellationToken);
-    }
-
     /// <summary>Immediately attempts admission of a Task operation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken)
+        Func<CancellationToken, Task> taskFunc, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<object?, Internal.Unit>(scheduler, async (_, token) => { await taskFunc(token).ConfigureAwait(true); return default; }, null, cancellationToken);
     }
 
     /// <summary>Immediately attempts admission of a Task result-producing operation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken)
+        Func<CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<object?, TResult>(scheduler, (_, token) => new ValueTask<TResult>(taskFunc(token)), null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts admission of a ValueTask operation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, ValueTask> taskFunc, CancellationToken cancellationToken)
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, Internal.Unit>(scheduler, async (_, token) => { await taskFunc(token).ConfigureAwait(true); return default; }, null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission of a ValueTask result-producing operation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, ValueTask<TResult>> taskFunc, CancellationToken cancellationToken)
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, TResult>(scheduler, (_, token) => taskFunc(token), null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TState, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state)
-        => admission.TrySubmit<TState, TResult>(scheduler, taskFunc, state, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TState>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TState, CancellationToken, ValueTask> taskFunc, TState state)
-        => admission.TrySubmit<TState>(scheduler, taskFunc, state, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Action taskFunc)
-        => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<TResult> taskFunc)
-        => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, Task> taskFunc)
-        => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, Task<TResult>> taskFunc)
-        => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, ValueTask> taskFunc)
-        => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<CancellationToken, ValueTask<TResult>> taskFunc)
-        => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
-
-
     /// <summary>Immediately attempts admission of a Task operation without a delegate token parameter.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<Task> taskFunc, CancellationToken cancellationToken)
+        Func<Task> taskFunc, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<object?, Internal.Unit>(scheduler, async (_, _) => { await taskFunc().ConfigureAwait(true); return default; }, null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<Task> taskFunc)
-        => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
-
     /// <summary>Immediately attempts admission of a Task result-producing operation without a delegate token parameter.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<Task<TResult>> taskFunc, CancellationToken cancellationToken)
+        Func<Task<TResult>> taskFunc, CancellationToken cancellationToken = default)
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<object?, TResult>(scheduler, (_, _) => new ValueTask<TResult>(taskFunc()), null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<Task<TResult>> taskFunc)
-        => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission of a ValueTask operation without a delegate token parameter.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<ValueTask> taskFunc, CancellationToken cancellationToken)
+    internal static TaskSchedulerTrySubmission<TResult> FinishTrySubmit<TResult>(Internal.AdmissionRequest request, Task<TResult> completion)
     {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, Internal.Unit>(scheduler, async (_, _) => { await taskFunc().ConfigureAwait(true); return default; }, null, cancellationToken);
+        var decision = request.Decision;
+        // Capability validation guarantees a settled decision; never wait on an incomplete task.
+        if (!decision.IsCompleted)
+        {
+            ObserveUnreturned(decision);
+            ObserveUnreturned(completion);
+            throw new InvalidOperationException("The pipeline did not make a synchronous admission decision.");
+        }
+        try
+        {
+            var result = decision.GetAwaiter().GetResult();
+            if (result == TaskSchedulerAdmissionResult.Accepted)
+                return new TaskSchedulerTrySubmission<TResult>(result, completion);
+            ObserveUnreturned(completion);
+            return new TaskSchedulerTrySubmission<TResult>(result, null);
+        }
+        catch
+        {
+            ObserveUnreturned(completion);
+            throw;
+        }
     }
 
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<ValueTask> taskFunc)
-        => admission.TrySubmit(scheduler, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission of a ValueTask result-producing operation without a delegate token parameter.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<ValueTask<TResult>> taskFunc, CancellationToken cancellationToken)
+    private static void ObserveUnreturned(Task task)
     {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<object?, TResult>(scheduler, (_, _) => taskFunc(), null, cancellationToken);
+        _ = task.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler,
-        Func<ValueTask<TResult>> taskFunc)
-        => admission.TrySubmit<TResult>(scheduler, taskFunc, CancellationToken.None);
 
     internal static Internal.PipelineTaskScheduler ValidateTrySubmit(BoundedAdmissionController admission, ITaskScheduler scheduler)
     {

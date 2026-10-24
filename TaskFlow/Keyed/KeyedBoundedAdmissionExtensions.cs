@@ -267,18 +267,16 @@ public static class KeyedBoundedAdmissionExtensions
     /// <remarks>
     /// Supports the same middleware as unkeyed TrySubmit: built-in admission/coordinated enqueue policies, annotations,
     /// and execution/completion middleware. Other enqueue middleware is rejected before submission. Dispatch is asynchronous.
-    /// Accepted Completion must be observed; rejection returns Full or Closed with null Completion.
+    /// Accepted Completion must be observed; Full/Closed rejections have null Completion.
     /// The controller must occur exactly once. The key remains typed and the original state is visible to middleware.
-    /// Dispatch requests share a drain and restore each producer's captured ExecutionContext, including flow suppression.
-    /// Thread-affine terminals retain their execution thread's ambient context instead of the producer's context.
-    /// C# 13+ prefers Task overloads for ordinary async lambdas; older compilers require an explicit delegate type.
     /// Admission uses existing locks and invokes key hashing/equality synchronously; comparers must be fast and nonthrowing.
     /// </remarks>
     /// <exception cref="NotSupportedException">The pipeline cannot guarantee synchronous atomic admission.</exception>
     /// <exception cref="ArgumentException">The controller is missing or registered more than once.</exception>
     /// <exception cref="OperationCanceledException">The caller canceled before admission.</exception>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TState, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         var pipeline = BoundedAdmissionTaskSchedulerExtensions.ValidateTrySubmit(admission, scheduler);
@@ -286,163 +284,51 @@ public static class KeyedBoundedAdmissionExtensions
         cancellationToken.ThrowIfCancellationRequested();
         var request = new AdmissionRequest(admission, TaskSchedulerAdmissionMode.Reject, synchronous: true);
         var completion = pipeline.SubmitKeyed(key, (s, token) => taskFunc(key, (TState)s!, token), state, request, cancellationToken);
-        return PipelineTaskScheduler.FinishTrySubmit(request, completion);
+        return BoundedAdmissionTaskSchedulerExtensions.FinishTrySubmit(request, completion);
     }
 
     /// <summary>Immediately attempts combined admission of a keyed ValueTask operation with typed state.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit<TKey, TState>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, TState, CancellationToken, ValueTask> taskFunc, TState state, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TKey, TState, Unit>(scheduler, key, async (k, s, token) => { await taskFunc(k, s, token).ConfigureAwait(true); return default; }, state, cancellationToken);
     }
 
-    /// <summary>Immediately attempts combined admission of a keyed synchronous operation.</summary>
+    /// <summary>Immediately attempts combined admission of a keyed Task operation.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Action<TKey> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, Unit>(scheduler, key, (k, _, _) => { taskFunc(k); return new ValueTask<Unit>(default(Unit)); }, null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts combined admission of a keyed synchronous result-producing operation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TResult> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, TResult>(scheduler, key, (k, _, _) => new ValueTask<TResult>(taskFunc(k)), null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts combined keyed admission of a Task operation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, Task> taskFunc, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, CancellationToken, Task> taskFunc, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TKey, object?, Unit>(scheduler, key, async (k, _, token) => { await taskFunc(k, token).ConfigureAwait(true); return default; }, null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts combined keyed admission of a Task result-producing operation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    /// <summary>Immediately attempts combined admission of a keyed Task result-producing operation.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, CancellationToken, Task<TResult>> taskFunc, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TKey, object?, TResult>(scheduler, key, (k, _, token) => new ValueTask<TResult>(taskFunc(k, token)), null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts combined keyed admission of a ValueTask operation.</summary>
+    /// <summary>Immediately attempts combined admission of a keyed Task operation without a delegate token parameter.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, ValueTask> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, Unit>(scheduler, key, async (k, _, token) => { await taskFunc(k, token).ConfigureAwait(true); return default; }, null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts combined keyed admission of a ValueTask result-producing operation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, ValueTask<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, TResult>(scheduler, key, (k, _, token) => taskFunc(k, token), null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TState, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TState, CancellationToken, ValueTask<TResult>> taskFunc, TState state) where TKey : notnull
-        => admission.TrySubmit<TKey, TState, TResult>(scheduler, key, taskFunc, state, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TKey, TState>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TState, CancellationToken, ValueTask> taskFunc, TState state) where TKey : notnull
-        => admission.TrySubmit<TKey, TState>(scheduler, key, taskFunc, state, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Action<TKey> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, TResult> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, Task> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, Task<TResult>> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, ValueTask> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, CancellationToken, ValueTask<TResult>> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts combined keyed admission of a Task operation without a delegate token parameter.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, Task> taskFunc, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, Task> taskFunc, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TKey, object?, Unit>(scheduler, key, async (k, _, _) => { await taskFunc(k).ConfigureAwait(true); return default; }, null, cancellationToken);
     }
 
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, Task> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts combined keyed admission of a Task result-producing operation without a delegate token parameter.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
+    /// <summary>Immediately attempts combined admission of a keyed Task result-producing operation without a delegate token parameter.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple overloads with optional parameters", Justification = "These new APIs differ by delegate shape; optional cancellation avoids token/no-token duplication. Compile tests cover overload selection.")]
     public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, Task<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
+        Func<TKey, Task<TResult>> taskFunc, CancellationToken cancellationToken = default) where TKey : notnull
     {
         Argument.NotNull(taskFunc);
         return admission.TrySubmit<TKey, object?, TResult>(scheduler, key, (k, _, _) => new ValueTask<TResult>(taskFunc(k)), null, cancellationToken);
     }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, Task<TResult>> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts combined keyed admission of a ValueTask operation without a delegate token parameter.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, ValueTask> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, Unit>(scheduler, key, async (k, _, _) => { await taskFunc(k).ConfigureAwait(true); return default; }, null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission TrySubmit<TKey>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, ValueTask> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey>(scheduler, key, taskFunc, CancellationToken.None);
-
-    /// <summary>Immediately attempts combined keyed admission of a ValueTask result-producing operation without a delegate token parameter.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, ValueTask<TResult>> taskFunc, CancellationToken cancellationToken) where TKey : notnull
-    {
-        Argument.NotNull(taskFunc);
-        return admission.TrySubmit<TKey, object?, TResult>(scheduler, key, (k, _, _) => taskFunc(k), null, cancellationToken);
-    }
-
-    /// <summary>Immediately attempts admission without caller cancellation.</summary>
-    public static TaskSchedulerTrySubmission<TResult> TrySubmit<TKey, TResult>(this BoundedAdmissionController admission, ITaskScheduler scheduler, TKey key,
-        Func<TKey, ValueTask<TResult>> taskFunc) where TKey : notnull
-        => admission.TrySubmit<TKey, TResult>(scheduler, key, taskFunc, CancellationToken.None);
-
 }

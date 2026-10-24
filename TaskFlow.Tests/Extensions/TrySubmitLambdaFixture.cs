@@ -59,5 +59,12 @@ internal sealed class TrySubmitLambdaFixture
             ? budget.TrySubmit(scheduler, "A", async (string key, object value, CancellationToken ct) => { await Task.Yield(); Assert.That(value, Is.SameAs(state)); return 42; }, state, token)
             : budget.TrySubmit(scheduler, async (object value, CancellationToken ct) => { await Task.Yield(); Assert.That(value, Is.SameAs(state)); return 42; }, state, token);
         Assert.That(await typed.Completion!.WaitForTestAsync(), Is.EqualTo(42));
+
+        var actionState = new int[1];
+        TaskSchedulerTrySubmission action = keyed
+            ? budget.TrySubmit(scheduler, "A", async (string key, int[] value, CancellationToken ct) => { await Task.Yield(); value[0] = 42; }, actionState)
+            : budget.TrySubmit(scheduler, async (int[] value, CancellationToken ct) => { await Task.Yield(); value[0] = 42; }, actionState);
+        await action.Completion!.WaitForTestAsync();
+        Assert.That(actionState[0], Is.EqualTo(42));
     }
 }

@@ -11,7 +11,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     private readonly MiddlewareRegistration[] _registrations;
     private readonly AnnotationScope? _annotations;
     private readonly CoordinatedPolicy[] _policies;
-    private readonly bool _hasCompletionMiddleware;
     internal SchedulingCoordinator? Coordinator { get; }
     internal TaskFlow? TerminalFlow => _terminal as TaskFlow;
 
@@ -27,9 +26,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         _terminal = terminal;
         _registrations = registrations;
         _annotations = annotations;
-        foreach (var registration in registrations)
-            if (registration.Middleware is ITaskSchedulerCompletionMiddleware)
-                _hasCompletionMiddleware = true;
         _policies = coordinator == null ? Array.Empty<CoordinatedPolicy>() : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.OfType<CoordinatedPolicy>(
             System.Linq.Enumerable.Select(registrations, registration => registration.Middleware)));
     }
@@ -111,37 +107,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         }
         if (Coordinator == null && budgets != 1)
             throw new NotSupportedException("TrySubmit with multiple budgets requires keyed scheduling or a concurrent branch. Configure scheduling before bounded admission.");
-    }
-
-    internal static TaskSchedulerTrySubmission<TResult> FinishTrySubmit<TResult>(AdmissionRequest request, Task<TResult> completion)
-    {
-        var decision = request.Decision;
-        // Capability validation guarantees a settled decision; never wait on an incomplete task.
-        if (!decision.IsCompleted)
-        {
-            ObserveUnreturned(decision);
-            ObserveUnreturned(completion);
-            throw new InvalidOperationException("The pipeline did not make a synchronous admission decision.");
-        }
-        try
-        {
-            var result = decision.GetAwaiter().GetResult();
-            if (result == TaskSchedulerAdmissionResult.Accepted)
-                return new TaskSchedulerTrySubmission<TResult>(result, completion);
-            ObserveUnreturned(completion);
-            return new TaskSchedulerTrySubmission<TResult>(result, null);
-        }
-        catch
-        {
-            ObserveUnreturned(completion);
-            throw;
-        }
-    }
-
-    private static void ObserveUnreturned(Task task)
-    {
-        _ = task.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     public PipelineTaskScheduler Append(object middleware)
@@ -245,7 +210,9 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
                 if (!operation.TryClaimCompletion())
                     throw;
                 // Rejection/cancellation may settle inline. Keep user completion middleware off TrySubmit's stack.
-                var outcome = operation.AdmissionRequest?.Synchronous == true && _hasCompletionMiddleware
+                var deferCompletion = operation.AdmissionRequest?.Synchronous == true
+                    && Array.Exists(_registrations, static registration => registration.Middleware is ITaskSchedulerCompletionMiddleware);
+                var outcome = deferCompletion
                     ? await Task.Run(async () =>
                         await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false), CancellationToken.None).ConfigureAwait(false)
                     : await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);

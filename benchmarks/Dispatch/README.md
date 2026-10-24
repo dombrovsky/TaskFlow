@@ -2,6 +2,8 @@
 
 This lightweight harness compares PR #38's original per-submission `Task.Run(Pump)` implementation (`03273aa`) with the guarded drain in this directory's revision. It measures end-to-end submission, execution, completion, and disposal, not just admission latency. It is deliberately outside the solution and adds no package dependency or public API.
 
+The harness is optional and remains outside feature validation and the solution. Current source uses the reduced typed-state API; the historical results below used the convenience signatures in their recorded commits. Reproduce those commits for exact historical comparisons. No new performance improvement is claimed for the API revision.
+
 ## Method
 
 Measured on Linux x64, .NET SDK 10.0.402 / runtime 10.0.13, with a two-CPU container quota. Each process sets the thread-pool minimum to 32 workers and I/O threads. Each scenario gets a 1,000-operation warmup followed by five 20,000-operation samples, with full collection before each sample. Four processes ran sequentially in old/new/new/old order, giving ten samples per variant and scenario. No builds or tests ran during measurement. The shared host produces substantial scheduling noise; these samples are descriptive, not a statistical performance guarantee.

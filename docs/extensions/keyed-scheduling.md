@@ -95,6 +95,8 @@ else
     ReportRejected(attempt.Admission); // Completion is null.
 ```
 
+Keyed TrySubmit has two typed-state ValueTask cores and four Task conveniences, all with optional cancellation. Use `static (TKey key, TState state, CancellationToken token) => ...` with a state argument for ValueTask or synchronous work. Ordinary async lambdas target Task without Task/ValueTask ambiguity.
+
 Dispatch requests share one guarded drain per coordinator. Busy keys and saturated execution limits do not schedule independent workers for new arrivals. The existing ready-key list still determines round-robin order; each dispatched operation restores its own producer context, including context-flow suppression. Legacy-only suppressed submissions retain inline terminal scheduling; mixed pipelines hand off at TrySubmit. See [dispatch guarantees and limitations](admission.md#dispatch-and-producer-context).
 
 `TrySubmit` validates the entire native pipeline before creating work. Other enqueue middleware, including the timeout in the earlier example, is unsupported at every position. Execution/completion middleware and annotations remain supported. Keep `Submit(Reject)` when enqueue middleware must run, or `Submit(Wait)` for backpressure; neither requires a synchronous admission decision. See [bounded admission compatibility](admission.md#supported-trysubmit-pipelines).

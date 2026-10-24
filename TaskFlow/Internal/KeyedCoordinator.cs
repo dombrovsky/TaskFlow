@@ -118,10 +118,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 ChangeWaiters(submission, 1);
             }
         }
-        if (operation.AdmissionRequest?.Synchronous == true)
-            RequestDispatch(submission);
-        else
-            Pump();
+        Pump(defer: operation.AdmissionRequest?.Synchronous == true);
         return await submission.Task.ConfigureAwait(false);
     }
 
@@ -298,22 +295,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 blocked.Add(submission.Key);
         }
     }
-    private void RequestDispatch(Submission submission)
-    {
-        lock (_sync)
-        {
-            // A new arrival cannot unblock other keys. Probe its head rather than scanning all
-            // ready keys on every producer when execution limits are saturated.
-            if (_pumping || _closed || submission.Settled || !submission.Accepted || submission.Key.Ready == null)
-                return;
-            var head = submission.Key.Queue.First;
-            if (head == null || !CanDispatch(head.Value))
-                return;
-            _pumping = true;
-            QueueDrain();
-        }
-    }
-
     // Called under _sync after claiming ownership; the worker starts without a producer context.
     private void QueueDrain()
     {
