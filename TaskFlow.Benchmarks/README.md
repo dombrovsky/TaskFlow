@@ -2,9 +2,9 @@
 
 Standalone BenchmarkDotNet 0.15.8 executable targeting .NET 10. It is intentionally outside `TaskFlow.sln`, is not a test project, and sets `IsPackable=false` and `GeneratePackageOnBuild=false`. Normal solution tests and package publication do not run or publish it. No production sources are modified.
 
-This branch, `issue-43-benchmarks` (PR #47), combines current `main` with the release-based `benchmarks-1.0.0` branch ([PR #50](https://github.com/dombrovsky/TaskFlow/pull/50)). The latter starts at 1.0.0 commit `0800af84229d7beb3a6fa507d236d0ff533b0c92` and provides 16 common cases, including pipeline middleware. This branch adds four keyed scheduling cases and three bounded-admission cases for APIs introduced after 1.0.0, for 23 cases total. The common benchmark sources and identifiers are identical across the two branches.
+The suite contains 16 release-compatible cases from [PR #50](https://github.com/dombrovsky/TaskFlow/pull/50), plus four keyed scheduling cases and three bounded-admission cases for APIs introduced after 1.0.0, for 23 cases total. The common benchmark sources and stable identifiers are reused by the history and comparison runners.
 
-To measure the unchanged release library, check out `benchmarks-1.0.0`; to measure the current library and newer APIs, use this branch. PR benchmark CI checks out the head SHA explicitly and records that SHA in the summary, so a baseline PR run is not silently measured against GitHub's synthetic merge commit.
+The commands below measure the checked-out library and all 23 cases. To measure unchanged TaskFlow 1.0.0, use `python3 build/benchmark_run.py --release-1.0.0 --output /tmp/taskflow-1.0.0-measurement` with SDK 10.0.100 and runtime 10.0.0 installed. The runner checks out the exact release commit `0800af84229d7beb3a6fa507d236d0ff533b0c92` and overlays only the common harness; no historical feature branch is required. PR benchmark CI checks out the head SHA explicitly and records it in the summary.
 
 From the repository root, with a .NET 10 SDK and runtime installed:
 
@@ -54,13 +54,13 @@ Optional dedicated-thread and Channel/SemaphoreSlim/task-chain comparisons are d
 
 ## Comparing the shared cases
 
-Run the same command, SDK/runtime and environment on both branches, sequentially on the same idle runner:
+For manual comparisons, run the same command, SDK/runtime and environment on both source checkouts, sequentially on the same idle runner:
 
 ```sh
 dotnet run --project TaskFlow.Benchmarks -c Release --no-build -- --filter '*SequentialBenchmarks*' '*BurstBenchmarks*' '*ProducerBenchmarks*' '*EnqueueOnlyBenchmarks*' '*MiddlewareBenchmarks*'
 ```
 
-Use independent build/artifact directories for each checkout, match cases by class/method and parameters, and retain the full JSON/environment for both runs. The modern-only keyed/admission cases have no 1.0.0 baseline. Shared harness source and stable identifiers make the 16 common cases comparable; CPU/runtime and noise still need to be controlled. This branch does not implement the automated pairing workflow in #44.
+Use independent build/artifact directories for each checkout, match cases by class/method and parameters, and retain the full JSON/environment for both runs. The modern-only keyed/admission cases have no 1.0.0 baseline. Shared harness source and stable identifiers make the 16 common cases comparable; CPU/runtime and noise still need to be controlled. The automated pairing workflow described below selects these common sources explicitly and excludes keyed/admission cases from both builds.
 
 
 ## Reviewing results
@@ -75,13 +75,16 @@ Generated reports belong in workflow summaries and downloadable artifacts, rathe
 
 ## History and release comparisons
 
-The current workflow provides a readable report per run and downloadable raw data. It does not yet maintain a historical database or calculate release comparisons. Actions artifacts have finite retention, so they should not be the only copy of long-term results.
+The `Benchmark history` workflow measures the 16 common cases using SDK 10.0.100 and runtime 10.0.0. It checks out an exact source commit and overlays an explicit list of common harness files, excluding keyed/admission sources even when measuring modern TaskFlow. The 1.0.0 selection uses the release commit above and verifies its production tree. Older releases without middleware omit those five cases from both sides of comparisons.
 
-Recommended follow-up work:
+Trusted main/release runs publish immutable JSON, raw reports, provenance, and an index to the separate `benchmark-data` branch. The existing documentation deployment serves the [benchmark history view](https://dombrovsky.github.io/TaskFlow/benchmarks/). PR history jobs validate measurements without publishing. Workflow summaries and downloadable artifacts remain available; artifact retention is finite, while the data branch retains published records.
 
-1. **History on main and releases.** Run measured benchmarks after relevant merges to `main` and on releases. Store immutable JSON records keyed by commit SHA, release tag, benchmark-harness version, SDK/runtime, runner identity, and job settings. Use a dedicated `benchmark-data` branch or durable object storage, and publish a trend page through the existing documentation/Pages deployment. Keep this publication restricted to trusted main/release runs; PR smoke runs must not update baselines. The data branch can receive generated commits without adding bot commits to `main` or triggering source build/release workflows. Include a schema version and retain raw measurements alongside summaries.
-2. **Comparison with a released version.** Add a manual baseline-release input, resolve it to an exact tag/commit or NuGet version, and run the same benchmark harness against both candidate and release on the same runner with the same SDK/runtime and settings. Run the two sequentially with independent build/output directories. Report mean time, throughput and allocation changes for matching cases, together with uncertainty and environment metadata; do not fail builds on noisy shared-runner percentages. Older releases may not have middleware, keyed, or admission APIs: use a compatible common subset and mark missing cases unsupported. Running different historical harness versions and comparing their numbers is not equivalent.
+The `Benchmark comparison` workflow supports a release tag/commit baseline or the merge base with a target branch. It measures baseline then candidate on the same runner with independent checkouts and identical common sources, SDK/runtime, and settings. Select `representative` for burst and synchronous completion cases, or `full` for all compatible common cases. Reports include time, throughput, allocation deltas, uncertainty, exclusions, and environment metadata. Shared-runner differences are advisory and do not impose percentage-based failure thresholds.
 
-A one-off comparison can be collected today by running an unchanged, compatible benchmark harness against both library versions on the same idle machine and comparing the exported tables/JSON. Pin the release version explicitly and keep both sets of artifacts. A workflow that performs this pairing and publishes the delta table is a separate follow-up to this suite.
+For a local comparison, with SDK 10.0.100 and runtime 10.0.0 installed:
 
-Avoid automatically committing a fresh Markdown report to `main` after every merge. That creates source-history churn, requires write permissions on the protected branch, and can cause CI loops. A per-run job summary plus immutable results on a separate data branch and a Pages history view gives readable reports and durable history without changing source commits. The repository already has a documentation Pages deployment; integrate the history view there rather than creating a second deployment that overwrites it.
+```sh
+python3 build/benchmark_compare.py --mode release --baseline 1.0.0 --candidate HEAD --scope full --output /tmp/taskflow-comparison
+```
+
+Output directories must not already exist. Keyed/admission cases are measured through the standalone 23-case suite and the `Benchmarks` workflow; they have no 1.0.0 baseline and are excluded from the history/comparison contract. Generated reports are not committed to `main`.

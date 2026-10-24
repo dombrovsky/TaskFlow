@@ -8,7 +8,6 @@ from pathlib import Path
 
 SCHEMA = 1
 RELEASE = "0800af84229d7beb3a6fa507d236d0ff533b0c92"
-RELEASE_CHECKOUT = "7e3410545c4cdf38602f2cdd01b2e9e67d9bad51"
 SETTINGS = {"warmup": 3, "iterations": 8, "launches": 1, "processor_count": 2,
             "sdk": "10.0.100", "runtime": "10.0.0", "bdn": "0.15.8"}
 PRODUCTION = ["TaskFlow", "TaskFlow.Annotations", "Directory.Build.props", "Directory.Build.targets", "TaskFlow.snk"]
