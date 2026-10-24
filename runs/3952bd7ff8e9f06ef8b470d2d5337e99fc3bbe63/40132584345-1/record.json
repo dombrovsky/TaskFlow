@@ -1,0 +1,256 @@
+{
+  "schema": 1,
+  "series": "a36a07b838abe4200b258ca43e07034e0168ccca09e4ed48a1b924d8ef1a8ef2",
+  "provenance": {
+    "label": "TaskFlow main",
+    "measured_sha": "3952bd7ff8e9f06ef8b470d2d5337e99fc3bbe63",
+    "production_tree": {
+      "TaskFlow": "aee6a3f03b29b23b05a29eda34b8f310534ba4a1",
+      "TaskFlow.Annotations": "abf00b3953f809cfef0c693e0a2f6e5ed259d2a3",
+      "Directory.Build.props": "425c77c14c8152390a42f2ecb167740912dce2e9",
+      "Directory.Build.targets": "07a193594beb28740f54b852341f6ddc7510a50d",
+      "TaskFlow.snk": "9442f03f3356e5af38e62beccb786e1c4dc32d12"
+    },
+    "release_source_sha": null,
+    "release_tag": "",
+    "release_tree_verified": false,
+    "harness_sha": "3952bd7ff8e9f06ef8b470d2d5337e99fc3bbe63",
+    "synthetic_validation_patch": null,
+    "harness_hash": "f1fe135c8478889cb1e8debfb957fc395949377756770326cb8f2306141e0e36",
+    "settings": {
+      "warmup": 3,
+      "iterations": 8,
+      "launches": 1,
+      "processor_count": 2,
+      "sdk": "10.0.100",
+      "runtime": "10.0.0",
+      "bdn": "0.15.8"
+    },
+    "environment": {
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "machine": "x86_64",
+      "cpu_count": 4,
+      "affinity": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "runner": {
+        "RUNNER_NAME": "GitHub Actions 1000000730",
+        "RUNNER_OS": "Linux",
+        "RUNNER_ARCH": "X64",
+        "ImageOS": "ubuntu24",
+        "ImageVersion": "20261023.334.3"
+      },
+      "cpu": {
+        "/sys/fs/cgroup/cpuset.cpus.effective": "0-3\n",
+        "/proc/cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 207\nmodel name\t: INTEL(R) XEON(R) PLATINUM 8573C\nstepping\t: 2\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3202.560\ncache size\t: 266240 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx_vnni avx512_bf16 vnmi avx512vbmi umip waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm serialize tsxldtrk ibt amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb ept_5level tsc_offset vtpr ept vpid unrestricted_guest ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs retbleed bhi spectre_v2_user its\nbogomips\t: 4599.99\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 207\nmodel name\t: INTEL(R) XEON(R) PLATINUM 8573C\nstepping\t: 2\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3085.124\ncache size\t: 266240 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 2\napicid\t\t: 1\ninitial apicid\t: 1\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx_vnni avx512_bf16 vnmi avx512vbmi umip waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm serialize tsxldtrk ibt amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb ept_5level tsc_offset vtpr ept vpid unrestricted_guest ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs retbleed bhi spectre_v2_user its\nbogomips\t: 4599.99\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 207\nmodel name\t: INTEL(R) XEON(R) PLATINUM 8573C\nstepping\t: 2\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3208.516\ncache size\t: 266240 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx_vnni avx512_bf16 vnmi avx512vbmi umip waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm serialize tsxldtrk ibt amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb ept_5level tsc_offset vtpr ept vpid unrestricted_guest ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs retbleed bhi spectre_v2_user its\nbogomips\t: 4599.99\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 57 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 207\nmodel name\t: INTEL(R) XEON(R) PLATINUM 8573C\nstepping\t: 2\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 3126.644\ncache size\t: 266240 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 2\napicid\t\t: 3\ninitial apicid\t: 3\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 28\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves user_shstk avx_vnni avx512_bf16 vnmi avx512vbmi umip waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq la57 rdpid cldemote movdiri movdir64b fsrm serialize tsxldtrk ibt amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb ept_5level tsc_offset vtpr ept vpid unrestricted_guest ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs retbleed bhi spectre_v2_user its\nbogomips\t: 4599.99\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 48 bits physical, 57 bits virtual\npower management:\n\n"
+      },
+      "dotnet_info": ".NET SDK:\n Version:           10.0.100\n Commit:            b0f34d51fc\n Workload version:  10.0.100-manifests.63b36e85\n MSBuild version:   18.0.2+b0f34d51f\n\nRuntime Environment:\n OS Name:     ubuntu\n OS Version:  24.04\n OS Platform: Linux\n RID:         linux-x64\n Base Path:   /usr/share/dotnet/sdk/10.0.100/\n\n.NET workloads installed:\nThere are no installed workloads to display.\nConfigured to use workload sets when installing new manifests.\nNo workload sets are installed. Run \"dotnet workload restore\" to install a workload set.\n\nHost:\n  Version:      10.0.13\n  Architecture: x64\n  Commit:       4099f83977\n\n.NET SDKs installed:\n  8.0.131 [/usr/share/dotnet/sdk]\n  8.0.206 [/usr/share/dotnet/sdk]\n  8.0.319 [/usr/share/dotnet/sdk]\n  8.0.425 [/usr/share/dotnet/sdk]\n  9.0.121 [/usr/share/dotnet/sdk]\n  9.0.205 [/usr/share/dotnet/sdk]\n  9.0.318 [/usr/share/dotnet/sdk]\n  10.0.100 [/usr/share/dotnet/sdk]\n  10.0.112 [/usr/share/dotnet/sdk]\n  10.0.204 [/usr/share/dotnet/sdk]\n  10.0.303 [/usr/share/dotnet/sdk]\n  10.0.401 [/usr/share/dotnet/sdk]\n\n.NET runtimes installed:\n  Microsoft.AspNetCore.App 8.0.6 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 8.0.22 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 8.0.31 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 9.0.6 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 9.0.20 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 10.0.0 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 10.0.8 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.AspNetCore.App 10.0.12 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]\n  Microsoft.NETCore.App 8.0.6 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 8.0.22 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 8.0.31 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 9.0.6 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 9.0.20 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.0 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.8 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.12 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n  Microsoft.NETCore.App 10.0.13 [/usr/share/dotnet/shared/Microsoft.NETCore.App]\n\nOther architectures found:\n  None\n\nEnvironment variables:\n  DOTNET_CLI_TELEMETRY_OPTOUT              [1]\n  DOTNET_MULTILEVEL_LOOKUP                 [0]\n  DOTNET_NOLOGO                            [1]\n  DOTNET_PROCESSOR_COUNT                   [2]\n  DOTNET_ROLL_FORWARD                      [Disable]\n  DOTNET_ROOT                              [/usr/share/dotnet]\n  DOTNET_SKIP_FIRST_TIME_EXPERIENCE        [1]\n\nglobal.json file:\n  /home/runner/work/_temp/measurement/checkout/global.json\n\nLearn more:\n  https://aka.ms/dotnet/info\n\nDownload .NET:\n  https://aka.ms/dotnet/download",
+      "dotnet_variables": {
+        "DOTNET_ROOT": "/usr/share/dotnet",
+        "DOTNET_SKIP_FIRST_TIME_EXPERIENCE": "1",
+        "DOTNET_MULTILEVEL_LOOKUP": "0",
+        "DOTNET_NOLOGO": "1",
+        "DOTNET_PROCESSOR_COUNT": "2",
+        "DOTNET_ROLL_FORWARD": "Disable",
+        "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+      }
+    },
+    "timestamp": "2026-10-24T21:04:30.484050+00:00",
+    "run_id": "40132584345",
+    "attempt": "1",
+    "run_url": "https://github.com/dombrovsky/TaskFlow/actions/runs/40132584345",
+    "selection": "3952bd7ff8e9f06ef8b470d2d5337e99fc3bbe63",
+    "filters": [
+      "*"
+    ],
+    "omitted_harness_files": []
+  },
+  "cases": {
+    "TaskFlow.Benchmarks.BurstBenchmarks.SubmitAndDrain": {
+      "mean_ns": 480.86830598958335,
+      "stddev_ns": 2.2036496701770774,
+      "error_ns": 0.8996362106310475,
+      "n": 6,
+      "ops_s": 2079571.449280881,
+      "allocated_bytes": 655,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.EnqueueOnlyBenchmarks.SubmitOnly": {
+      "mean_ns": 769.255,
+      "stddev_ns": 182.55758809482558,
+      "error_ns": 69.00028257809632,
+      "n": 7,
+      "ops_s": 1299959.0512898844,
+      "allocated_bytes": null,
+      "allocation_note": "unsupported: deferred execution and iteration setup",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.MiddlewareBenchmarks.PipelineCompletion(Layers: 0)": {
+      "mean_ns": 1091.9479555402484,
+      "stddev_ns": 8.23805500991723,
+      "error_ns": 3.11369212044439,
+      "n": 7,
+      "ops_s": 915794.5623015005,
+      "allocated_bytes": 513,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.MiddlewareBenchmarks.PipelineCompletion(Layers: 1)": {
+      "mean_ns": 2740.121591091156,
+      "stddev_ns": 25.96131056170438,
+      "error_ns": 9.178709373335552,
+      "n": 8,
+      "ops_s": 364947.3086344995,
+      "allocated_bytes": 1790,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.MiddlewareBenchmarks.PipelineCompletion(Layers: 2)": {
+      "mean_ns": 3312.568175315857,
+      "stddev_ns": 38.783401572630396,
+      "error_ns": 13.712003124743982,
+      "n": 8,
+      "ops_s": 301880.57937996974,
+      "allocated_bytes": 2416,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.MiddlewareBenchmarks.PipelineCompletion(Layers: 4)": {
+      "mean_ns": 4249.716157913208,
+      "stddev_ns": 88.45792647721025,
+      "error_ns": 31.27459983086821,
+      "n": 8,
+      "ops_s": 235309.8331374307,
+      "allocated_bytes": 3664,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.MiddlewareBenchmarks.PipelineCompletion(Layers: 8)": {
+      "mean_ns": 6180.205520629883,
+      "stddev_ns": 226.05326129079896,
+      "error_ns": 79.92189698402922,
+      "n": 8,
+      "ops_s": 161806.9167217728,
+      "allocated_bytes": 6160,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.ProducerBenchmarks.ConcurrentSubmitAndDrain(Producers: 1)": {
+      "mean_ns": 408.7500559082032,
+      "stddev_ns": 13.240948998551263,
+      "error_ns": 4.681382413110411,
+      "n": 8,
+      "ops_s": 2446482.8458019327,
+      "allocated_bytes": 605,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.ProducerBenchmarks.ConcurrentSubmitAndDrain(Producers: 4)": {
+      "mean_ns": 659.7207836914062,
+      "stddev_ns": 65.19222755087496,
+      "error_ns": 23.048933090940075,
+      "n": 8,
+      "ops_s": 1515792.7788853236,
+      "allocated_bytes": 689,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.ProducerBenchmarks.ConcurrentSubmitAndDrain(Producers: 16)": {
+      "mean_ns": 658.6443713727679,
+      "stddev_ns": 42.42858746887822,
+      "error_ns": 16.036498703200458,
+      "n": 7,
+      "ops_s": 1518270.0156015418,
+      "allocated_bytes": 699,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.SyncCompletion(Token: None)": {
+      "mean_ns": 1157.6853930950165,
+      "stddev_ns": 4.30280345570187,
+      "error_ns": 1.5212707508198513,
+      "n": 8,
+      "ops_s": 863792.5346251004,
+      "allocated_bytes": 513,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.AsyncCompletion(Token: None)": {
+      "mean_ns": 2141.1017663138255,
+      "stddev_ns": 14.951316101235337,
+      "error_ns": 5.651066310997788,
+      "n": 7,
+      "ops_s": 467049.2620823087,
+      "allocated_bytes": 712,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.SyncCompletion(Token: Live)": {
+      "mean_ns": 1279.7267866134644,
+      "stddev_ns": 13.958315041472826,
+      "error_ns": 4.93500960988181,
+      "n": 8,
+      "ops_s": 781416.7918187411,
+      "allocated_bytes": 529,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.AsyncCompletion(Token: Live)": {
+      "mean_ns": 2126.8487424850464,
+      "stddev_ns": 29.41470231705559,
+      "error_ns": 10.399667737486828,
+      "n": 8,
+      "ops_s": 470179.1810693519,
+      "allocated_bytes": 728,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.SyncCompletion(Token: CanceledCooperative)": {
+      "mean_ns": 1194.6110727787018,
+      "stddev_ns": 20.027377457165272,
+      "error_ns": 7.080747204672079,
+      "n": 8,
+      "ops_s": 837092.5255815431,
+      "allocated_bytes": 529,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    },
+    "TaskFlow.Benchmarks.SequentialBenchmarks.AsyncCompletion(Token: CanceledCooperative)": {
+      "mean_ns": 2226.4601373672485,
+      "stddev_ns": 41.32805645429853,
+      "error_ns": 14.611674486047477,
+      "n": 8,
+      "ops_s": 449143.4556661244,
+      "allocated_bytes": 728,
+      "allocation_note": "managed bytes/op",
+      "actual_iterations": 8,
+      "warmup_iterations": 3
+    }
+  },
+  "raw_reports": [
+    "results/TaskFlow.Benchmarks.BurstBenchmarks-report-full.json",
+    "results/TaskFlow.Benchmarks.EnqueueOnlyBenchmarks-report-full.json",
+    "results/TaskFlow.Benchmarks.MiddlewareBenchmarks-report-full.json",
+    "results/TaskFlow.Benchmarks.ProducerBenchmarks-report-full.json",
+    "results/TaskFlow.Benchmarks.SequentialBenchmarks-report-full.json"
+  ]
+}
