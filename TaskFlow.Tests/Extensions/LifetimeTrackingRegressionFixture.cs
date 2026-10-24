@@ -93,8 +93,8 @@ internal sealed class LifetimeTrackingRegressionFixture
             var shutdown = flow.DisposeAsync().AsTask();
             Assert.That(shutdown.IsCompleted, Is.False);
             Task<int> rejected = null!;
-            Assert.That(() => { rejected = scheduler.Enqueue(() => 0); }, Throws.Nothing);
-            await Assert.ThatAsync(async () => await rejected, Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(() => { rejected = scheduler.Enqueue(() => 0); }, Throws.TypeOf<ObjectDisposedException>());
+            Assert.That(rejected, Is.Null, "Closed entry must reject the enqueue call before returning a task.");
             release.SetResult(true);
             Assert.That(await pending, Is.EqualTo(42));
             await shutdown;
@@ -223,7 +223,8 @@ internal sealed class LifetimeTrackingRegressionFixture
             {
                 await Assert.ThatAsync(async () => await task, Throws.Exception.SameAs(failure));
                 Assert.That(task.IsCanceled, Is.EqualTo(failure is OperationCanceledException));
-                Assert.That(observer.Status, Is.EqualTo(failure is OperationCanceledException ? TaskStatus.Canceled : TaskStatus.Faulted));
+                // A synchronous next rejection returns no continuation task for this observer to inspect.
+                Assert.That(observer.Status, Is.EqualTo(!faultedTask ? TaskStatus.Created : failure is OperationCanceledException ? TaskStatus.Canceled : TaskStatus.Faulted));
             }
         }
     }

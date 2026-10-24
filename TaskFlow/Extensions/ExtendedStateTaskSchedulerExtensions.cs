@@ -22,11 +22,13 @@ internal static class ExtendedStateTaskSchedulerExtensions
             _extendedState = extendedState;
         }
 
-        public async Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
+        public Task<T> Enqueue<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, CancellationToken cancellationToken)
         {
+            Argument.NotNull(taskFunc);
+
             var extendedState = new ExtendedState(state, _extendedState);
 
-            return await _baseTaskScheduler.Enqueue(Action, extendedState, cancellationToken).ConfigureAwait(false);
+            return _baseTaskScheduler.Enqueue(Action, extendedState, cancellationToken);
 
             async ValueTask<T> Action(ExtendedState s, CancellationToken token)
             {

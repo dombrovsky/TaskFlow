@@ -161,7 +161,7 @@ public static class ThrottlingTaskSchedulerExtensions
                 var elapsed = _timeProvider.GetElapsedTime(_lastAdmissionTimestamp, currentTimestamp);
                 if (_hasAdmission && elapsed < _interval)
                 {
-                    throw new OperationThrottledException($"Operation did not execute because the throttle interval has not elapsed. Interval: {_interval}. Elapsed: {elapsed}.");
+                    return Task.FromException<TResult>(new OperationThrottledException($"Operation did not execute because the throttle interval has not elapsed. Interval: {_interval}. Elapsed: {elapsed}."));
                 }
 
                 _lastAdmissionTimestamp = currentTimestamp;
