@@ -93,7 +93,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 _keys.Add(key, state);
             }
             state.References++;
-            submission = new Submission<T>(state, policies, operation.AdmissionRequest, next, _lifetime, _stopping) { CallerToken = cancellationToken };
+            submission = new Submission<T>(state, policies, operation.AdmissionRequest, next, _stopping) { CallerToken = cancellationToken };
         }
         operation.OnQuiesced(() => Complete(submission));
         operation.OnStarted(() => Started(submission));
@@ -436,7 +436,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
         public abstract void Cleanup();
     }
     private sealed class Submission<T>(KeyState key, CoordinatedPolicy[] policies,
-        AdmissionRequest? request, Func<CancellationToken, Task<T>> next, TaskSchedulerMiddlewareLifetime lifetime, CancellationToken stopping) : Submission(key, policies, request)
+        AdmissionRequest? request, Func<CancellationToken, Task<T>> next, CancellationToken stopping) : Submission(key, policies, request)
     {
         private readonly TaskCompletionSource<T> _completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();

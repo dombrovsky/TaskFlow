@@ -1,6 +1,6 @@
 # Dispatch ownership and keyed throughput review
 
-Reviewed `7fa12ae` against its parent `03273aa`. This historical review records the code at `7fa12ae`; subsequent review changes are described in the PR and current admission guide. Production scheduling/context code was unchanged by this measurement review. The changes are fault tests, measurement tools/data, and documentation.
+Reviewed `7fa12ae` against its parent `03273aa`. This historical review records the code at `7fa12ae`; subsequent review changes are described in the PR and current admission guide. The branch is now rebased onto `3952bd7`, including main's operation-based lifetime accounting; the measurements below are not performance measurements of that rebased combination. Production scheduling/context code was unchanged by this measurement review. The changes are fault tests, measurement tools/data, and documentation.
 
 ## Ownership and exceptions
 

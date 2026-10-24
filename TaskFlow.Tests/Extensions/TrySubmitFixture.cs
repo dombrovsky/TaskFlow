@@ -347,8 +347,9 @@ internal sealed class TrySubmitFixture
             Assert.That(await first.Completion!.WaitForTestAsync(), Is.EqualTo(1));
             if (second.Completion != null)
                 Assert.That(await second.Completion.WaitForTestAsync(), Is.EqualTo(2));
-            var selfDispose = admission.TrySubmit(scheduler, "A", (string _, CancellationToken _) => flow.DisposeAsync().AsTask());
-            await Assert.ThatAsync(async () => await selfDispose.Completion!.WaitForTestAsync(), Throws.TypeOf<InvalidOperationException>());
+            Assert.That(await admission.TrySubmit(scheduler, "A", _ => 3).Completion!.WaitForTestAsync(), Is.EqualTo(3));
+            await flowCleanup.DisposeAsync().WaitForTestAsync();
+            Assert.That(admission.TrySubmit(scheduler, "A", _ => 4).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Closed));
         }
         finally { completion.Release.TrySetResult(0); }
     }

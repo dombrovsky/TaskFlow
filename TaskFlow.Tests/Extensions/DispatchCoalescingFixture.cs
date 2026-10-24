@@ -140,20 +140,17 @@ internal sealed class DispatchCoalescingFixture
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
-    public async Task SharedDrain_RestoresEachContextIncludingSuppression_AndLifetimeOwnership(int kind)
+    public async Task SharedDrain_RestoresEachContextIncludingSuppression(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true);
         await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
         var flow = flowCleanup.Value;
-        var lifetime = flow.MiddlewareLifetime;
         var budget = Budget(4);
         var scheduler = Configure(kind, flow, budget, 4);
         var ambient = new AsyncLocal<string?>();
-        backend.CheckOwnership = () => Assert.That(() => lifetime.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
         ValueTask<string?> Read()
         {
             Assert.That(_submitting, Is.False);
-            Assert.That(() => lifetime.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
             return new ValueTask<string?>(ambient.Value);
         }
         ambient.Value = "first";
@@ -323,15 +320,14 @@ internal sealed class DispatchCoalescingFixture
 
     [TestCase(0)]
     [TestCase(1)]
-    public async Task SuppressedRejectionCompletion_RetainsOwnershipAndRunsOffProducer(int kind)
+    public async Task SuppressedRejectionCompletion_IsLifetimeTrackedAndRunsOffProducer(int kind)
     {
         using var backend = new InlineBackend();
         await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
         var flow = flowCleanup.Value;
-        var lifetime = flow.MiddlewareLifetime;
         var budget = Budget(1);
         var scheduler = Configure(kind, flow, budget, 1);
-        var completion = new RejectionObserver(lifetime);
+        var completion = new RejectionObserver();
         var decorated = scheduler.UseMiddleware(completion);
         var release = Gate();
         var first = Submit(kind, budget, decorated, 0, () => new ValueTask<int>(release.Task));
@@ -340,9 +336,15 @@ internal sealed class DispatchCoalescingFixture
             using (ExecutionContext.SuppressFlow())
                 Assert.That(Submit(kind, budget, decorated, 1, () => new ValueTask<int>(1)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             await completion.Checked.Task.WaitForTestAsync();
+            release.TrySetResult(0);
+            await first.Completion!.WaitForTestAsync();
+            var shutdown = flow.DisposeAsync().AsTask();
+            Assert.That(flow.MiddlewareLifetime.StoppingToken.IsCancellationRequested, Is.True);
+            Assert.That(shutdown.IsCompleted, Is.False, "Shutdown must retain the rejected operation's completion callback");
+            completion.Release.TrySetResult(0);
+            await shutdown.WaitForTestAsync();
         }
-        finally { release.TrySetResult(0); }
-        await first.Completion!.WaitForTestAsync();
+        finally { release.TrySetResult(0); completion.Release.TrySetResult(0); }
     }
 
     [TestCase(0)]
@@ -408,22 +410,23 @@ internal sealed class DispatchCoalescingFixture
         { Check(); return next(context, outcome); }
     }
 
-    private sealed class RejectionObserver(TaskSchedulerMiddlewareLifetime lifetime) : ITaskSchedulerCompletionMiddleware
+    private sealed class RejectionObserver : ITaskSchedulerCompletionMiddleware
     {
         public AdmissionTestGate Checked { get; } = Gate();
-        public ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
+        public AdmissionTestGate Release { get; } = Gate();
+        public async ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
         {
             if (outcome.Exception is AdmissionRejectedException)
             {
                 try
                 {
                     Assert.That(_submitting, Is.False);
-                    Assert.That(() => lifetime.DisposeAsync(), Throws.TypeOf<InvalidOperationException>());
                     Checked.TrySetResult(0);
+                    await Release.Task.WaitForTestAsync();
                 }
                 catch (Exception error) { Checked.TrySetException(error); throw; }
             }
-            return next(context, outcome);
+            return await next(context, outcome).WaitForTestAsync();
         }
     }
 
@@ -433,7 +436,6 @@ internal sealed class DispatchCoalescingFixture
         private int _inlineOnProducer;
         public ManualResetEventSlim Release { get; } = new();
         public AdmissionTestGate Entered { get; } = Gate();
-        public Action? CheckOwnership { get; set; }
         public int InlineOnProducer => _inlineOnProducer;
         protected override IEnumerable<Task> GetScheduledTasks() => Array.Empty<Task>();
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => TryExecuteTask(task);
@@ -441,7 +443,6 @@ internal sealed class DispatchCoalescingFixture
         {
             if (_submitting)
                 Interlocked.Increment(ref _inlineOnProducer);
-            CheckOwnership?.Invoke();
             var first = Interlocked.Increment(ref _queued) == 1;
             if (first && blockFirst)
             {

@@ -6,7 +6,6 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 {
     private static readonly WaitCallback DrainCallback = static state => ((BoundedAdmissionMiddleware)state!).Drain(onWorker: true);
 
-    private readonly TaskSchedulerMiddlewareLifetime _lifetime;
     private readonly object _sync = new object();
     private readonly LinkedList<Submission> _waiters = new LinkedList<Submission>();
     private readonly Queue<Submission> _dispatch = new Queue<Submission>();
@@ -22,7 +21,6 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
 
     public BoundedAdmissionMiddleware(BoundedAdmissionController controller, TaskSchedulerMiddlewareLifetime lifetime)
     {
-        _lifetime = lifetime;
         Controller = controller;
         _stoppingRegistration = lifetime.StoppingToken.Register(Close);
     }

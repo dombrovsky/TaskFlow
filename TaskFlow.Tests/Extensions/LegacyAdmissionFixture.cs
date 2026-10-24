@@ -119,23 +119,35 @@ internal sealed class LegacyAdmissionFixture
     [TestCase(1, true)]
     [TestCase(2, false)]
     [TestCase(2, true)]
-    public async Task SuppressedLegacyExecution_RetainsTheSelfDisposalGuard(int kind, bool submit)
+    public async Task SuppressedLegacyExecution_IsDrainedByExternalDisposal(int kind, bool submit)
     {
         await using var owner = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow());
         var flow = owner.Value;
         var budget = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
         var scheduler = Configure(kind, flow, TaskScheduler.Default, budget);
-        Task SelfDispose(CancellationToken _) => flow.DisposeAsync().AsTask();
+        var entered = new AdmissionTestGate();
+        var release = new AdmissionTestGate();
+        Task Hold(CancellationToken _)
+        { entered.TrySetResult(0); return release.Task; }
         Task completion;
         using (ExecutionContext.SuppressFlow())
         {
             if (submit)
-                completion = kind == 1 ? budget.Submit(scheduler, "A", SelfDispose, TaskSchedulerAdmissionMode.Reject).Completion
-                    : budget.Submit(scheduler, SelfDispose, TaskSchedulerAdmissionMode.Reject).Completion;
+                completion = kind == 1 ? budget.Submit(scheduler, "A", Hold, TaskSchedulerAdmissionMode.Reject).Completion
+                    : budget.Submit(scheduler, Hold, TaskSchedulerAdmissionMode.Reject).Completion;
             else
-                completion = kind == 1 ? scheduler.Enqueue("A", SelfDispose) : scheduler.Enqueue(SelfDispose);
+                completion = kind == 1 ? scheduler.Enqueue("A", Hold) : scheduler.Enqueue(Hold);
         }
-        await Assert.ThatAsync(async () => await completion.WaitForTestAsync(), Throws.TypeOf<InvalidOperationException>());
+        try
+        {
+            await entered.Task.WaitForTestAsync();
+            var shutdown = flow.DisposeAsync().AsTask();
+            Assert.That(flow.MiddlewareLifetime.StoppingToken.IsCancellationRequested, Is.True);
+            Assert.That(shutdown.IsCompleted, Is.False, "Shutdown must drain accepted suppressed-flow work");
+            release.TrySetResult(0);
+            await Task.WhenAll(completion, shutdown).WaitForTestAsync();
+        }
+        finally { release.TrySetResult(0); }
     }
 
     private sealed class InlineBackend(Action queued) : TaskScheduler
