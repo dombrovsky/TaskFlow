@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from benchmark_report import EXPECTED, read_cases, write_json
+from benchmark_report import EXPECTED, RELEASE, read_cases, write_json
 from benchmark_compare import delta, evidence, render
 from benchmark_publish import append
+from benchmark_run import COMMON_HARNESS, common_harness, main as run_main
 
 
 class ReportingTests(unittest.TestCase):
@@ -29,6 +31,27 @@ class ReportingTests(unittest.TestCase):
     def parse(self, benchmarks=None):
         (self.root / "results/case-report-full.json").write_text(json.dumps({"Benchmarks": benchmarks or [self.benchmark]}))
         return read_cases(self.root)
+
+    def test_release_harness_excludes_modern_and_future_sources(self):
+        directory = self.root / "harness"
+        directory.mkdir()
+        for name in [*COMMON_HARNESS, "KeyedBenchmarks.cs", "AdmissionBenchmarks.cs", "FutureBenchmarks.cs"]:
+            (directory / name).write_text(name)
+        harness = common_harness(directory)
+        self.assertIn("SequentialBenchmarks.cs", harness)
+        self.assertIn("MiddlewareBenchmarks.cs", harness)
+        self.assertFalse({"KeyedBenchmarks.cs", "AdmissionBenchmarks.cs", "FutureBenchmarks.cs"} & harness.keys())
+        self.assertNotIn("MiddlewareBenchmarks.cs", common_harness(directory, ["MiddlewareBenchmarks.cs"]))
+
+    def test_missing_common_source_fails_instead_of_silently_changing_harness(self):
+        with self.assertRaises(FileNotFoundError):
+            common_harness(self.root)
+
+    def test_release_cli_uses_release_commit_without_a_feature_branch(self):
+        with patch("sys.argv", ["benchmark_run.py", "--release-1.0.0", "--output", "measurement"]), \
+                patch("benchmark_run.measure") as measure:
+            run_main()
+        measure.assert_called_once_with(RELEASE, "measurement", "TaskFlow 1.0.0", True, release_tag=None)
 
     def test_measured_metrics(self):
         case = next(iter(self.parse().values()))

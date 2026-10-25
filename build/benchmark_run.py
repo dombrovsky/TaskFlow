@@ -10,11 +10,22 @@ import platform
 import shutil
 import subprocess
 
-from benchmark_report import (EXPECTED, PRODUCTION, RELEASE, RELEASE_CHECKOUT, SCHEMA, SETTINGS,
+from benchmark_report import (EXPECTED, PRODUCTION, RELEASE, SCHEMA, SETTINGS,
                               digest, history_summary, read_cases, write_json)
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Keep history and comparisons compatible with 1.0.0 even when new cases are added.
+COMMON_HARNESS = (
+    ".editorconfig", "Directory.Build.props", "TaskFlow.Benchmarks.csproj",
+    "Program.cs", "Workload.cs", "WorkloadValidation.cs", "SequentialBenchmarks.cs",
+    "EnqueueOnlyBenchmarks.cs", "MiddlewareBenchmarks.cs",
+)
+
+
+def common_harness(directory, omit=None):
+    return {name: (directory / name).read_text() for name in sorted(COMMON_HARNESS)
+            if name not in (omit or [])}
 
 
 def command(*args, cwd=ROOT, capture=False):
@@ -62,10 +73,7 @@ def measure(source, output, label, release=False, filters=None, omit=None, synth
     command("git", "worktree", "add", "--detach", str(checkout), sha)
     try:
         # Overlay only this one immutable common harness, never the candidate's harness.
-        harness_files = sorted(p for p in (ROOT / "TaskFlow.Benchmarks").iterdir()
-                               if (p.suffix in {".cs", ".csproj", ".props"} or p.name == ".editorconfig")
-                               and p.name not in (omit or []))
-        harness = {p.name: p.read_text() for p in harness_files}
+        harness = common_harness(ROOT / "TaskFlow.Benchmarks", omit)
         shutil.rmtree(checkout / "TaskFlow.Benchmarks", ignore_errors=True)
         (checkout / "TaskFlow.Benchmarks").mkdir()
         for name, content in harness.items():
@@ -128,7 +136,7 @@ def measure(source, output, label, release=False, filters=None, omit=None, synth
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", default=RELEASE_CHECKOUT)
+    parser.add_argument("--source", default=RELEASE)
     parser.add_argument("--release-1.0.0", dest="release_1_0_0", action="store_true")
     parser.add_argument("--label", default="TaskFlow main")
     parser.add_argument("--release-tag")
