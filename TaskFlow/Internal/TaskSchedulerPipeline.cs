@@ -68,6 +68,22 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         return count;
     }
 
+    internal void ValidateTrySubmit()
+    {
+        if (_terminal is not (TaskFlow or DedicatedThreadTaskFlow or CurrentThreadTaskFlow or TaskFlowSchedulerAdapter))
+            throw new NotSupportedException("TrySubmit requires a built-in terminal scheduler.");
+        var budgets = 0;
+        foreach (var registration in _registrations)
+        {
+            if (registration.Middleware is BoundedAdmissionMiddleware)
+                budgets++;
+            else if (registration.Middleware is ITaskSchedulerEnqueueMiddleware && registration.Middleware is not CoordinatedPolicy)
+                throw new NotSupportedException("TrySubmit does not support enqueue middleware other than built-in admission and coordinated scheduling policies. Use Submit with Reject instead.");
+        }
+        if (Coordinator == null && budgets != 1)
+            throw new NotSupportedException("TrySubmit with multiple budgets requires keyed scheduling or a concurrent branch. Configure scheduling before bounded admission.");
+    }
+
     public PipelineTaskScheduler Append(object middleware)
     {
         Lifetime?.CheckRegistrationOpen();
@@ -160,9 +176,21 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             }
             catch (Exception exception)
             {
-                if ((Lifetime != null && operation.Lifetime == null) || !operation.TryClaimCompletion())
+                if (Lifetime != null && operation.Lifetime == null)
+                {
+                    if (operation.AdmissionRequest?.Synchronous == true && exception is ObjectDisposedException)
+                        operation.AdmissionRequest.Decide(TaskSchedulerAdmissionResult.Closed);
                     throw;
-                var outcome = await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
+                }
+                if (!operation.TryClaimCompletion())
+                    throw;
+                // Rejection/cancellation may settle inline. Keep user completion middleware off TrySubmit's stack.
+                var deferCompletion = operation.AdmissionRequest?.Synchronous == true
+                    && Array.Exists(_registrations, static registration => registration.Middleware is ITaskSchedulerCompletionMiddleware);
+                var outcome = deferCompletion
+                    ? await Task.Run(async () =>
+                        await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false), CancellationToken.None).ConfigureAwait(false)
+                    : await InvokeCompletion(operation, 0, TaskSchedulerOperationOutcome<TResult>.FromException(exception), operation.ProducerCancellationToken).ConfigureAwait(false);
                 result = outcome.GetResultOrThrow();
             }
             operation.AdmissionRequest?.RecordCallerOutcome(null);

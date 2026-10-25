@@ -25,6 +25,8 @@ The packages can be consumed from compatible target frameworks regardless of the
 
 `IAsyncDisposable` support for the `netstandard2.0` asset is supplied through `Microsoft.Bcl.AsyncInterfaces`. Prefer `await using` where the consuming language and runtime support it.
 
+`TrySubmit` is available on every core target and supports NativeAOT/trimming. See [supported pipelines](extensions/admission.md#supported-trysubmit-pipelines) for composition requirements.
+
 ## Package selection examples
 
 For a .NET 8 or .NET 10 application:

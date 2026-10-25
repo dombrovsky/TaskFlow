@@ -39,6 +39,8 @@ internal interface IKeyedCoordinator<TKey> where TKey : notnull
 
 internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator<TKey> where TKey : notnull
 {
+    private static readonly WaitCallback DrainCallback = static state => ((KeyedCoordinator<TKey>)state!).Drain(onWorker: true);
+
     private readonly object _sync = new object();
     private readonly Dictionary<TKey, KeyState> _keys;
     private readonly LinkedList<KeyState> _ready = new LinkedList<KeyState>();
@@ -47,6 +49,9 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
     private readonly CancellationTokenRegistration _stoppingRegistration;
 
     private bool _closed;
+    // _sync protects ready/waiter queues, accounting, and the single queued OR active owner.
+    // A handoff never clears ownership. Only observing no runnable work under _sync retires it;
+    // a racing arrival joins that owner or claims the next. Dispatch callbacks run outside _sync.
     private bool _pumping;
 
     public KeyedCoordinator(IEqualityComparer<TKey> comparer, TaskSchedulerMiddlewareLifetime lifetime)
@@ -82,7 +87,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 _keys.Add(key, state);
             }
             state.References++;
-            submission = new Submission<T>(state, policies, operation.AdmissionRequest, next) { CallerToken = cancellationToken };
+            submission = new Submission<T>(state, policies, operation.AdmissionRequest, next, _stopping) { CallerToken = cancellationToken };
         }
         operation.OnQuiesced(() => Complete(submission));
         operation.OnStarted(() => Started(submission));
@@ -107,7 +112,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 ChangeWaiters(submission, 1);
             }
         }
-        Pump();
+        Pump(defer: operation.AdmissionRequest?.Synchronous == true);
         return await submission.Task.ConfigureAwait(false);
     }
 
@@ -213,13 +218,13 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
             submission.Settled = true;
             submission.Cancel();
         }
-        Pump();
+        Pump(defer: submission.Request?.Synchronous == true);
     }
     private void Started(Submission submission)
     {
         lock (_sync)
             ReleaseReservations(submission, pendingOnly: true);
-        Pump();
+        Pump(defer: submission.Request?.Synchronous == true);
     }
     private static void ReleaseReservations(Submission submission, bool pendingOnly)
     {
@@ -256,7 +261,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
             }
         }
         submission.Cleanup();
-        Pump();
+        Pump(defer: submission.Request?.Synchronous == true);
     }
     private static bool CanDispatch(Submission submission)
     {
@@ -267,6 +272,8 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
     }
     private void PromoteWaiters()
     {
+        if (_waiters.First == null)
+            return;
         var blocked = new HashSet<KeyState>();
         var node = _waiters.First;
         while (node != null)
@@ -282,7 +289,13 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 blocked.Add(submission.Key);
         }
     }
-    private void Pump()
+    // Called under _sync after claiming ownership; the worker starts without a producer context.
+    private void QueueDrain()
+    {
+        _ = ThreadPool.UnsafeQueueUserWorkItem(DrainCallback, this);
+    }
+
+    private void Pump(bool defer = false)
     {
         lock (_sync)
         {
@@ -290,6 +303,10 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 return;
             _pumping = true;
         }
+        Drain(onWorker: false, defer);
+    }
+    private void Drain(bool onWorker, bool defer = false)
+    {
         while (true)
         {
             Submission? dispatch = null;
@@ -310,6 +327,11 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                         }
                         else if (CanDispatch(key.Queue.First.Value))
                         {
+                            if (!onWorker && (defer || key.Queue.First.Value.RequiresWorker))
+                            {
+                                QueueDrain();
+                                return;
+                            }
                             dispatch = key.Queue.First.Value;
                             key.Queue.RemoveFirst();
                             dispatch.Queued = null;
@@ -326,9 +348,11 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                     }
                 }
                 if (dispatch == null)
-                { _pumping = false; return; }
+                    _pumping = false;
             }
-            dispatch.Dispatch(_stopping);
+            if (dispatch == null)
+                return;
+            dispatch.Dispatch(onWorker);
         }
     }
     private void Close()
@@ -370,18 +394,19 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
         public CoordinatedPolicy[] Policies { get; } = policies;
         public bool[] Reserved { get; } = new bool[policies.Length];
         public AdmissionRequest? Request { get; } = request;
+        public bool RequiresWorker { get; } = request?.Synchronous == true;
         public bool Accepted { get; set; }
         public bool Dispatched { get; set; }
         public bool Settled { get; set; }
         public LinkedListNode<Submission>? Waiter { get; set; }
         public LinkedListNode<Submission>? Queued { get; set; }
-        public abstract void Dispatch(CancellationToken stopping);
+        public abstract void Dispatch(bool onWorker);
         public abstract void Reject(TaskSchedulerAdmissionResult result);
         public abstract void Cancel();
         public abstract void Cleanup();
     }
     private sealed class Submission<T>(KeyState key, CoordinatedPolicy[] policies,
-        AdmissionRequest? request, Func<CancellationToken, Task<T>> next) : Submission(key, policies, request)
+        AdmissionRequest? request, Func<CancellationToken, Task<T>> next, CancellationToken stopping) : Submission(key, policies, request)
     {
         private readonly TaskCompletionSource<T> _completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ExecutionContext? _executionContext = ExecutionContext.Capture();
@@ -395,21 +420,24 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                 Request?.Cancel();
             _completion.TrySetCanceled();
         }
-        public override void Dispatch(CancellationToken stopping)
+        public override void Dispatch(bool onWorker)
         {
             if (_executionContext != null)
-                ExecutionContext.Run(_executionContext, state => { _ = ExecuteAsync(stopping); }, null);
-            else if (ExecutionContext.IsFlowSuppressed())
-                _ = ExecuteAsync(stopping);
+                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ForwardCompletionAsync(); }, this);
+            else if (onWorker || ExecutionContext.IsFlowSuppressed())
+                _ = ForwardCompletionAsync();
             else
             {
-                // A caller that suppressed flow must not inherit the preceding operation's context.
+                // Preserve legacy inline dispatch: suppression prevents the terminal from
+                // capturing the current pump caller, without introducing a worker handoff.
                 using var suppression = ExecutionContext.SuppressFlow();
-                _ = ExecuteAsync(stopping);
+                _ = ForwardCompletionAsync();
             }
         }
+        // The submission awaits _completion.Task. Forward every outcome there so the drain
+        // can dispatch other operations without awaiting this bridge task.
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Operation failures are returned to the submitting caller.")]
-        private async Task ExecuteAsync(CancellationToken stopping)
+        private async Task ForwardCompletionAsync()
         {
             try
             {

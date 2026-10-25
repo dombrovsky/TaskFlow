@@ -43,7 +43,7 @@ await submission.Completion;
 
 ## Keys and delegates
 
-Key-first `Enqueue` and `Submit` extension methods supply immutable submission metadata. The admission controller remains nongeneric; keyed convenience methods live in `KeyedBoundedAdmissionExtensions`. A delegate can receive the key, or omit it when it already has everything it needs. Typed-state overloads keep the original state reference visible to middleware:
+Key-first `Enqueue`, `Submit`, and `TrySubmit` methods supply immutable submission metadata. The admission controller remains nongeneric. `TrySubmit` delegates receive the key; `Enqueue` and `Submit` delegates may omit it. Typed-state overloads keep the original state reference visible to middleware:
 
 ```csharp
 await scheduler.Enqueue(
@@ -79,6 +79,23 @@ On a coordinated branch, all registered capacity budgets are checked and reserve
 Waiting preserves FIFO within each key. The coordinator selects the oldest eligible waiting key-head, skipping keys whose per-key budget is full. This avoids a hot key preventing unrelated work from using available global capacity. A new submission cannot overtake an earlier waiter for its key or an earlier eligible waiter. Admission fairness and round-robin execution are separate decisions.
 
 `Submit` targeting any coordinated controller reports the combined admission decision. Its explicit mode applies to that combined decision: `Reject` never waits for any coordinated capacity budget; `Wait` permits waiting. Ordinary `Enqueue` uses the registered policies' defaults; if any participating budget is configured to reject, the combined stage rejects when it cannot admit immediately. `Accepted` means every coordinated budget was reserved, not that dispatch or execution succeeded. Failure/cancellation before reaching the coordinated stage follows issue 30's unreached-admission contract.
+
+For synchronous load shedding, `TrySubmit` reserves the same combined budgets without admission waiters:
+
+```csharp
+// Omit the timeout enqueue middleware used in the earlier example.
+var immediate = flow.WithKeyedScheduling<string>()
+    .WithConcurrencyLimit(8)
+    .WithBoundedAdmission(global)
+    .WithPerKeyBoundedAdmission(perKey);
+var attempt = global.TrySubmit(immediate, documentId, Save, cancellationToken);
+if (attempt.Admission == TaskSchedulerAdmissionResult.Accepted)
+    await attempt.Completion!;
+else
+    ReportRejected(attempt.Admission); // Full or Closed; Completion is null.
+```
+
+FIFO, eligible-waiter priority, round-robin dispatch, and concurrency limits are shared with `Submit` and `Enqueue`. `TrySubmit` supports execution/completion middleware and annotations; other enqueue middleware, including timeout, throws before work is created. See [bounded admission](admission.md#synchronous-admission) for cancellation, context, and pipeline requirements.
 
 The combined stage is placed at the outermost coordinated policy registration. All participating budgets are evaluated there, rather than introducing independent waits at each decorator. A timeout outside that stage includes admission/dispatch waiting; a timeout inside it starts when the selected operation is dispatched. Moving or appending a coordinated policy can move that stage. Ordinary user middleware retains its existing relative order.
 

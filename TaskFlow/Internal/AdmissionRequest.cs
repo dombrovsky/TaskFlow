@@ -20,9 +20,15 @@ internal sealed class AdmissionRequest
     private bool _canceled;
     private Exception? _failure;
 
-    public AdmissionRequest(BoundedAdmissionController controller, TaskSchedulerAdmissionMode mode) { Controller = controller; Mode = mode; }
+    public AdmissionRequest(BoundedAdmissionController controller, TaskSchedulerAdmissionMode mode, bool synchronous = false)
+    {
+        Controller = controller;
+        Mode = mode;
+        Synchronous = synchronous;
+    }
     public BoundedAdmissionController Controller { get; }
     public TaskSchedulerAdmissionMode Mode { get; }
+    public bool Synchronous { get; }
 
     public Task<TaskSchedulerAdmissionResult> Decision
     {

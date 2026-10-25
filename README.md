@@ -27,6 +27,7 @@ One flow is one sequential lane. Create separate flows for work that should proc
 |---|---|
 | FIFO execution | Accepted operations start in submission order and do not overlap within one flow. |
 | Per-operation tasks | Every caller can await its own result, exception, or cancellation. |
+| [Bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) | Use `TrySubmit` for immediate load shedding or `Submit(Wait)` for asynchronous backpressure. |
 | Owned lifetime | A flow gives queued and running work an explicit component-level shutdown boundary. |
 | Composable policies | Add cancellation scopes, latest-request-wins behavior, timeouts, leading-edge throttling, operation names, interception, and error observation. |
 | Execution choices | Use the thread pool, a dedicated thread, the current thread, or another `TaskScheduler`. |

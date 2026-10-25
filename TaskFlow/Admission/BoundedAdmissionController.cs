@@ -33,7 +33,7 @@ public sealed class BoundedAdmissionController : ITaskSchedulerMiddlewareFactory
         => new BoundedAdmissionMiddleware(this, lifetime);
 
     /// <summary>Submits through a native pipeline, overriding this controller's registration only.</summary>
-    /// <remarks>Reject never waits for capacity; upstream middleware can still delay the admission decision. The controller must occur exactly once in the pipeline.</remarks>
+    /// <remarks>Reject never waits for capacity; upstream middleware can still delay the admission decision. Use TrySubmit extensions for a synchronous decision on supported pipelines. The controller must occur exactly once in the pipeline.</remarks>
     public TaskSchedulerSubmission<T> Submit<T>(ITaskScheduler scheduler, Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, TaskSchedulerAdmissionMode admissionMode, CancellationToken cancellationToken)
     {
         Argument.NotNull(scheduler);

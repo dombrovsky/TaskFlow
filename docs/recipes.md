@@ -75,6 +75,74 @@ public sealed class ReadingSubscriber : IAsyncDisposable
 
 The synchronous event handler only captures the event data and enqueues the asynchronous work. It returns immediately without becoming `async void`, and TaskFlow preserves callback submission order. The operation tasks are intentionally discarded; `OnError` reports failures, while disposing `_flow` controls the lifetime of every accepted callback. Unsubscribe before disposal so no callback can submit during shutdown.
 
+## Shed load from synchronous events
+
+Use `TrySubmit` to accept or drop an event synchronously, updating its cooldown only on acceptance.
+
+```csharp
+public sealed class CameraEventProducer : IAsyncDisposable
+{
+    private readonly object _rules = new();
+    private readonly TaskFlow _flow = new();
+    private readonly BoundedAdmissionController _admission = new(new BoundedAdmissionOptions
+    {
+        Capacity = 32,
+        CapacityMode = TaskSchedulerCapacityMode.Outstanding
+    });
+    private readonly ITaskScheduler _deliveries;
+    private readonly Func<string, CancellationToken, Task> _deliver;
+    private readonly Dictionary<string, DateTimeOffset> _nextAllowed = new();
+
+    public CameraEventProducer(Func<string, CancellationToken, Task> deliver)
+    {
+        _deliver = deliver;
+        _deliveries = _flow.WithKeyedScheduling<string>()
+            .WithConcurrencyLimit(4)
+            .WithBoundedAdmission(_admission)
+            .WithPerKeyBoundedAdmission(new BoundedAdmissionOptions { Capacity = 2 });
+    }
+
+    public bool OnCameraEvent(string ruleId, DateTimeOffset now)
+    {
+        Task completion;
+        lock (_rules)
+        {
+            if (_nextAllowed.TryGetValue(ruleId, out var next) && now < next)
+                return false;
+
+            var attempt = _admission.TrySubmit(_deliveries, ruleId, _deliver);
+            if (attempt.Admission != TaskSchedulerAdmissionResult.Accepted)
+                return false; // Full/Closed leaves the cooldown unchanged.
+
+            _nextAllowed[ruleId] = now.AddSeconds(10);
+            completion = attempt.Completion!;
+        }
+        _ = ObserveAsync(completion);
+        return true;
+    }
+
+    private static async Task ObserveAsync(Task completion)
+    {
+        try
+        {
+            await completion.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown requested cancellation.
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(error);
+        }
+    }
+
+    public ValueTask DisposeAsync() => _flow.DisposeAsync();
+}
+```
+
+Stop event callbacks before disposal. Delivery may begin before the handler releases its lock; observe completion outside that lock. Use `Submit(..., Wait)` when producers should wait for capacity instead of dropping work.
+
 ## Avoid duplicate credential refreshes
 
 ```csharp
