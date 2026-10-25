@@ -308,14 +308,20 @@ supported. Join attempts on failure and cancellation too:
 public async ValueTask<T> InvokeAsync<T>(TaskSchedulerOperationContext context,
     TaskSchedulerExecutionDelegate<T> next)
 {
-    var first = next(context).AsTask();
-    var second = next(context).AsTask();
+    var first = Attempt();
+    var second = Attempt();
     var results = await Task.WhenAll(first, second).ConfigureAwait(true);
     return results[0];
+
+    // Convert synchronous throws into faulted tasks so every attempt reaches the join.
+    async Task<T> Attempt() => await next(context).ConfigureAwait(true);
 }
 ```
 
 Use concurrent attempts only when the operation permits overlapping execution.
+Execution continuation invocation may throw synchronously now that the per-layer
+async observer is removed. Protect invocation and awaiting together; the attempt
+helper above ensures a synchronous throw cannot bypass the join of earlier attempts.
 Enqueue continuations remain at most once. Never invoke a saved continuation after
 middleware finishes or return while directly started downstream work is running.
 Detached execution and completion continuations are unsupported; violations are

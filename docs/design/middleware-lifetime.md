@@ -96,7 +96,11 @@ Direct forwarding now exposes the original downstream task status to middleware.
 For example, a terminal returning `Task.FromException<T>(OperationCanceledException)`
 is observed as Faulted by its immediate enqueue caller, rather than being normalized
 to Canceled by an async per-layer observer. Await still throws the same exception;
-the outer scheduled task retains its cancellation behavior.
+the outer scheduled task retains its cancellation behavior. Execution continuation
+invocation can now throw synchronously instead of returning a faulted ValueTask.
+Protect both invocation and awaiting with the same try/catch. Concurrent-attempt
+orchestration should use an async attempt helper to convert synchronous throws to
+faulted tasks before joining all attempts, as shown in the customization example.
 
 Cancellation scopes and cancel-previous already await their continuation and keep
 their existing linked-token scopes. Callers still dispose the external owner.

@@ -12,10 +12,13 @@ internal sealed class StructuredMiddlewareFixture
 {
     private static TaskCompletionSource<bool> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    [TestCase("success")]
-    [TestCase("fault")]
-    [TestCase("cancel")]
-    public async Task ConcurrentAttempts_JoinEveryAttemptBeforeCleanup(string outcome)
+    [TestCase("success", false)]
+    [TestCase("success", true)]
+    [TestCase("fault", false)]
+    [TestCase("fault", true)]
+    [TestCase("cancel", false)]
+    [TestCase("cancel", true)]
+    public async Task ConcurrentAttempts_JoinEveryAttemptBeforeCleanup(string outcome, bool synchronous)
     {
         await using var flow = new TaskFlow();
         var middleware = new JoinedAttempts();
@@ -24,9 +27,22 @@ internal sealed class StructuredMiddlewareFixture
         var release = Gate();
         var calls = 0;
         var failure = new FormatException("attempt");
-        var pending = scheduler.Enqueue<int>(async (_, _) =>
+        var pending = scheduler.Enqueue<int>(Attempt, null, default);
+
+        ValueTask<int> Attempt(object? state, CancellationToken token)
         {
             var call = Interlocked.Increment(ref calls);
+            if (synchronous && call == 1 && outcome == "fault")
+                throw failure;
+            if (synchronous && call == 1 && outcome == "cancel")
+                throw new OperationCanceledException(new CancellationToken(true));
+            return Finish(call);
+        }
+
+        async ValueTask<int> Finish(int call)
+        {
+            if (!synchronous)
+                await Task.Yield();
             if (call == 1 && outcome == "fault")
                 throw failure;
             if (call == 1 && outcome == "cancel")
@@ -37,7 +53,7 @@ internal sealed class StructuredMiddlewareFixture
                 await release.Task;
             }
             return 42;
-        }, null, default);
+        }
         try
         {
             await entered.Task;
@@ -115,9 +131,11 @@ internal sealed class StructuredMiddlewareFixture
         {
             var attempts = new Task<T>[Attempts];
             for (var i = 0; i < attempts.Length; i++)
-                attempts[i] = next(context).AsTask();
+                attempts[i] = InvokeAttempt();
             var results = await Task.WhenAll(attempts).ConfigureAwait(true);
             return results[0];
+
+            async Task<T> InvokeAttempt() => await next(context).ConfigureAwait(true);
         }
 
         public void Dispose() => Cleaned = true;
