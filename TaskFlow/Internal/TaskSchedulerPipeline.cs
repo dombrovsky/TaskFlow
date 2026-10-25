@@ -32,31 +32,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
     internal TaskSchedulerMiddlewareLifetime? Lifetime { get; }
 
-    internal int ScheduledDrainCount
-    {
-        get
-        {
-            var count = Coordinator?.ScheduledDrainCount ?? 0;
-            foreach (var registration in _registrations)
-                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
-                    count += bounded.ScheduledDrainCount;
-            return count;
-        }
-    }
-
-    // Tests pause a retiring worker after idle has been published, outside the queue lock.
-    internal Action? DrainIdle
-    {
-        set
-        {
-            if (Coordinator != null)
-                Coordinator.DrainIdle = value;
-            foreach (var registration in _registrations)
-                if (registration.Middleware is BoundedAdmissionMiddleware bounded)
-                    bounded.DrainIdle = value;
-        }
-    }
-
     internal PipelineTaskScheduler WithLifetime(TaskSchedulerMiddlewareLifetime lifetime)
     {
         if (Lifetime != null && Lifetime != lifetime)

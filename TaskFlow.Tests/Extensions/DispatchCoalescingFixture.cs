@@ -40,7 +40,7 @@ internal sealed class DispatchCoalescingFixture
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
-    public async Task ConcurrentBurst_UsesOneDrain_AndNeverCallsUserCodeOnProducer(int kind)
+    public async Task ConcurrentBurst_AdmitsWithoutInlineCallbacks_AndSerializesDispatch(int kind)
     {
         using var backend = new InlineBackend(blockFirst: true);
         await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
@@ -68,35 +68,42 @@ internal sealed class DispatchCoalescingFixture
                     tasks[i] = attempt.Completion!;
                 }
             }))).WaitForTestAsync();
-            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
+            Assert.That(tasks.All(task => !task.IsCompleted), Is.True);
             Assert.That(Submit(kind, budget, decorated, 900, () => new ValueTask<int>(0)).Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
-            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
         Assert.That(await Task.WhenAll(tasks).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(0, tasks.Length)));
-        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.QueueCalls, Is.EqualTo(tasks.Length));
         Assert.That(backend.InlineOnProducer, Is.Zero);
         Assert.That(observer.InlineOnProducer, Is.Zero);
     }
 
     [TestCase(1)]
     [TestCase(2)]
-    public async Task SaturatedExecution_DoesNotScheduleDrainsForBlockedArrivals(int kind)
+    public async Task SaturatedExecution_KeepsArrivalsPendingUntilCapacityIsReleased(int kind)
     {
         using var backend = new InlineBackend();
         await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
         var flow = flowCleanup.Value;
         var budget = Budget(257);
         var scheduler = Configure(kind, flow, budget, 1);
-        var idle = Gate();
+        var started = Gate();
         var release = Gate();
-        scheduler.DrainIdle = () => idle.TrySetResult(0);
-        var first = Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(release.Task));
+        var first = Submit(kind, budget, scheduler, 0, () =>
+        {
+            started.SetResult(0);
+            return new ValueTask<int>(release.Task);
+        });
         try
         {
-            await idle.Task.WaitForTestAsync();
+            await started.Task.WaitForTestAsync();
             var pending = Enumerable.Range(1, 256).Select(i => Submit(kind, budget, scheduler, i, () => new ValueTask<int>(i)).Completion!).ToArray();
-            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
+            Assert.That(pending.All(task => !task.IsCompleted), Is.True);
+            Assert.That(Submit(kind, budget, scheduler, 900, () => new ValueTask<int>(0)).Admission,
+                Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             release.SetResult(0);
             await first.Completion!.WaitForTestAsync();
             Assert.That(await Task.WhenAll(pending).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(1, 256)));
@@ -107,35 +114,25 @@ internal sealed class DispatchCoalescingFixture
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
-    public async Task ArrivalAfterIdlePublication_StartsAnotherDrainWithoutLostWakeup(int kind)
+    public async Task RepeatedCompletionAndResubmission_DoNotLoseWakeups(int kind)
     {
         using var backend = new InlineBackend();
-        using var retire = new ManualResetEventSlim();
         await using var flowCleanup = new AdmissionTestOwner<TaskFlow>(() => new TaskFlow(new TaskFlowOptions { TaskScheduler = backend }));
         var flow = flowCleanup.Value;
         var budget = Budget(2);
         var scheduler = Configure(kind, flow, budget, 2);
-        var idle = Gate();
-        var retired = Gate();
-        var calls = 0;
-        scheduler.DrainIdle = () =>
+        // Completion is the public handoff boundary. Resubmission can race drain retirement;
+        // the test deliberately makes no assumption about the worker's internal idle state.
+        for (var iteration = 0; iteration < 128; iteration++)
         {
-            if (Interlocked.Increment(ref calls) != 1)
-                return;
-            idle.SetResult(0);
-            try
-            { retire.WaitForTest(); retired.TrySetResult(0); }
-            catch (OperationCanceledException error) { retired.TrySetException(error); }
-            catch (TimeoutException error) { retired.TrySetException(error); }
-        };
-        try
-        {
-            await Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(0)).Completion!.WaitForTestAsync();
-            await idle.Task.WaitForTestAsync();
-            Assert.That(await Submit(kind, budget, scheduler, 1, () => new ValueTask<int>(1)).Completion!.WaitForTestAsync(), Is.EqualTo(1));
-            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(2));
+            var first = Submit(kind, budget, scheduler, 0, () => new ValueTask<int>(1));
+            Assert.That(await first.Completion!.WaitForTestAsync(), Is.EqualTo(1));
+            var second = Submit(kind, budget, scheduler, 1, () => new ValueTask<int>(2));
+            Assert.That(second.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
+            Assert.That(await second.Completion!.WaitForTestAsync(), Is.EqualTo(2));
         }
-        finally { retire.Set(); await retired.WaitForCleanupAsync(); }
+        Assert.That(backend.QueueCalls, Is.EqualTo(256));
+        Assert.That(backend.InlineOnProducer, Is.Zero);
     }
 
     [TestCase(0)]
@@ -171,7 +168,7 @@ internal sealed class DispatchCoalescingFixture
         }
         finally { backend.Release.Set(); }
         Assert.That(await Task.WhenAll(first.Completion!, second.Completion!, suppressed.Completion!, fourth.Completion!).WaitForTestAsync(), Is.EqualTo(new string?[] { "first", "second", null, "fourth" }));
-        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.QueueCalls, Is.EqualTo(4));
         Assert.That(backend.InlineOnProducer, Is.Zero);
     }
 
@@ -237,12 +234,12 @@ internal sealed class DispatchCoalescingFixture
             await backend.Entered.Task.WaitForTestAsync();
             using (ExecutionContext.SuppressFlow())
                 attempt = Submit(kind, budget, scheduler, 1, () => new ValueTask<string?>(ambient.Value));
-            Assert.That(scheduler.ScheduledDrainCount, Is.Zero);
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
         await legacy.WaitForTestAsync();
         Assert.That(await attempt.Completion!.WaitForTestAsync(), Is.Null);
-        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.QueueCalls, Is.EqualTo(2));
     }
 
     [TestCase(0)]
@@ -276,13 +273,13 @@ internal sealed class DispatchCoalescingFixture
             immediate = Submit(kind, budget, scheduler, 1, () => { order.Add(ambient.Value); return new ValueTask<string?>(ambient.Value); });
             ambient.Value = "queued legacy";
             queued = kind == 1 ? scheduler.Enqueue(2, Read) : scheduler.Enqueue(Read);
-            Assert.That(scheduler.ScheduledDrainCount, Is.Zero);
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
         Assert.That(await Task.WhenAll(first, immediate.Completion!, queued).WaitForTestAsync(),
             Is.EqualTo(MixedContextOrder));
         Assert.That(order, Is.EqualTo(MixedContextOrder));
-        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.QueueCalls, Is.EqualTo(3));
         Assert.That(backend.InlineOnProducer, Is.Zero);
     }
 
@@ -415,7 +412,7 @@ internal sealed class DispatchCoalescingFixture
                 var value = index + 1;
                 pending[index] = Submit(kind, budget, decorated, value, () => new ValueTask<int>(value)).Completion!;
             }
-            Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+            Assert.That(backend.QueueCalls, Is.EqualTo(1));
         }
         finally { backend.Release.Set(); }
         await Assert.ThatAsync(async () => await first.Completion!.WaitForTestAsync(), Throws.TypeOf<TaskSchedulerException>());
@@ -423,7 +420,7 @@ internal sealed class DispatchCoalescingFixture
         await Assert.ThatAsync(async () => await (pending[1]).WaitForTestAsync(), Throws.TypeOf<InvalidOperationException>());
         Assert.That(await Task.WhenAll(pending.Skip(2)).WaitForTestAsync(), Is.EqualTo(Enumerable.Range(3, 61)));
         Assert.That(firstRan, Is.False);
-        Assert.That(scheduler.ScheduledDrainCount, Is.EqualTo(1));
+        Assert.That(backend.QueueCalls, Is.EqualTo(64));
         Assert.That(backend.InlineOnProducer, Is.Zero);
         // The failed key and all global reservations are reusable after observable completion.
         Assert.That(await Submit(kind, budget, decorated, 0, () => new ValueTask<int>(42)).Completion!.WaitForTestAsync(), Is.EqualTo(42));
@@ -479,6 +476,7 @@ internal sealed class DispatchCoalescingFixture
         public ManualResetEventSlim Release { get; } = new();
         public AdmissionTestGate Entered { get; } = Gate();
         public int InlineOnProducer => _inlineOnProducer;
+        public int QueueCalls => Volatile.Read(ref _queued);
         protected override IEnumerable<Task> GetScheduledTasks() => Array.Empty<Task>();
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => TryExecuteTask(task);
         protected override void QueueTask(Task task)

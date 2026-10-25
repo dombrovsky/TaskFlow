@@ -11,7 +11,6 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
     private readonly Queue<Submission> _dispatch = new Queue<Submission>();
     private readonly CancellationTokenRegistration _stoppingRegistration;
 
-    private int _scheduledDrains;
     private int _used;
     // _sync protects ownership and both queues. True means one queued OR active drain.
     // Handoff keeps ownership; only an empty-queue observation under _sync publishes idle.
@@ -26,8 +25,6 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
     }
 
     public BoundedAdmissionController Controller { get; }
-    internal int ScheduledDrainCount { get { lock (_sync) return _scheduledDrains; } }
-    internal Action? DrainIdle { get; set; }
 
     public async Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
     {
@@ -136,7 +133,6 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                     _pumping = false;
                 else if (!onWorker && (defer || _dispatch.Peek().RequiresWorker))
                 {
-                    _scheduledDrains++;
                     _ = ThreadPool.UnsafeQueueUserWorkItem(DrainCallback, this);
                     return;
                 }
@@ -144,11 +140,7 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                     next = _dispatch.Dequeue();
             }
             if (next == null)
-            {
-                if (onWorker)
-                    DrainIdle?.Invoke();
                 return;
-            }
             // One dispatcher invokes continuations in FIFO order, outside the admission lock.
             next.Dispatch(onWorker);
         }

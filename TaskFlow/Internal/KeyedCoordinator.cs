@@ -27,8 +27,6 @@ internal abstract class SchedulingCoordinator : CoordinatedPolicy, IDisposable
 {
     public abstract bool RequiresKey { get; }
     internal abstract int KeyCount { get; }
-    internal abstract int ScheduledDrainCount { get; }
-    internal Action? DrainIdle { get; set; }
     public abstract Task<T> Schedule<T>(PipelineOperation<T> operation, CoordinatedPolicy[] policies,
         Func<CancellationToken, Task<T>> next, CancellationToken cancellationToken);
     public abstract void Dispose();
@@ -50,7 +48,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
     private readonly CancellationToken _stopping;
     private readonly CancellationTokenRegistration _stoppingRegistration;
 
-    private int _scheduledDrains;
     private bool _closed;
     // _sync protects ready/waiter queues, accounting, and the single queued OR active owner.
     // A handoff never clears ownership. Only observing no runnable work under _sync retires it;
@@ -65,7 +62,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
     }
 
     public override bool RequiresKey => true;
-    internal override int ScheduledDrainCount { get { lock (_sync) return _scheduledDrains; } }
     internal override int KeyCount { get { lock (_sync) return _keys.Count; } }
 
     public void ValidateKey(TKey key)
@@ -296,7 +292,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
     // Called under _sync after claiming ownership; the worker starts without a producer context.
     private void QueueDrain()
     {
-        _scheduledDrains++;
         _ = ThreadPool.UnsafeQueueUserWorkItem(DrainCallback, this);
     }
 
@@ -356,11 +351,7 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
                     _pumping = false;
             }
             if (dispatch == null)
-            {
-                if (onWorker)
-                    DrainIdle?.Invoke();
                 return;
-            }
             dispatch.Dispatch(onWorker);
         }
     }
