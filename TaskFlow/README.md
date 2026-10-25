@@ -29,6 +29,7 @@ await Task.WhenAll(first, second);
 - `DisposeAsync` requests cancellation and waits for the lane to finish. Synchronous disposal is bounded by `TaskFlowOptions.SynchronousDisposeTimeout`.
 - Observe every returned operation task; disposal does not surface individual operation failures.
 - Timeout includes time spent waiting in the underlying queue.
+- [Bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) provides immediate `TrySubmit` decisions and asynchronous `Submit(Wait)` backpressure.
 - Scheduler decorators do not own the flow they wrap. Dispose the original `ITaskFlow`.
 
 TaskFlow also provides dedicated-thread and caller-owned-thread flows, cancellation and timeout policies, leading-edge throttling, error observation, annotations, and interception.
@@ -45,6 +46,3 @@ TaskFlow also provides dedicated-thread and caller-owned-thread flows, cancellat
 - [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
 
 Source, license, and feedback are available in the [TaskFlow repository](https://github.com/dombrovsky/TaskFlow).
-
-
-For synchronous load shedding, `admission.TrySubmit(scheduler, operation)` returns an immediate admission enum and an observable completion task on acceptance. It never waits for capacity. Use `Submit(..., TaskSchedulerAdmissionMode.Wait)` for asynchronous backpressure, or `Submit(..., Reject)` when enqueue middleware must run before the decision. See [bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) for pipeline compatibility and [event producer recipes](https://dombrovsky.github.io/TaskFlow/recipes/#shed-load-from-synchronous-events).

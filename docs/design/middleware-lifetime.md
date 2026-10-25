@@ -96,3 +96,23 @@ operations remain observable through their returned tasks.
 
 ExecutionContext flow, caller cancellation and terminal scheduler selection are
 left to the existing scheduling paths. No lifetime scope needs to flow with them.
+
+## Synchronous admission
+
+TrySubmit reserves capacity in the existing admission queues. A single drain owner
+covers both a queued worker and active dispatch. Ownership and idle publication
+use the queue lock, preventing duplicate drains and lost wakeups. Operation,
+middleware, and terminal dispatch callbacks run outside that lock and off the
+synchronous producer's stack.
+
+Deferred admissions capture context before the producer returns; a legacy drain
+may later hand off to a worker at TrySubmit. The uncoordinated gate skips capture
+for legacy work that owns inline dispatch. Legacy-only bounded waiters retain the
+capacity releaser's context; coordinated submissions retain their producer context.
+Operation activities own execution and completion regardless of context flow.
+
+Operation, middleware, and terminal scheduling failures settle affected completions
+without abandoning the drain. Runtime thread-pool queue failure can occur after
+callback publication, so resetting ownership and retrying could dispatch twice.
+There is no inline fallback; progress requires a functioning thread pool and
+cooperative work.

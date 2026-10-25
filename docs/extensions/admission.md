@@ -43,83 +43,67 @@ Capacity belongs to a registration. Descendant snapshots share its gate. Indepen
 
 Outstanding capacity does not bound unlimited admission waiters. Await submissions in producers to apply backpressure. To bound retained submissions through a registration, also configure `MaxAdmissionWaiters`; handle overflow instead of repeatedly retrying or spawning more producers.
 
-## Immediate load shedding or asynchronous backpressure
+## Synchronous admission
 
-| API | Capacity unavailable | Decision | Middleware |
-| --- | --- | --- | --- |
-| `TrySubmit(...)` | Immediately returns `Full`; never registers an admission waiter | Synchronous enum | Validated native pipelines described below |
-| `Submit(..., Wait)` | Waits asynchronously and cancellably | `Admission` task | Existing native middleware pipeline |
-| `Submit(..., Reject)` | Rejects when the admission stage is reached | `Admission` task; upstream middleware may delay it | Existing native middleware pipeline |
-| `Enqueue(...)` | Uses configured admission mode | Operation completion task | Existing pipeline behavior |
+| API | When capacity is unavailable | Result |
+| --- | --- | --- |
+| `TrySubmit(...)` | Returns `Full` immediately | Immediate decision; completion task on acceptance |
+| `Submit(..., Wait)` | Waits asynchronously and cancellably | Admission and completion tasks |
+| `Submit(..., Reject)` | Rejects when it reaches admission | Admission and completion tasks |
+| `Enqueue(...)` | Uses the configured admission mode | Operation completion task |
 
-Use `TrySubmit` when a synchronous event producer must decide whether to consume a cooldown, acknowledge an event, or shed load before returning. The controller exposes this through extension methods, without changing `ITaskScheduler`:
+Use `TrySubmit` for synchronous producers that must accept or drop work before returning:
 
 ```csharp
-// A deliberately supported branch without the earlier timeout enqueue middleware.
+// Timeout is enqueue middleware, so use a branch without it for TrySubmit.
 ITaskScheduler immediate = flow.WithBoundedAdmission(admission);
-Task Save(CancellationToken token) => SaveAsync(token);
-var attempt = admission.TrySubmit(immediate, Save, cancellationToken);
+var attempt = admission.TrySubmit(immediate, token => SaveAsync(token), cancellationToken);
 if (attempt.Admission == TaskSchedulerAdmissionResult.Accepted)
 {
     await attempt.Completion!;
 }
 else
 {
-    // Full or Closed; Completion is null and there is no rejection task to observe.
-    ReportRejected(attempt.Admission);
+    ReportRejected(attempt.Admission); // Full or Closed; Completion is null.
 }
 ```
 
-`TaskSchedulerTrySubmission` (and its generic result form) contains the immediate `Admission` enum and a reusable `Completion` task **only on acceptance**. Observe every accepted completion for success, cancellation, and failure. Internal rejection failures, including failures introduced by completion middleware, are observed by the scheduler. Rejection completion middleware still runs and remains lifetime-owned; it cannot change the already returned admission decision.
+`Accepted` reserves all applicable global/per-key budgets atomically. `TrySubmit` never waits for capacity or creates admission waiters; earlier eligible waiters retain priority. Observe every accepted completion for success, cancellation, and failure. Rejected work does not execute; its completion callbacks remain lifetime-owned and internal failures are observed by the scheduler.
 
-`Accepted` atomically reserves every applicable coordinated global/per-key budget before returning. It does not promise execution success. Dispatch is deferred off the producer's stack, including with an inline custom .NET `TaskScheduler`; execution may begin concurrently before `TrySubmit` returns. No asynchronous work is synchronously waited on. Synchronization uses the existing admission locks; this is not a lock-free or hard real-time API.
+Cancellation that wins before admission throws `OperationCanceledException` synchronously. After acceptance, cancellation follows the terminal's existing behavior; observe `Completion` for the outcome. A closed lifetime returns `Closed`.
 
-An already canceled caller token throws `OperationCanceledException` synchronously without submitting work. Cancellation racing admission either wins before admission (the call throws) or applies to accepted work through its completion task. A closed lifetime returns `Closed` with null completion. `TrySubmit` never returns `WaiterLimitReached`, because it never registers a waiter. Earlier eligible admission waiters retain priority.
-
-The 12 overloads consist of four typed-state `ValueTask` cores (keyed/unkeyed, with/without results) and eight `Task` conveniences (also with/without a delegate token parameter). Cancellation is optional on every overload. Ordinary async lambdas have a Task target without overlapping Task/ValueTask convenience signatures or compiler-specific overload priorities. For ValueTask or synchronous operations, use a typed-state core:
+Task delegates may return results and receive a cancellation token. Caller cancellation is optional. For ValueTask or synchronous operations, use a typed-state overload:
 
 ```csharp
-// Common Task convenience: no casts or explicit delegate type required.
-var attempt = admission.TrySubmit(immediate, async token => await SaveAsync(token));
-
-// Typed state avoids a closure. This synchronous body also executes off the producer's stack.
 var computed = admission.TrySubmit(immediate,
-    static (int value, CancellationToken _) => new ValueTask<int>(value * 2), 21, cancellationToken);
+    static (int value, CancellationToken _) => new ValueTask<int>(value * 2), 21);
+if (computed.Admission == TaskSchedulerAdmissionResult.Accepted)
+    Console.WriteLine(await computed.Completion!);
 ```
 
-Observe each accepted completion. For named Task operations with typed state, wrap the result in `new ValueTask(...)` or `new ValueTask<T>(...)`. See the [synchronous event producer recipe](../recipes.md#shed-load-from-synchronous-events) for a cooldown example.
+See the [synchronous event producer recipe](../recipes.md#shed-load-from-synchronous-events) for a handler that updates a cooldown only on acceptance.
 
 ### Dispatch and producer context
 
-Admission and dispatch are separate phases. Each admission domain has one drain owner, claimed under its existing queue lock before a thread-pool worker is queued. Further arrivals join that drain. The keyed coordinator uses its existing ready-list selection before scheduling a drain; arrivals blocked by a busy key or execution limit need no worker. Completion, cancellation, and capacity release recheck runnable work. Publishing idle uses the same lock as queue mutation, so an arrival either joins the current drain or starts the next one.
-
-The worker is queued without capturing a producer's `ExecutionContext`. At the dispatch boundary it restores each queued producer's captured context; a suppressed producer starts from the worker's default context. `TaskFlow`, `TaskFlowSchedulerAdapter`, and keyed/concurrent branches preserve that context into execution. `DedicatedThreadTaskFlow` and `CurrentThreadTaskFlow` retain their existing thread-affine terminal semantics: delegates and execution/completion middleware start in the execution thread's ambient context, not each producer's context. Suppressing producer flow does not erase that terminal thread's existing AsyncLocal values. Continuations retain the terminal's synchronization-context behavior. Lifetime accounting is stored on the operation and remains active through execution and completion even when flow was suppressed. There is no ambient lifetime scope or automatic self-disposal detection; disposal belongs to the external owner.
-
-A legacy-only `Enqueue`/`Submit` drain retains inline scheduler callbacks, including submissions made under suppressed flow. It hands off when it encounters `TrySubmit`, because that call requires an asynchronous boundary. An immediately admitted legacy operation claims its inline drain under the gate lock, avoiding an unnecessary context capture. Deferred legacy operations still capture before their producer returns, because a later TrySubmit may share their drain; that worker restores each queued producer's context before invoking its terminal. Legacy keyed/concurrent branches continue capturing each producer's context. An uncoordinated bounded legacy waiter retains its historical behavior: its continuation is invoked in the capacity releaser's context. With a custom inline scheduler, suppressing flow prevents future capture but does not clear ambient values on the current callback stack. Use a keyed/concurrent branch with the default scheduler when waiting producers require context isolation; do not rely on synchronous callback timing when mixing legacy calls with `TrySubmit`.
-
-This coalesces dispatch work items, but does not eliminate terminal scheduling or asynchronous task continuations. Work that becomes runnable only after a previous drain has retired needs another drain. Rejection or pre-execution cancellation with completion middleware still uses a separate per-operation asynchronous handoff to protect the producer from those callbacks; without completion middleware, rejection needs no such handoff. There is no dedicated thread or polling loop. See the [reproducible dispatch measurements](https://github.com/dombrovsky/TaskFlow/tree/main/benchmarks/Dispatch).
-
-The off-stack guarantee covers operation delegates, supported middleware callbacks, and terminal `QueueTask` calls initiated by this submission. It does not make admission wait-free: existing locks can contend, and keyed hashing/equality must run synchronously to decide admission. Supply a fast, stable, nonblocking, nonthrowing comparer. Runtime `ExecutionContext`/`AsyncLocal` notifications also retain their .NET behavior. With a custom backend that blocks inside `QueueTask`, a direct native flow can hold its existing owner lock and delay a concurrent producer entering that lifetime. Prefer a keyed/concurrent branch, or `TaskFlowSchedulerAdapter` with an explicit lifetime, for such backends. No asynchronous capacity or execution task is synchronously waited on.
-
-### Dispatch failures and progress
-
-Operation, execution/completion middleware, and custom terminal scheduling exceptions settle the affected accepted completion; they do not abandon the shared drain. Worker submission uses the runtime thread pool, whose managed queue has no capacity-rejection decision. Progress and shutdown draining require a functioning thread pool and cooperative running work. Resource exhaustion, runtime termination, forced thread abort, or a host without thread-pool support are outside this liveness guarantee. In particular, queueing can fail after the runtime has already published the callback, so blindly clearing drain ownership and retrying cannot safely recover. The scheduler does not fall back to executing callbacks on the producer. See the [dispatch ownership review](https://github.com/dombrovsky/TaskFlow/blob/main/benchmarks/Dispatch/REVIEW.md) for the runtime-source audit and fault tests.
+- Operation delegates, supported middleware callbacks, and terminal `QueueTask` calls run off the `TrySubmit` calling stack. Execution may begin before the call returns.
+- `TaskFlow`, adapters, and keyed/concurrent branches preserve the producer's `ExecutionContext`. Suppressed flow starts from the worker's default context.
+- Dedicated-thread and current-thread flows retain their execution thread's ambient context. Suppressing producer flow does not clear that thread's existing values.
+- Existing locks can contend, and key hashing/equality runs synchronously. Use fast, stable, nonthrowing comparers. For blocking custom backends, use a keyed/concurrent branch or an adapter with an explicit lifetime.
 
 ### Supported TrySubmit pipelines
 
-Capability validation runs before operation creation, middleware invocation, or capacity reservation:
+Validation runs before work creation or capacity reservation:
 
-- A native pipeline must contain exactly one registration of the selected controller. Missing/duplicate pairing throws `ArgumentException`; null arguments throw `ArgumentNullException`.
-- One uncoordinated bounded registration works on built-in `TaskFlow`, `DedicatedThreadTaskFlow`, `CurrentThreadTaskFlow`, or `TaskFlowSchedulerAdapter` terminals. An adapter needs an explicit middleware lifetime. Opaque/custom `ITaskScheduler` terminals throw `NotSupportedException`.
-- Keyed or concurrent branches support multiple coordinated global/per-key budgets and execution limits. Configure the branch before adding admission. Multiple independent uncoordinated bounded registrations throw `NotSupportedException`, since they cannot reserve atomically together.
-- Annotations and execution/completion middleware are supported at any position, including error handlers and execution interceptors.
-- Any other **enqueue middleware**, at any position, throws `NotSupportedException`. This includes custom enqueue middleware even when it currently forwards synchronously, and built-in timeout, throttling, cancellation-scope, cancel-previous, and logging middleware that implement enqueue interception. A middleware object implementing multiple phases is unsupported if one is enqueue.
+- The native pipeline must contain the selected controller exactly once. Missing or duplicate registrations throw `ArgumentException`.
+- Built-in flow terminals and `TaskFlowSchedulerAdapter` are supported. Adapters require an explicit lifetime; opaque/custom `ITaskScheduler` terminals are unsupported.
+- Multiple budgets require a keyed or concurrent branch, configured before admission. Annotations and execution/completion middleware are supported.
+- Other **enqueue middleware**, anywhere in the pipeline, throws `NotSupportedException`. This includes timeout, throttling, cancellation scopes, cancel-previous, logging, and custom enqueue interception. No middleware is bypassed.
 
-No middleware is silently bypassed. Keep `Submit(..., Reject)` for these broader compositions: it still traverses enqueue middleware, and rejects capacity immediately once it reaches admission. `Submit(..., Wait)` continues to provide asynchronous backpressure. To use `TrySubmit`, compose a supported branch deliberately; moving unsupported enqueue middleware inside the admission stage does not make it supported.
+Keep `Submit(..., Reject)` when enqueue middleware must run; its admission task may be delayed by that middleware. Use `Submit(..., Wait)` for asynchronous backpressure.
 
 ## Admission separately from completion
 
-`Admission` and `Completion` remain reusable `Task` handles, including for synchronous decisions. Retaining them, awaiting them multiple times, and combining them with `Task.WhenAll` is supported.
+`Submit` exposes reusable `Admission` and `Completion` tasks. They can be awaited more than once or combined with `Task.WhenAll`.
 
 `Enqueue` uses the registration's configured default mode and returns the caller-facing operation task. `BoundedAdmissionController.Submit` traverses the same pipeline and gate, overrides the mode for that controller's registration, and exposes two tasks:
 

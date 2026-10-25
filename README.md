@@ -27,6 +27,7 @@ One flow is one sequential lane. Create separate flows for work that should proc
 |---|---|
 | FIFO execution | Accepted operations start in submission order and do not overlap within one flow. |
 | Per-operation tasks | Every caller can await its own result, exception, or cancellation. |
+| [Bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) | Use `TrySubmit` for immediate load shedding or `Submit(Wait)` for asynchronous backpressure. |
 | Owned lifetime | A flow gives queued and running work an explicit component-level shutdown boundary. |
 | Composable policies | Add cancellation scopes, latest-request-wins behavior, timeouts, leading-edge throttling, operation names, interception, and error observation. |
 | Execution choices | Use the thread pool, a dedicated thread, the current thread, or another `TaskScheduler`. |
@@ -87,6 +88,3 @@ Read [Concepts and lifecycle](https://dombrovsky.github.io/TaskFlow/concepts-and
 - [Troubleshooting](https://dombrovsky.github.io/TaskFlow/troubleshooting/)
 
 TaskFlow is available under the [MIT License](LICENSE). Contributions and problem reports are welcome through [GitHub issues](https://github.com/dombrovsky/TaskFlow/issues).
-
-
-For synchronous load shedding, `admission.TrySubmit(scheduler, operation)` returns an immediate admission enum and an observable completion task on acceptance. It never waits for capacity. Use `Submit(..., TaskSchedulerAdmissionMode.Wait)` for asynchronous backpressure, or `Submit(..., Reject)` when enqueue middleware must run before the decision. See [bounded admission](https://dombrovsky.github.io/TaskFlow/extensions/admission/) for pipeline compatibility and [event producer recipes](https://dombrovsky.github.io/TaskFlow/recipes/#shed-load-from-synchronous-events).

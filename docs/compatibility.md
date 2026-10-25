@@ -25,6 +25,8 @@ The packages can be consumed from compatible target frameworks regardless of the
 
 `IAsyncDisposable` support for the `netstandard2.0` asset is supplied through `Microsoft.Bcl.AsyncInterfaces`. Prefer `await using` where the consuming language and runtime support it.
 
+`TrySubmit` is available on every core target and supports NativeAOT/trimming. See [supported pipelines](extensions/admission.md#supported-trysubmit-pipelines) for composition requirements.
+
 ## Package selection examples
 
 For a .NET 8 or .NET 10 application:
@@ -48,6 +50,3 @@ dotnet add package TaskFlow.Microsoft.Extensions.Logging
 ```
 
 All TaskFlow APIs use the `System.Threading.Tasks.Flow` namespace. Logging configuration also uses `Microsoft.Extensions.Logging`, and registration uses `Microsoft.Extensions.DependencyInjection`.
-
-
-`TrySubmit` is available on `netstandard2.0`, `net8.0`, and `net10.0`. Its typed keyed path and capability validation use no reflection, dynamic code generation, or runtime generic construction, preserving the existing NativeAOT/trimming model. Only native pipeline compositions documented in [bounded admission](extensions/admission.md#supported-trysubmit-pipelines) support synchronous admission.

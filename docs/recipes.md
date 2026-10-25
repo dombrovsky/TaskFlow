@@ -77,7 +77,7 @@ The synchronous event handler only captures the event data and enqueues the asyn
 
 ## Shed load from synchronous events
 
-Reserve capacity under a rule-state lock and consume its cooldown only on acceptance. The handler remains synchronous; delivery runs asynchronously on the flow-owned branch afterward.
+Use `TrySubmit` to accept or drop an event synchronously, updating its cooldown only on acceptance.
 
 ```csharp
 public sealed class CameraEventProducer : IAsyncDisposable
@@ -123,16 +123,25 @@ public sealed class CameraEventProducer : IAsyncDisposable
 
     private static async Task ObserveAsync(Task completion)
     {
-        try { await completion.ConfigureAwait(false); }
-        catch (OperationCanceledException) { }
-        catch (Exception error) { Console.Error.WriteLine(error); }
+        try
+        {
+            await completion.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown requested cancellation.
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(error);
+        }
     }
 
     public ValueTask DisposeAsync() => _flow.DisposeAsync();
 }
 ```
 
-Subscribe/unsubscribe this producer through the application's event source lifecycle, stopping callbacks before disposing it. Execution can begin concurrently before the handler returns; the delivery delegate must not depend on the handler having released its lock. The returned completion is observed outside that lock. For an asynchronous producer that must retain every event, use `Submit(..., TaskSchedulerAdmissionMode.Wait)` and await admission/completion instead of dropping work on `Full`.
+Stop event callbacks before disposal. Delivery may begin before the handler releases its lock; observe completion outside that lock. Use `Submit(..., Wait)` when producers should wait for capacity instead of dropping work.
 
 ## Avoid duplicate credential refreshes
 
