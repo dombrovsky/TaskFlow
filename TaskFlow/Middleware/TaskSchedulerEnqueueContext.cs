@@ -84,5 +84,50 @@ public sealed class TaskSchedulerEnqueueContext<TResult>
     public TaskSchedulerEnqueueContext<TResult> WithCancellationToken(CancellationToken cancellationToken)
         => new TaskSchedulerEnqueueContext<TResult>(_operation, _annotations, _registrationIndex, cancellationToken);
 
+    /// <summary>Separates caller waiting from an explicitly owned downstream producer.</summary>
+    /// <param name="continuation">The downstream enqueue continuation to transfer to operation ownership.</param>
+    /// <param name="callerWait">Starts the producer through the supplied continuation and returns the caller's wait task.</param>
+    /// <returns>The caller's wait task, which may settle before the producer.</returns>
+    /// <remarks>
+    /// <para>This is an explicit ownership boundary for policies such as timeout. Invoke the supplied continuation at most once,
+    /// before <paramref name="callerWait"/> completes. Its task represents actual producer termination. The operation retains
+    /// ownership until that task settles, including its execution and completion processing, even if the caller stops waiting.</para>
+    /// <para>Ordinary middleware must return or await every continuation it starts. Only work started through this boundary
+    /// transfers ownership; arbitrary detached work and continuations invoked after middleware completion remain unsupported.
+    /// Nested boundaries are supported. Caller completion does not release outstanding admission capacity or owned resources.</para>
+    /// <para>The boundary preserves synchronous forwarding exceptions. A policy returning an async wait task may instead report
+    /// them through that task. Observe the producer's result inside the wait policy when it determines the caller's outcome.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
+    public Task<TResult> InvokeWithCallerWait(TaskSchedulerEnqueueDelegate<TResult> continuation,
+        Func<TaskSchedulerEnqueueDelegate<TResult>, Task<TResult>> callerWait)
+    {
+        Annotations.Argument.NotNull(continuation);
+        Annotations.Argument.NotNull(callerWait);
+        return callerWait(nextContext =>
+        {
+            _operation.AddActivity();
+            Task<TResult> producer;
+            try
+            {
+                producer = continuation(nextContext);
+                Annotations.Argument.NotNull(producer);
+            }
+            catch
+            {
+                _operation.ReleaseActivity();
+                throw;
+            }
+            return AwaitProducer(_operation, producer);
+        });
+
+        static async Task<TResult> AwaitProducer(Internal.PipelineOperation<TResult> operation, Task<TResult> producer)
+        {
+            try
+            { return await producer.ConfigureAwait(false); }
+            finally { operation.ReleaseActivity(); }
+        }
+    }
+
     internal Internal.PipelineOperation<TResult> Operation => _operation;
 }

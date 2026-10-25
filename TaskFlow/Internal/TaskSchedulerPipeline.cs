@@ -204,29 +204,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         finally { operation.ReleaseActivity(); }
     }
 
-    private Task<TResult> InvokeEnqueue<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
-    {
-        operation.AddActivity();
-        Task<TResult> pending;
-        try
-        {
-            pending = InvokeEnqueueCore(operation, index, cancellationToken);
-        }
-        catch
-        {
-            operation.ReleaseActivity();
-            throw;
-        }
-        return AwaitActivity(operation, pending);
-
-        static async Task<TResult> AwaitActivity(PipelineOperation<TResult> operation, Task<TResult> pending)
-        {
-            try
-            { return await pending.ConfigureAwait(false); }
-            finally { operation.ReleaseActivity(); }
-        }
-    }
-
     private Task<TResult> InvokeEnqueueCore<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
     {
         while (index >= 0 && !(_registrations[index].Middleware is ITaskSchedulerEnqueueMiddleware))
@@ -249,10 +226,10 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         if (registration.Middleware is CoordinatedPolicy)
         {
             if (operation.Coordinated)
-                return InvokeEnqueue(operation, index - 1, cancellationToken);
+                return InvokeEnqueueCore(operation, index - 1, cancellationToken);
             operation.Coordinated = true;
             return Coordinator!.Schedule(operation, GetPolicies(),
-                token => InvokeEnqueue(operation, registrationIndex - 1, token), cancellationToken);
+                token => InvokeEnqueueCore(operation, registrationIndex - 1, token), cancellationToken);
         }
         var middleware = (ITaskSchedulerEnqueueMiddleware)registration.Middleware;
         var context = new TaskSchedulerEnqueueContext<TResult>(operation, registration.Annotations, registrationIndex, cancellationToken);
@@ -261,7 +238,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         {
             if (Interlocked.Exchange(ref nextCalled, 1) != 0)
                 throw new InvalidOperationException("Enqueue middleware must invoke its continuation at most once.");
-            return InvokeEnqueue(operation, registrationIndex - 1, nextContext.CancellationToken);
+            return InvokeEnqueueCore(operation, registrationIndex - 1, nextContext.CancellationToken);
         });
     }
 
@@ -281,7 +258,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The pipeline converts every operation failure into a completion outcome.")]
     private async ValueTask<TResult> ExecuteEnvelope<TResult>(PipelineOperation<TResult> operation, CancellationToken cancellationToken)
     {
-        // The envelope owns the root execution activity, including completion middleware.
+        // One execution envelope owns the entire structured execution/completion tree.
         operation.AddActivity();
         try
         {
@@ -303,14 +280,6 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
             return outcome.GetResultOrThrow();
         }
-        finally { operation.ReleaseActivity(); }
-    }
-
-    private async ValueTask<TResult> InvokeExecution<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
-    {
-        operation.AddActivity();
-        try
-        { return await InvokeExecutionCore(operation, index, cancellationToken).ConfigureAwait(true); }
         finally { operation.ReleaseActivity(); }
     }
 
@@ -339,7 +308,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         return middleware.InvokeAsync(context, nextContext =>
         {
             ValidateOperationContext(operation, nextContext);
-            return InvokeExecution(operation, registrationIndex + 1, nextContext.CancellationToken);
+            return InvokeExecutionCore(operation, registrationIndex + 1, nextContext.CancellationToken);
         });
     }
 
@@ -379,17 +348,11 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         var nextCalled = false;
         try
         {
-            return await middleware.InvokeAsync(context, outcome, async (nextContext, nextOutcome) =>
+            return await middleware.InvokeAsync(context, outcome, (nextContext, nextOutcome) =>
             {
                 ValidateOperationContext(operation, nextContext);
-                // A middleware may return its own outcome while this continuation is still running.
-                operation.AddActivity();
-                try
-                {
-                    nextCalled = true;
-                    return await InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken, producerToken).ConfigureAwait(true);
-                }
-                finally { operation.ReleaseActivity(); }
+                nextCalled = true;
+                return InvokeCompletion(operation, registrationIndex + 1, nextOutcome, nextContext.CancellationToken, producerToken);
             }).ConfigureAwait(true);
         }
         catch (Exception exception)

@@ -13,7 +13,7 @@ The terminal scheduler is the `ITaskScheduler` at the end of the enqueue pipelin
 | Execution | Token supplied when the terminal invokes the operation | Initial execution and normal completion `CancellationToken` |
 | Attempt | Replacement token supplied by execution middleware | `CancellationToken` on a context copied with `WithCancellationToken` |
 
-These roles can have different tokens. Keeping caller and producer cancellation separate lets middleware detach a caller's wait from shared work. The pipeline does not reattach caller cancellation after that choice.
+These roles can have different tokens. Keeping caller and producer cancellation separate allows an explicit enqueue ownership boundary (`InvokeWithCallerWait`) to end a caller's wait before producer termination. Ordinary middleware must await all downstream work it starts. The pipeline does not reattach caller cancellation after that choice.
 
 Each context snapshots the producer token when created. Copies retain that value even if an early timeout races later submission. Before terminal submission, it falls back to the original caller token.
 

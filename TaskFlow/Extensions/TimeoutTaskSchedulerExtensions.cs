@@ -38,7 +38,8 @@ using System.Threading.Tasks.Flow.Annotations;
 /// The timeout clock starts when <c>Enqueue</c> reaches this wrapper, not when the delegate begins running.
 /// Time spent waiting in an underlying scheduler's queue therefore counts toward the timeout. On a built-in
 /// sequential flow, a timed-out queued delegate can later be invoked with an already-canceled token.
-/// Cancellation is cooperative, so a delegate that ignores its token may continue running.
+/// Cancellation is cooperative, so a delegate that ignores its token may continue running. An explicit operation-ownership
+/// boundary retains that producer; caller timeout does not release outstanding admission capacity or owned middleware resources.
 /// </para>
 /// <para>
 /// Common use cases include:
@@ -233,17 +234,17 @@ public static class TimeoutTaskSchedulerExtensions
 
         public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
-            return await Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, context.CancellationToken).ConfigureAwait(false);
+            return await context.InvokeWithCallerWait(continuation, ownedContinuation =>
+                Internal.TaskExtensions.WhenAnyCancelRest(new Func<CancellationToken, Task<TResult>>[]
+                {
+                    TimeoutAsync,
+                    token => ownedContinuation(context.WithCancellationToken(token))
+                }, context.CancellationToken)).ConfigureAwait(false);
 
             async Task<TResult> TimeoutAsync(CancellationToken token)
             {
                 await Task.Delay(_timeout, token).ConfigureAwait(false);
                 throw new TimeoutException(FormatExceptionMessage());
-            }
-
-            Task<TResult> EnqueueInternalAsync(CancellationToken token)
-            {
-                return continuation(context.WithCancellationToken(token));
             }
 
             string FormatExceptionMessage()

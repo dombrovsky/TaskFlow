@@ -43,7 +43,7 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
     }
 
     [Test]
-    public async Task SingleFlight_SharesOneProducerAndAllowsIndependentWaitCancellation()
+    public async Task SingleFlight_FollowerShortCircuitsWhileLeaderAwaitsProducer()
     {
         var terminal = new CountingInlineTerminal();
         var middleware = new SingleFlightIntMiddleware();
@@ -60,11 +60,11 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
         await middleware.ProducerStarted;
         var follower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("A follower must not create another producer."), "key", CancellationToken.None);
 
-        await firstWait.CancelAsync();
-        Assert.That(async () => await first, Throws.InstanceOf<OperationCanceledException>());
+        Assert.That(first.IsCompleted, Is.False);
         Assert.That(follower.IsCompleted, Is.False);
 
         producerGate.SetResult(42);
+        Assert.That(await first, Is.EqualTo(42));
         Assert.That(await follower, Is.EqualTo(42));
         Assert.That(terminal.EnqueueCount, Is.EqualTo(1));
         Assert.That(execution.CallCount, Is.EqualTo(1));
@@ -163,13 +163,13 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
 
     [TestCase(OwnershipCancellation.LocalScope)]
     [TestCase(OwnershipCancellation.SharedLane)]
-    public async Task SharedProducer_DetachesCallerButPreservesOwnershipCancellation(OwnershipCancellation cancellation)
+    public async Task Producer_PreservesLocalAndSharedOwnershipCancellation(OwnershipCancellation cancellation)
     {
         using var localOwner = new CancellationTokenSource();
         using var sharedLane = new CancellationTokenSource();
         using var caller = new CancellationTokenSource();
         var terminal = new CountingInlineTerminal();
-        var ownership = new OwnershipSingleFlightMiddleware(localOwner.Token, sharedLane.Token);
+        var ownership = new OwnershipTokenMiddleware(localOwner.Token, sharedLane.Token);
         var scheduler = terminal
             .UseMiddleware(ownership)
             .UseMiddleware(new DropProducerTokenMiddleware());
@@ -182,11 +182,8 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
             return 42;
         }, "key", caller.Token);
         await producerEntered.Task;
-        var follower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("A follower must not invoke the producer."), "key", CancellationToken.None);
-
         await caller.CancelAsync();
-        Assert.That(async () => await first, Throws.InstanceOf<OperationCanceledException>());
-        Assert.That(follower.IsCompleted, Is.False, "Canceling one caller must not cancel shared producer work.");
+        Assert.That(first.IsCompleted, Is.False, "Upstream replacement does not remove local/shared owner cancellation.");
 
         if (cancellation == OwnershipCancellation.LocalScope)
         {
@@ -197,9 +194,8 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
             await sharedLane.CancelAsync();
         }
 
-        Assert.That(async () => await follower, Throws.InstanceOf<OperationCanceledException>());
+        Assert.That(async () => await first, Throws.InstanceOf<OperationCanceledException>());
         Assert.That(terminal.EnqueueCount, Is.EqualTo(1));
-        Assert.That(() => ownership.ActiveCount, Is.Zero.After(100, 10));
     }
 
     private sealed class RetryMiddleware : ITaskSchedulerExecutionMiddleware
@@ -239,10 +235,16 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
             var producer = _producers.GetOrAdd(key, candidate);
             if (ReferenceEquals(candidate, producer))
             {
-                _ = Produce(key, producer, context, continuation);
+                return Lead();
             }
 
             return Wait<TResult>(producer.Task, context.CallerCancellationToken);
+
+            async Task<TResult> Lead()
+            {
+                await Produce(key, producer, context, continuation);
+                return await Wait<TResult>(producer.Task, context.CallerCancellationToken);
+            }
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The single-flight prototype must transfer every producer failure to all follower tasks.")]
@@ -421,66 +423,12 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
             => continuation(context.WithCancellationToken(CancellationToken.None));
     }
 
-    private sealed class OwnershipSingleFlightMiddleware : ITaskSchedulerEnqueueMiddleware
+    private sealed class OwnershipTokenMiddleware(CancellationToken localOwnerToken, CancellationToken sharedLaneToken) : ITaskSchedulerEnqueueMiddleware
     {
-        private readonly CancellationToken _localOwnerToken;
-        private readonly CancellationToken _sharedLaneToken;
-        private readonly ConcurrentDictionary<string, OwnedProducer> _producers = new ConcurrentDictionary<string, OwnedProducer>();
-
-        public OwnershipSingleFlightMiddleware(CancellationToken localOwnerToken, CancellationToken sharedLaneToken)
+        public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
-            _localOwnerToken = localOwnerToken;
-            _sharedLaneToken = sharedLaneToken;
-        }
-
-        public int ActiveCount => _producers.Count;
-
-        public Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
-        {
-            if (typeof(TResult) != typeof(int))
-                throw new NotSupportedException("This test prototype supports Int32 results only.");
-            var key = (string)context.State!;
-            var candidate = new OwnedProducer();
-            var producer = _producers.GetOrAdd(key, candidate);
-            if (ReferenceEquals(candidate, producer))
-            {
-                _ = Produce(key, producer, context, continuation);
-            }
-
-            return Wait<TResult>(producer.Task, context.CallerCancellationToken, _localOwnerToken, _sharedLaneToken);
-        }
-
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "The ownership prototype must transfer every producer failure to all follower tasks.")]
-        private async Task Produce<TResult>(string key, OwnedProducer producer, TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
-        {
-            using var ownership = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, _localOwnerToken, _sharedLaneToken);
-            try
-            {
-                var result = await continuation(context.WithCancellationToken(ownership.Token));
-                producer.TrySetResult((int)(object)result!);
-            }
-            catch (Exception exception)
-            {
-                producer.TrySetException(exception);
-            }
-            finally
-            {
-                _producers.TryRemove(new KeyValuePair<string, OwnedProducer>(key, producer));
-            }
-        }
-
-        private static async Task<TResult> Wait<TResult>(Task<int> producer, CancellationToken callerToken, CancellationToken localOwnerToken, CancellationToken sharedLaneToken)
-        {
-            using var wait = CancellationTokenSource.CreateLinkedTokenSource(callerToken, localOwnerToken, sharedLaneToken);
-            return (TResult)(object)await producer.WaitAsync(wait.Token);
-        }
-
-        private sealed class OwnedProducer
-        {
-            private readonly TaskCompletionSource<int> _completion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-            public Task<int> Task => _completion.Task;
-            public void TrySetResult(int result) => _completion.TrySetResult(result);
-            public void TrySetException(Exception exception) => _completion.TrySetException(exception);
+            using var ownership = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken, localOwnerToken, sharedLaneToken);
+            return await continuation(context.WithCancellationToken(ownership.Token));
         }
     }
 

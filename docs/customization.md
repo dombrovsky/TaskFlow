@@ -295,3 +295,39 @@ Use middleware for reusable policy that needs to affect admission, wrap executio
 ## Testing custom implementations
 
 Exercise concurrent submissions, ordering, canceled-before-start work, disposal during startup and execution, delegate failures, callback failures, and operations that ignore cancellation. Run contract tests against every execution model whose guarantees the custom implementation claims.
+
+
+### Middleware completion and ownership
+
+Before middleware's returned `Task`/`ValueTask` settles, every downstream
+continuation it starts must settle. Direct forwarding, awaited post-processing,
+short-circuiting, sequential retries, and fully joined concurrent attempts are
+supported. Join attempts on failure and cancellation too:
+
+```csharp
+public async ValueTask<T> InvokeAsync<T>(TaskSchedulerOperationContext context,
+    TaskSchedulerExecutionDelegate<T> next)
+{
+    var first = next(context).AsTask();
+    var second = next(context).AsTask();
+    var results = await Task.WhenAll(first, second).ConfigureAwait(true);
+    return results[0];
+}
+```
+
+Use concurrent attempts only when the operation permits overlapping execution.
+Enqueue continuations remain at most once. Never invoke a saved continuation after
+middleware finishes or return while directly started downstream work is running.
+Detached execution and completion continuations are unsupported; violations are
+not exhaustively detected at runtime.
+
+An enqueue policy that separates caller waiting from producer completion must
+explicitly transfer ownership using `context.InvokeWithCallerWait(next, owned =>
+WaitForCaller(owned(context)))`. Invoke `owned` at most once before the wait policy
+finishes. For example, a wait policy may race its producer task against a deadline;
+it must observe failures and manage its cancellation resources. The operation
+retains producer ownership after caller completion. Built-in `WithTimeout` uses
+this boundary and retains its queue-and-execution timeout behavior. Existing custom
+early-return policies must migrate or await their producer. See
+[Middleware lifetime](design/middleware-lifetime.md) for disposal and future policy
+requirements.
