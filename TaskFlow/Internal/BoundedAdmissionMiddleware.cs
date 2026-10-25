@@ -213,12 +213,12 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
             // Legacy-only inline drains retain the pump caller's context. A shared worker
             // must restore each queued producer instead of borrowing the TrySubmit owner's context.
             if (!onWorker)
-                _ = ExecuteAsync();
+                _ = ForwardCompletionAsync();
             else if (_executionContext != null)
-                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ExecuteAsync(); }, this);
+                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ForwardCompletionAsync(); }, this);
             else
                 // A suppressed producer starts from the context-free worker.
-                _ = ExecuteAsync();
+                _ = ForwardCompletionAsync();
         }
 
         public void Quiesced()
@@ -234,8 +234,10 @@ internal sealed class BoundedAdmissionMiddleware : ITaskSchedulerEnqueueMiddlewa
                 _owner.Release(Request?.Synchronous == true);
         }
 
+        // The submission awaits _completion.Task. Forward every outcome there so the drain
+        // can dispatch other operations without awaiting this bridge task.
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Propagates every operation failure through its completion task.")]
-        private async Task ExecuteAsync()
+        private async Task ForwardCompletionAsync()
         {
             try
             {

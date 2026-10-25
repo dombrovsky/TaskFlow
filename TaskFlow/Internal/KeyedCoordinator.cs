@@ -432,19 +432,21 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
         public override void Dispatch(bool onWorker)
         {
             if (_executionContext != null)
-                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ExecuteAsync(); }, this);
+                ExecutionContext.Run(_executionContext, static state => { _ = ((Submission<T>)state!).ForwardCompletionAsync(); }, this);
             else if (onWorker || ExecutionContext.IsFlowSuppressed())
-                _ = ExecuteAsync();
+                _ = ForwardCompletionAsync();
             else
             {
                 // Preserve legacy inline dispatch: suppression prevents the terminal from
                 // capturing the current pump caller, without introducing a worker handoff.
                 using var suppression = ExecutionContext.SuppressFlow();
-                _ = ExecuteAsync();
+                _ = ForwardCompletionAsync();
             }
         }
+        // The submission awaits _completion.Task. Forward every outcome there so the drain
+        // can dispatch other operations without awaiting this bridge task.
         [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Operation failures are returned to the submitting caller.")]
-        private async Task ExecuteAsync()
+        private async Task ForwardCompletionAsync()
         {
             try
             {
