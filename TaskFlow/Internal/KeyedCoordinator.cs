@@ -43,7 +43,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
 {
     private static readonly WaitCallback DrainCallback = static state => ((KeyedCoordinator<TKey>)state!).Drain(onWorker: true);
 
-    private readonly TaskSchedulerMiddlewareLifetime _lifetime;
     private readonly object _sync = new object();
     private readonly Dictionary<TKey, KeyState> _keys;
     private readonly LinkedList<KeyState> _ready = new LinkedList<KeyState>();
@@ -60,7 +59,6 @@ internal class KeyedCoordinator<TKey> : SchedulingCoordinator, IKeyedCoordinator
 
     public KeyedCoordinator(IEqualityComparer<TKey> comparer, TaskSchedulerMiddlewareLifetime lifetime)
     {
-        _lifetime = lifetime;
         _keys = new Dictionary<TKey, KeyState>(comparer);
         _stopping = lifetime.StoppingToken;
         _stoppingRegistration = _stopping.Register(Close);
