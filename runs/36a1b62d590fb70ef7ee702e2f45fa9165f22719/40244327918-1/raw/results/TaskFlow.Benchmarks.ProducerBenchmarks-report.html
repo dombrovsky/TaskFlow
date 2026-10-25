@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>TaskFlow.Benchmarks.ProducerBenchmarks-20261025-232204</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.5 LTS (Noble Numbat)
+AMD EPYC 9V74 3.69GHz, 1 CPU, 4 logical and 2 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+  Job-YZJABG : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+</code></pre>
+<pre><code>IterationCount=8  LaunchCount=1  WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method            </th><th>Producers</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Op/s </th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>ConcurrentSubmitAndDrain</td><td>1</td><td>287.3 ns</td><td>35.91 ns</td><td>18.78 ns</td><td>3,480,379.8</td><td>0.0371</td><td>0.0156</td><td>612 B</td>
+</tr><tr><td>ConcurrentSubmitAndDrain</td><td>4</td><td>420.2 ns</td><td>28.20 ns</td><td>12.52 ns</td><td>2,379,848.6</td><td>0.0410</td><td>0.0234</td><td>699 B</td>
+</tr><tr><td>ConcurrentSubmitAndDrain</td><td>16</td><td>447.8 ns</td><td>40.77 ns</td><td>18.10 ns</td><td>2,233,003.1</td><td>0.0410</td><td>0.0273</td><td>699 B</td>
+</tr></tbody></table>
+</body>
+</html>
