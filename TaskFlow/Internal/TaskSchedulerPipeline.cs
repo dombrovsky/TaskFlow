@@ -239,6 +239,11 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
             return ScheduleTerminal(operation, cancellationToken);
         }
 
+        return InvokeEnqueueMiddleware(operation, index, cancellationToken);
+    }
+
+    private Task<TResult> InvokeEnqueueMiddleware<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    {
         var registrationIndex = index;
         var registration = _registrations[index];
         if (registration.Middleware is CoordinatedPolicy)
@@ -318,11 +323,15 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
         if (index >= _registrations.Length)
         {
-            var finalContext = new TaskSchedulerOperationContext(operation, operation.FinalAnnotations, -1, cancellationToken);
             operation.MarkStarted();
-            return operation.TaskFunc(operation.State, finalContext.CancellationToken);
+            return operation.TaskFunc(operation.State, cancellationToken);
         }
 
+        return InvokeExecutionMiddleware(operation, index, cancellationToken);
+    }
+
+    private ValueTask<TResult> InvokeExecutionMiddleware<TResult>(PipelineOperation<TResult> operation, int index, CancellationToken cancellationToken)
+    {
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerExecutionMiddleware)registration.Middleware;
@@ -334,8 +343,7 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
         });
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Completion middleware failures replace the current outcome by contract.")]
-    private async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeCompletion<TResult>(
+    private ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeCompletion<TResult>(
         PipelineOperation<TResult> operation,
         int index,
         TaskSchedulerOperationOutcome<TResult> outcome,
@@ -350,9 +358,20 @@ internal sealed class PipelineTaskScheduler : ITaskScheduler
 
         if (index >= _registrations.Length)
         {
-            return outcome;
+            return new ValueTask<TaskSchedulerOperationOutcome<TResult>>(outcome);
         }
 
+        return InvokeCompletionMiddleware(operation, index, outcome, cancellationToken, producerToken);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Completion middleware failures replace the current outcome by contract.")]
+    private async ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeCompletionMiddleware<TResult>(
+        PipelineOperation<TResult> operation,
+        int index,
+        TaskSchedulerOperationOutcome<TResult> outcome,
+        CancellationToken cancellationToken,
+        CancellationToken producerToken)
+    {
         var registrationIndex = index;
         var registration = _registrations[index];
         var middleware = (ITaskSchedulerCompletionMiddleware)registration.Middleware;
