@@ -146,6 +146,65 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
         finally { release.TrySetResult(true); await lifetime.DisposeAsync(); }
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SingleFlight_PublishesSharedCompletionBeforeRetiringKey(bool producerFails)
+    {
+        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
+        var terminal = new CountingInlineTerminal();
+        var events = new ConcurrentQueue<string>();
+        var failure = new FormatException("shared producer");
+        Task<int>? joining = null;
+        ITaskScheduler? scheduler = null;
+        OwnedSingleFlight? middleware = null;
+        middleware = new OwnedSingleFlight(events, default, default, () =>
+        {
+            Assert.That(middleware!.ActiveCount, Is.EqualTo(1));
+            Assert.That(middleware.Released, Is.Zero);
+            // Force a concurrent submission after producer-scope cleanup and publication,
+            // but before key retirement. It must still join the published producer.
+            Task.Run(() =>
+            {
+                joining = scheduler!.Enqueue<int>((_, _) => throw new AssertionException("Successor started before key retirement."), "key", default);
+            }).GetAwaiter().GetResult();
+            Assert.That(joining!.IsCompleted, Is.True, "The shared outcome must already be published.");
+            Assert.That(terminal.EnqueueCount, Is.EqualTo(1));
+        });
+        scheduler = terminal.UseMiddleware(new OwnedFactory(middleware), lifetime);
+        var entered = Signal();
+        var release = Signal();
+        var first = scheduler.Enqueue<int>(async (_, _) =>
+        {
+            entered.TrySetResult(true);
+            await release.Task;
+            if (producerFails)
+                throw failure;
+            return 42;
+        }, "key", default);
+        try
+        {
+            await entered.Task;
+            release.SetResult(true);
+            Assert.That(await middleware.ProducerObserved, producerFails ? Is.SameAs(failure) : Is.Null);
+            Assert.That(joining, Is.Not.Null);
+            if (producerFails)
+            {
+                await Assert.ThatAsync(async () => await first, Throws.Exception.SameAs(failure));
+                await Assert.ThatAsync(async () => await joining!, Throws.Exception.SameAs(failure));
+            }
+            else
+            {
+                Assert.That(await first, Is.EqualTo(42));
+                Assert.That(await joining!, Is.EqualTo(42));
+            }
+            Assert.That(middleware.ActiveCount, Is.Zero);
+            Assert.That(middleware.Released, Is.EqualTo(1));
+            await lifetime.DisposeAsync();
+            Assert.That(middleware.Cleanups, Is.EqualTo(1));
+        }
+        finally { release.TrySetResult(true); await lifetime.DisposeAsync(); }
+    }
+
     [TestCase(OwnershipCancellation.LocalScope)]
     [TestCase(OwnershipCancellation.SharedLane)]
     public async Task SharedProducer_DetachesCallerButPreservesOwnershipCancellation(OwnershipCancellation cancellation)
@@ -464,8 +523,10 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
 
     // A public-API seam, not a complete single-flight/promotion policy. The downstream path
     // in these tests returns actual terminal completion; nested caller waits are tested separately.
+    // Keep the key through producer-scope cleanup and shared-result publication. Retirement
+    // does not wait for the ownership boundary's observer or operation-wide disposal.
     private sealed class OwnedSingleFlight(ConcurrentQueue<string> events,
-        CancellationToken localOwner, CancellationToken sharedLane) : ITaskSchedulerEnqueueMiddleware, IDisposable
+        CancellationToken localOwner, CancellationToken sharedLane, Action? beforeKeyReleased = null) : ITaskSchedulerEnqueueMiddleware, IDisposable
     {
         private readonly ConcurrentDictionary<string, Producer> _producers = new();
         private readonly TaskCompletionSource<Exception?> _observed = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -503,12 +564,28 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
         private async Task<T> Produce<T>(string key, Producer producer, TaskSchedulerEnqueueContext<T> context,
             TaskSchedulerEnqueueDelegate<T> next)
         {
-            using var ownership = CancellationTokenSource.CreateLinkedTokenSource(localOwner, sharedLane);
-            T result;
             try
             {
+                T result;
                 try
-                { result = await next(context.WithCancellationToken(ownership.Token)); }
+                {
+                    using var ownership = CancellationTokenSource.CreateLinkedTokenSource(localOwner, sharedLane);
+                    result = await next(context.WithCancellationToken(ownership.Token));
+                }
+                catch (Exception exception)
+                {
+                    producer.Completion.TrySetException(exception);
+                    _ = producer.Task.Exception; // All caller waits may already have been canceled.
+                    throw;
+                }
+                producer.Completion.TrySetResult((int)(object)result!);
+                return result;
+            }
+            finally
+            {
+                // This test-only hook forces submissions into the publication/retirement window.
+                try
+                { beforeKeyReleased?.Invoke(); }
                 finally
                 {
                     _producers.TryRemove(new KeyValuePair<string, Producer>(key, producer));
@@ -516,14 +593,6 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
                     events.Enqueue("key:released");
                 }
             }
-            catch (Exception exception)
-            {
-                producer.Completion.TrySetException(exception);
-                _ = producer.Task.Exception; // All caller waits may already have been canceled.
-                throw;
-            }
-            producer.Completion.TrySetResult((int)(object)result!);
-            return result;
         }
 
         private async Task<T> Wait<T>(Task<int> producer, CancellationToken caller)
