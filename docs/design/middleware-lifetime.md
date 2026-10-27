@@ -26,59 +26,115 @@ calls share the shutdown operation. Failures are collected after all phases have
 been attempted. An external owner must keep an opaque terminal available until
 its explicit middleware lifetime has finished draining and cleaning up.
 
-## Operation activities
+## Structured middleware contract
 
-PipelineOperation starts with one activity. Plain Enqueue enters its lifetime
-synchronously to protect its own middleware resources before forwarding. It does
-not probe the terminal scheduler's disposal state. Entry and closure use the same
-lock: accepted work is counted before shutdown can drain it. After successful entry, the operation stores its
-owner directly and EnqueueCore owns the initial activity once forwarding returns
-a task. If entry or synchronous forwarding fails first, submission releases the
-activity and propagates the exception without invoking completion middleware.
-A failed entry never exits a lifetime it did not enter. Explicit admission Submit retains its
-separate asynchronous decision/completion contract.
+Before a middleware invocation's returned Task/ValueTask settles, every downstream
+continuation it started must have settled. Return `next(context)` directly, await it
+and do additional work, or short-circuit without invoking it. Execution middleware
+may retry sequentially or start concurrent attempts provided it awaits **every**
+started attempt before returning, throwing, or canceling. `Task.WhenAll` is suitable
+for joining concurrent attempts, including when one fails.
 
-Every invocation of an enqueue or execution continuation acquires an activity
-before calling user code. Independently pending work retains its activity even
-when middleware returns early or the caller-facing task times out. A continuation
-cannot start after the operation's activity count reaches zero.
+Starting downstream work and returning an independent result while it still runs,
+retaining a continuation for use after its middleware finishes, and detached
+execution or completion processing are unsupported. This is a usage requirement;
+the pipeline does not add per-layer observers or counters to detect every violation.
+Existing enqueue at-most-once validation, operation-context identity validation,
+annotation visibility, local state and cancellation-token replacement remain.
 
-The execution envelope owns its root activity through execution and completion.
-This avoids a separate root execution wrapper. Child invocations retain their own
-activities; the root cannot substitute for abandoned or independent child work.
+## Operation ownership
 
-The final release runs quiescence callbacks before exiting the lifetime. Admission
-capacity and linked cancellation sources are released there, after underlying work
-has stopped. Pending-capacity callbacks instead release their reservation when the
-delegate actually starts. Caller completion alone is not evidence of quiescence.
+PipelineOperation begins with one ownership reference. Plain Enqueue enters its
+lifetime synchronously before forwarding. Entry and closure use the same lock, so
+accepted work is counted before shutdown drains it. Synchronous entry/forwarding
+failure releases ownership and propagates the original exception without invoking
+completion middleware. Explicit admission Submit retains its separate asynchronous
+decision/completion contract; TrySubmit retains atomic reservations and synchronous
+accept/full/closed decisions and its existing supported-pipeline restrictions.
 
-Completion is claimed once per operation. Enqueue failure and terminal execution
-can race to report it; the winning outcome drives completion middleware. Caller
-admission outcomes are recorded after completion middleware has processed failures
-or recovery, rather than from the raw terminal outcome.
+The enqueue root retains ownership through admission waiting, queuing and its
+returned task. One execution envelope retains ownership through the whole structured
+execution/completion tree. Ordinary continuation calls forward directly, preserving
+synchronous rejection and scheduler/context placement. They neither retain an
+ownership reference nor allocate an asynchronous observer. Middleware must join
+its children, including completion transformations and failure recovery.
 
-Each enqueue continuation forwards synchronously before observing the returned
-task. Immediate scheduling rejection releases its activity and propagates directly
-through forwarding pipelines, preserving the original exception. Once a task is
-returned, observation retains the activity until that task settles, even when
-middleware completes the caller-facing task earlier. Returned task failures enter
-completion middleware; they are never promoted into synchronous exceptions.
+Completion is claimed once. Enqueue failure and terminal execution can race to
+report it; the winner drives completion middleware. Caller admission outcomes are
+recorded after completion middleware has processed failures or recovery.
 
-Admission middleware can short-circuit or defer forwarding according to its own
-state. It does not inspect terminal disposal to manufacture an early rejection.
-Transparent wrappers preserve exceptions from synchronous forwarding. Middleware
-that owns asynchronous admission or scheduling, including timeout and queuing,
-may report forwarding failures through its returned task even if it invokes the
-continuation immediately. Such task failures still enter completion middleware.
-Explicit Submit continues to report admission and scheduling outcomes through
-its decision/completion tasks.
+Final ownership release runs quiescence callbacks before exiting the lifetime.
+Outstanding capacity and linked cancellation resources remain owned until all work
+settles. Pending capacity releases only when the user delegate actually starts.
+These rules also cover canceled queued operations, asynchronous admission, owner
+shutdown, and completion processing after cancellation notification.
 
-Cancellation scope and cancel-previous retain their existing async wrappers and
-linked-token ownership. An immediate forwarding failure is represented by their
-returned task, and their using scopes release resources when that task settles.
-Timeout likewise retains its competing-task semantics. The pipeline does not
-impose a new exception-timing contract on these wrappers or reinterpret the
-exceptions produced by Task.Factory.StartNew in TaskFlowSchedulerAdapter.
+## Explicit caller-wait boundary and timeout compatibility
+
+`TaskSchedulerEnqueueContext<TResult>.InvokeWithCallerWait(next, callerWait)`
+retains downstream work in the operation. The wait policy receives an owned enqueue
+continuation; invoke it at most once before its caller-wait task settles. The policy may
+return an independent caller wait task or throw after forwarding. Only this explicit
+boundary adds an observer/reference; ordinary continuations remain structured.
+
+The owned continuation's task follows the immediate downstream result. With nested
+boundaries, an inner policy can finish its caller task while its producer still
+runs. The outer continuation then settles too, without signaling actual delegate
+termination or completion-pipeline quiescence. Each boundary and the execution
+envelope retain their own operation references. Outstanding capacity, keyed exclusion
+and owned middleware cleanup follow final operation release, not any caller task.
+
+Policies must observe producer faults after callers leave. Producer-scoped resources
+must live inside the operation-owned continuation, rather than in the shorter caller
+wait scope. A policy needing a termination signal must own the relevant execution
+scope or use coordinated operation ownership; it must not infer termination from a
+nested caller task. No new public termination-tracking API is needed for the current
+built-ins or the test prototypes. Awaiting owner disposal from its own callbacks
+remains unsupported.
+
+`WithTimeout`, including the TimeProvider/netstandard implementation, uses this
+boundary. Queue/admission waiting still consumes the timeout budget. Caller timeout
+still requests cooperative cancellation and can finish before a delegate that
+ignores cancellation; it does not prove producer termination, release outstanding
+capacity, permit overlapping same-key execution, or allow owned middleware cleanup.
+The winning completion outcome and completion middleware behavior are unchanged.
+Transparent wrappers still preserve synchronous forwarding rejection; timeout and
+other async wrappers continue reporting forwarding failures through their tasks.
+
+Custom enqueue policies that previously returned early after directly starting
+`next` must migrate to this boundary or await `next` before finishing. Execution
+and completion policies must join all attempts; no detached counterpart is provided.
+Direct forwarding now exposes the original downstream task status to middleware.
+For example, a terminal returning `Task.FromException<T>(OperationCanceledException)`
+is observed as Faulted by its immediate enqueue caller, rather than being normalized
+to Canceled by an async per-layer observer. Await still throws the same exception;
+the outer scheduled task retains its cancellation behavior. Execution continuation
+invocation can now throw synchronously instead of returning a faulted ValueTask.
+Protect both invocation and awaiting with the same try/catch. Concurrent-attempt
+orchestration should use an async attempt helper to convert synchronous throws to
+faulted tasks before joining all attempts, as shown in the customization example.
+
+Cancellation scopes and cancel-previous already await their continuation and keep
+their existing linked-token scopes. Callers still dispose the external owner.
+
+## Future policies
+
+Issue #10 can register a key before forwarding, while T2/T3 short-circuit and await
+a shared result. A promoted follower retains its own context, delegate, state and
+token, invokes its own enqueue continuation at most once while its invocation is
+still pending, and awaits it. Canceling T1's caller does not settle T2/T3. If T1 is
+executing, its actual termination must precede T2's execution; a caller-wait boundary
+can separate that notification from producer termination, but its downstream task
+alone is not a termination signal when another boundary is nested below it. A policy
+must retain its active key until the execution scope it owns has ended. Normal faults are shared,
+not implicit promotion. Closing the owner prevents promotion and settles waiters.
+Single-flight, promotion, and queue-position inheritance are separate policies.
+
+Operation ownership before forwarding also permits component-local scopes sharing
+an execution lane (#13) and future debounce timers/pending submissions (#21).
+Atomic admission and pending/outstanding budgets (#37) remain separate from caller
+wait outcomes. These policies must own and settle their waiters on shutdown rather
+than detaching them from their operation lifetime.
 
 ## Annotation-only forwarding
 

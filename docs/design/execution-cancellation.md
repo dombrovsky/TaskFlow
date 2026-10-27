@@ -13,7 +13,7 @@ The terminal scheduler is the `ITaskScheduler` at the end of the enqueue pipelin
 | Execution | Token supplied when the terminal invokes the operation | Initial execution and normal completion `CancellationToken` |
 | Attempt | Replacement token supplied by execution middleware | `CancellationToken` on a context copied with `WithCancellationToken` |
 
-These roles can have different tokens. Keeping caller and producer cancellation separate lets middleware detach a caller's wait from shared work. The pipeline does not reattach caller cancellation after that choice.
+These roles can have different tokens. Keeping caller and producer cancellation separate allows an explicit enqueue ownership boundary (`InvokeWithCallerWait`) to end a caller's wait before producer termination. Ordinary middleware must await all downstream work it starts. The pipeline does not reattach caller cancellation after that choice.
 
 Each context snapshots the producer token when created. Copies retain that value even if an early timeout races later submission. Before terminal submission, it falls back to the original caller token.
 
@@ -43,6 +43,11 @@ Normal completion starts with the terminal's execution token, not the last attem
 If a completion callback throws before continuing, the pipeline passes its incoming token and failure outcome to later callbacks. Throwing after continuing does not repeat downstream callbacks. Upstream callbacks can inspect and transform returned outcomes.
 
 Enqueue-side rejection, timeout, or submission failure uses the producer snapshot, with the caller fallback described above. Completion runs once even if timed-out work later reaches the terminal. Early completion does not guarantee the terminal's thread or synchronization context. Cancellation does not skip completion callbacks.
+
+A caller-wait boundary can finish before its producer, including after caller
+cancellation. Nested downstream task completion is not a producer-termination
+signal: an inner caller wait may have finished while execution continues. Keep
+producer cancellation sources alive with the owned work and observe late faults.
 
 Disposal requests cancellation and waits for underlying work to finish. Cancellation remains cooperative. Copies and retries keep the same queue position, admission reservation, and lifetime ownership.
 

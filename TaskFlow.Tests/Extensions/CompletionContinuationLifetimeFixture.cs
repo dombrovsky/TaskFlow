@@ -15,7 +15,7 @@ internal sealed class CompletionContinuationLifetimeFixture
 
     private static TaskCompletionSource<bool> Gate() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private static IEnumerable<TestCaseData> IndependentCases()
+    private static IEnumerable<TestCaseData> StructuredCases()
     {
         yield return new(false, false, 1, 1, "success");
         yield return new(true, false, 1, 1, "success");
@@ -26,14 +26,14 @@ internal sealed class CompletionContinuationLifetimeFixture
         yield return new(false, false, 1, 1, "cancel");
     }
 
-    [TestCaseSource(nameof(IndependentCases))]
-    public async Task IndependentChildren_DrainBeforeOwnedCleanup(bool explicitLifetime, bool throwAfterNext,
+    [TestCaseSource(nameof(StructuredCases))]
+    public async Task AwaitedChildren_DrainBeforeOwnedCleanup(bool explicitLifetime, bool throwAfterNext,
         int layers, int calls, string childOutcome)
     {
         var events = new ConcurrentQueue<string>();
         var flow = new TaskFlow();
         var lifetime = new TaskSchedulerMiddlewareLifetime();
-        var outer = new IndependentCompletion(events) { Calls = calls, ThrowAfterNext = throwAfterNext };
+        var outer = new StructuredCompletion(events) { Calls = calls, ThrowAfterNext = throwAfterNext };
         using var producer = new CancellationTokenSource();
         using var replacement = new CancellationTokenSource();
         await replacement.CancelAsync();
@@ -51,16 +51,14 @@ internal sealed class CompletionContinuationLifetimeFixture
             ? new TaskFlowSchedulerAdapter(TaskScheduler.Default).UseMiddleware(new Factory(outer), lifetime)
             : flow.UseMiddleware(new Factory(outer));
         for (var i = 1; i < layers; i++)
-            scheduler = scheduler.UseMiddleware(new IndependentCompletion(events));
+            scheduler = scheduler.UseMiddleware(new StructuredCompletion(events));
         scheduler = scheduler.UseMiddleware(new Factory(inner));
         var operation = scheduler.Enqueue((_, _) => new ValueTask<int>(42), null, producer.Token);
         try
         {
             await inner.Entered.Task;
-            if (throwAfterNext)
-                await Assert.ThatAsync(async () => await operation, Throws.Exception.SameAs(outer.Failure));
-            else
-                Assert.That(await operation, Is.EqualTo(17));
+            await outer.Invoked.Task;
+            Assert.That(operation.IsCompleted, Is.False);
             Assert.That(outer.Children, Has.Count.EqualTo(calls));
             Assert.That(inner.Context!.CancellationToken, Is.EqualTo(replacement.Token));
             Assert.That(inner.Context.ProducerCancellationToken, Is.EqualTo(producer.Token));
@@ -73,6 +71,8 @@ internal sealed class CompletionContinuationLifetimeFixture
             inner.Release.SetResult(true);
             await Task.WhenAll(outer.Children);
             await shutdown;
+            if (throwAfterNext)
+                await Assert.ThatAsync(async () => await operation, Throws.Exception.SameAs(outer.Failure));
             Assert.That(inner.Calls, Is.EqualTo(calls));
             Assert.That(inner.Finished, Is.EqualTo(calls));
             Assert.That(events.ToArray()[^2..], Is.EqualTo(CleanupOrder));
@@ -90,11 +90,11 @@ internal sealed class CompletionContinuationLifetimeFixture
     }
 
     [Test]
-    public async Task ReturnedSubmissionFailure_IndependentCompletionStillDrains()
+    public async Task ReturnedSubmissionFailure_StructuredCompletionStillDrains()
     {
         var events = new ConcurrentQueue<string>();
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
-        var outer = new IndependentCompletion(events);
+        var outer = new StructuredCompletion(events);
         var inner = new GatedCompletion(events);
         var scheduler = new FaultedTerminal().UseMiddleware(new Factory(outer), lifetime)
             .UseMiddleware(new Factory(inner));
@@ -102,13 +102,14 @@ internal sealed class CompletionContinuationLifetimeFixture
         try
         {
             await inner.Entered.Task;
-            Assert.That(await operation, Is.EqualTo(17));
+            Assert.That(operation.IsCompleted, Is.False);
             var shutdown = lifetime.DisposeAsync().AsTask();
             Assert.That(shutdown.IsCompleted, Is.False);
             Assert.That(events, Is.Empty);
             inner.Release.SetResult(true);
             await Task.WhenAll(outer.Children);
             await shutdown;
+            Assert.That(await operation, Is.EqualTo(17));
             Assert.That(outer.ChildFailures.Single(), Is.TypeOf<FormatException>());
             Assert.That(inner.Calls, Is.EqualTo(1));
             Assert.That(events.ToArray(), Is.EqualTo(FinishAndCleanupOrder));
@@ -121,7 +122,7 @@ internal sealed class CompletionContinuationLifetimeFixture
     {
         var events = new ConcurrentQueue<string>();
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
-        var outer = new IndependentCompletion(events) { Hold = Gate() };
+        var outer = new StructuredCompletion(events) { Hold = Gate() };
         var inner = new GatedCompletion(events);
         var scheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default)
             .UseMiddleware(new Factory(outer), lifetime).UseMiddleware(new Factory(inner));
@@ -147,11 +148,11 @@ internal sealed class CompletionContinuationLifetimeFixture
 
     [TestCase(false)]
     [TestCase(true)]
-    public async Task NoNext_QuiescesAndCannotResurrect(bool throwBeforeNext)
+    public async Task NoNext_Quiesces(bool throwBeforeNext)
     {
         var events = new ConcurrentQueue<string>();
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
-        var outer = new IndependentCompletion(events) { Calls = 0, ThrowAfterNext = throwBeforeNext };
+        var outer = new StructuredCompletion(events) { Calls = 0, ThrowAfterNext = throwBeforeNext };
         var inner = new GatedCompletion(events);
         inner.Release.SetResult(true);
         var scheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default)
@@ -164,18 +165,16 @@ internal sealed class CompletionContinuationLifetimeFixture
         await lifetime.DisposeAsync();
         Assert.That(inner.Calls, Is.EqualTo(throwBeforeNext ? 1 : 0));
         Assert.That(events.ToArray()[^2..], Is.EqualTo(CleanupOrder));
-        await Assert.ThatAsync(async () => await outer.LateNext!(), Throws.TypeOf<InvalidOperationException>());
-        Assert.That(inner.Calls, Is.EqualTo(throwBeforeNext ? 1 : 0));
     }
 
     [Test]
-    public async Task OutstandingAdmission_RemainsReservedUntilChildQuiesces()
+    public async Task OutstandingAdmission_RemainsReservedUntilAwaitedCompletionSettles()
     {
         var events = new ConcurrentQueue<string>();
         await using var flow = new TaskFlow();
         var controller = new BoundedAdmissionController(new BoundedAdmissionOptions
         { Capacity = 1, CapacityMode = TaskSchedulerCapacityMode.Outstanding });
-        var outer = new IndependentCompletion(events);
+        var outer = new StructuredCompletion(events);
         var inner = new GatedCompletion(events);
         var bounded = flow.WithBoundedAdmission(controller);
         var scheduler = bounded
@@ -185,7 +184,7 @@ internal sealed class CompletionContinuationLifetimeFixture
         {
             await inner.Entered.Task;
             Assert.That(await first.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
-            Assert.That(await first.Completion, Is.EqualTo(17));
+            Assert.That(first.Completion.IsCompleted, Is.False);
             var rejected = controller.Submit(bounded, () => 43, TaskSchedulerAdmissionMode.Reject);
             Assert.That(await rejected.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
             await Assert.ThatAsync(async () => await rejected.Completion, Throws.TypeOf<AdmissionRejectedException>());
@@ -193,36 +192,10 @@ internal sealed class CompletionContinuationLifetimeFixture
             Assert.That(waiting.Admission.IsCompleted, Is.False);
             Assert.That(waiting.Completion.IsCompleted, Is.False);
             inner.Release.SetResult(true);
+            Assert.That(await first.Completion, Is.EqualTo(17));
             Assert.That(await waiting.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Accepted));
             Assert.That(await waiting.Completion, Is.EqualTo(17));
             await flow.DisposeAsync();
-            Assert.That(inner.Finished, Is.EqualTo(2));
-            Assert.That(events.ToArray()[^2..], Is.EqualTo(CleanupOrder));
-        }
-        finally { inner.Release.TrySetResult(true); }
-    }
-
-    [Test]
-    public async Task RetainedContinuation_CanStillStartWhileAnIndependentChildIsActive()
-    {
-        var events = new ConcurrentQueue<string>();
-        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
-        var outer = new IndependentCompletion(events);
-        var inner = new GatedCompletion(events);
-        var scheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default)
-            .UseMiddleware(new Factory(outer), lifetime).UseMiddleware(new Factory(inner));
-        try
-        {
-            Assert.That(await scheduler.Enqueue(() => 42), Is.EqualTo(17));
-            var late = outer.LateNext!();
-            Assert.That(inner.Calls, Is.EqualTo(2));
-            var shutdown = lifetime.DisposeAsync().AsTask();
-            Assert.That(shutdown.IsCompleted, Is.False);
-            Assert.That(events, Is.Empty);
-            inner.Release.SetResult(true);
-            await late;
-            await Task.WhenAll(outer.Children);
-            await shutdown;
             Assert.That(inner.Finished, Is.EqualTo(2));
             Assert.That(events.ToArray()[^2..], Is.EqualTo(CleanupOrder));
         }
@@ -236,16 +209,18 @@ internal sealed class CompletionContinuationLifetimeFixture
         {
             var events = new ConcurrentQueue<string>();
             await using var lifetime = new TaskSchedulerMiddlewareLifetime();
-            var outer = new IndependentCompletion(events);
+            var outer = new StructuredCompletion(events);
             var inner = new GatedCompletion(events);
             var scheduler = new TaskFlowSchedulerAdapter(TaskScheduler.Default)
                 .UseMiddleware(new Factory(outer), lifetime).UseMiddleware(new Factory(inner));
-            Assert.That(await scheduler.Enqueue(() => 42), Is.EqualTo(17));
+            var operation = scheduler.Enqueue(() => 42);
+            await inner.Entered.Task;
             var race = Gate();
             var shutdown = Task.Run(async () => { await race.Task; await lifetime.DisposeAsync(); });
             var finish = Task.Run(async () => { await race.Task; inner.Release.SetResult(true); });
             race.SetResult(true);
             await Task.WhenAll(shutdown, finish);
+            Assert.That(await operation, Is.EqualTo(17));
             Assert.That(events.ToArray(), Is.EqualTo(FinishAndCleanupOrder));
         }
     }
@@ -261,7 +236,7 @@ internal sealed class CompletionContinuationLifetimeFixture
         public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => middleware;
     }
 
-    private sealed class IndependentCompletion(ConcurrentQueue<string> events) : ITaskSchedulerCompletionMiddleware, IAsyncDisposable
+    private sealed class StructuredCompletion(ConcurrentQueue<string> events) : ITaskSchedulerCompletionMiddleware, IAsyncDisposable
     {
         public TaskCompletionSource<bool> Invoked { get; } = Gate();
         public int Calls { get; init; } = 1;
@@ -272,19 +247,18 @@ internal sealed class CompletionContinuationLifetimeFixture
         public List<Task> Children { get; } = new();
         public List<Exception?> ChildFailures { get; } = new();
         public TaskSchedulerOperationContext? Context { get; private set; }
-        public Func<Task>? LateNext { get; private set; }
 
         public async ValueTask<TaskSchedulerOperationOutcome<T>> InvokeAsync<T>(TaskSchedulerOperationContext context,
             TaskSchedulerOperationOutcome<T> outcome, TaskSchedulerCompletionDelegate<T> next)
         {
             Context = context;
-            LateNext = () => next(context, outcome).AsTask();
             for (var i = 0; i < Calls; i++)
             {
                 var child = next(ReplacementToken is { } token ? context.WithCancellationToken(token) : context, outcome);
                 Children.Add(Observe(child));
             }
             Invoked.TrySetResult(true);
+            await Task.WhenAll(Children);
             if (ThrowAfterNext)
                 throw Failure;
             if (Hold != null)

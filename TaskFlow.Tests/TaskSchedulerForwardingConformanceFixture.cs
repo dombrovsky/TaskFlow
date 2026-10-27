@@ -155,7 +155,7 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
     }
 
     [Test]
-    public async Task Enqueue_SynchronousFailureAfterForwarding_ShouldRetainAcceptedChildUntilQuiescent()
+    public async Task Enqueue_ExplicitCallerBoundaryFailure_ShouldRetainAcceptedProducerUntilQuiescent()
     {
         await using var lifetime = new TaskSchedulerMiddlewareLifetime();
         using var observer = new Observer();
@@ -342,8 +342,11 @@ internal sealed class TaskSchedulerForwardingConformanceFixture
         public Task? Child { get; private set; }
         public Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
         {
-            Child = next(context);
-            throw failure;
+            return context.InvokeWithCallerWait(next, owned =>
+            {
+                Child = owned(context);
+                throw failure;
+            });
         }
     }
 

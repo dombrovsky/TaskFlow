@@ -156,14 +156,14 @@ internal sealed class LifetimeTrackingRegressionFixture
     [TestCase(false, true)]
     [TestCase(true, false)]
     [TestCase(true, true)]
-    public async Task IndependentEnqueueTask_HoldsCapacityAndCleanupUntilBothBranchesFinish(bool childFirst, bool concurrentNext)
+    public async Task StructuredEnqueueTask_HoldsCapacityAndCleanupUntilAwaitedWorkFinishes(bool childFirst, bool concurrentNext)
     {
         var flow = new TaskFlow();
         var entered = Gate();
         var release = Gate();
-        IndependentEnqueue middleware = null!;
+        StructuredEnqueue middleware = null!;
         var controller = new BoundedAdmissionController(new BoundedAdmissionOptions { Capacity = 1 });
-        var scheduler = flow.UseMiddleware(new Factory(_ => middleware = new IndependentEnqueue(concurrentNext))).WithBoundedAdmission(controller);
+        var scheduler = flow.UseMiddleware(new Factory(_ => middleware = new StructuredEnqueue(concurrentNext))).WithBoundedAdmission(controller);
         var pending = scheduler.Enqueue<int>(async (_, _) =>
         {
             entered.SetResult(true);
@@ -183,7 +183,7 @@ internal sealed class LifetimeTrackingRegressionFixture
             else
             {
                 middleware.Complete.SetResult(true);
-                Assert.That(await pending, Is.Zero);
+                Assert.That(pending.IsCompleted, Is.False);
             }
             var rejected = controller.Submit(scheduler, () => 2, TaskSchedulerAdmissionMode.Reject);
             Assert.That(await rejected.Admission, Is.EqualTo(TaskSchedulerAdmissionResult.Full));
@@ -224,7 +224,7 @@ internal sealed class LifetimeTrackingRegressionFixture
                 await Assert.ThatAsync(async () => await task, Throws.Exception.SameAs(failure));
                 Assert.That(task.IsCanceled, Is.EqualTo(failure is OperationCanceledException));
                 // A synchronous next rejection returns no continuation task for this observer to inspect.
-                Assert.That(observer.Status, Is.EqualTo(!faultedTask ? TaskStatus.Created : failure is OperationCanceledException ? TaskStatus.Canceled : TaskStatus.Faulted));
+                Assert.That(observer.Status, Is.EqualTo(!faultedTask ? TaskStatus.Created : TaskStatus.Faulted));
             }
         }
     }
@@ -234,7 +234,7 @@ internal sealed class LifetimeTrackingRegressionFixture
         public Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next) => next(context);
     }
 
-    private sealed class IndependentEnqueue(bool concurrentNext) : ITaskSchedulerEnqueueMiddleware, IDisposable
+    private sealed class StructuredEnqueue(bool concurrentNext) : ITaskSchedulerEnqueueMiddleware, IDisposable
     {
         public TaskCompletionSource<bool> Complete { get; } = Gate();
         public TaskCompletionSource<bool> Started { get; } = Gate();
@@ -246,7 +246,7 @@ internal sealed class LifetimeTrackingRegressionFixture
             Started.SetResult(true);
             return Finish<T>();
         }
-        private async Task<T> Finish<T>() { await Complete.Task; return default!; }
+        private async Task<T> Finish<T>() { await Complete.Task; await Underlying!; return default!; }
         public void Dispose() => Cleaned = true;
     }
 

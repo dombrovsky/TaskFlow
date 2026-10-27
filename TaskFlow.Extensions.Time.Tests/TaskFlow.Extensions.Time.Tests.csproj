@@ -34,6 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TaskFlow.Tests\Extensions\CallerWaitOwnershipFixture.cs" Link="CallerWaitOwnershipFixture.cs" />
     <Compile Include="..\TaskFlow.Tests\Extensions\TimeoutTaskSchedulerExtensionsFixture.cs" Link="TimeoutTaskSchedulerExtensionsFixture.cs" />
     <Compile Include="..\TaskFlow.Tests\Extensions\ThrottlingTaskSchedulerExtensionsFixture.cs" Link="ThrottlingTaskSchedulerExtensionsFixture.cs" />
     <Compile Include="..\TaskFlow.Tests\Extensions\TaskFlows.cs" Link="TaskFlows.cs" />

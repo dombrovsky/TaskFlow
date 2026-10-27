@@ -6,6 +6,8 @@ using System.Threading.Tasks.Flow.Annotations;
 /// <summary>
 /// Provides timeout delays controlled by a <see cref="TimeProvider"/>.
 /// </summary>
+/// <remarks>Timeout separates caller waiting from explicitly owned producer work. A timed-out caller does not release
+/// admission capacity or middleware resources until the producer actually settles; cancellation remains cooperative.</remarks>
 #if !TASKFLOW_EXTENSIONS_TIME
 [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0016:Add public types and members to the declared API", Justification = "This API is provided by TaskFlow.Extensions.Time for netstandard2.0 consumers.")]
 #endif
@@ -41,7 +43,12 @@ public static class TimeProviderTimeoutTaskSchedulerExtensions
 
         public async Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation)
         {
-            return await Internal.TaskExtensions.WhenAnyCancelRest(new[] { TimeoutAsync, EnqueueInternalAsync }, context.CancellationToken).ConfigureAwait(false);
+            return await context.InvokeWithCallerWait(continuation, ownedContinuation =>
+                Internal.TaskExtensions.WhenAnyCancelRest(new Func<CancellationToken, Task<TResult>>[]
+                {
+                    TimeoutAsync,
+                    token => ownedContinuation(context.WithCancellationToken(token))
+                }, context.CancellationToken)).ConfigureAwait(false);
 
             async Task<TResult> TimeoutAsync(CancellationToken token)
             {
@@ -52,11 +59,6 @@ public static class TimeProviderTimeoutTaskSchedulerExtensions
 #endif
 
                 throw new TimeoutException(FormatExceptionMessage());
-            }
-
-            Task<TResult> EnqueueInternalAsync(CancellationToken token)
-            {
-                return continuation(context.WithCancellationToken(token));
             }
 
             string FormatExceptionMessage()

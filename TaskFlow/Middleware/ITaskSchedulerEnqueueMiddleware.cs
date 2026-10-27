@@ -21,7 +21,14 @@ public interface ITaskSchedulerEnqueueMiddleware : ITaskSchedulerMiddleware
     /// submitting a terminal delegate. Do not call the continuation more than once.</para>
     /// <para>Failures reported through the returned task enter the completion pipeline even though terminal execution has not started.
     /// Exceptions thrown by this method before it returns a task propagate from enqueue without being converted into completion outcomes.
-    /// Middleware and wrappers that return their own tasks retain their exception timing and resource ownership.</para>
+    /// Middleware and wrappers that return their own tasks retain their exception timing and resource ownership. Direct forwarding
+    /// exposes the downstream task's original status: a faulted task containing OperationCanceledException remains Faulted when
+    /// inspected by middleware. Await propagates the same exception; the outer scheduled task still reports cancellation.</para>
+    /// <para>Return or await the continuation before this invocation's task settles. Short-circuiting without invoking it is
+    /// supported; invoking a saved continuation after completion is unsupported.</para>
+    /// <para>Policies that intentionally separate caller waiting from producer termination must transfer producer ownership
+    /// through <see cref="TaskSchedulerEnqueueContext{TResult}.InvokeWithCallerWait"/>. Returning an independent wait task
+    /// after directly invoking the ordinary continuation is unsupported.</para>
     /// </remarks>
     Task<TResult> InvokeAsync<TResult>(TaskSchedulerEnqueueContext<TResult> context, TaskSchedulerEnqueueDelegate<TResult> continuation);
 }

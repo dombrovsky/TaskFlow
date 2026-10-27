@@ -252,11 +252,38 @@ Custom middleware should preserve these composition rules:
 
 - Treat scheduler configuration and contexts as immutable; return a new scheduler snapshot or pass a copied context instead of mutating shared data.
 - Invoke an enqueue continuation zero or one time. A zero-call path must return an explicit result, cancellation, rejection, or shared task.
+- Return or await every downstream continuation started by an invocation before its task settles, including on failure and cancellation. Do not invoke saved continuations after completion.
 - Document execution middleware that invokes its continuation more than once. Every invocation may run all downstream execution middleware and the user operation again within the same terminal queue turn.
 - Pass one final outcome through completion middleware. Forward an existing outcome unchanged unless intentionally replacing its result or exception.
 - Keep registration-wide shared state concurrency-safe and operation-specific state in the registration-local context slot.
 - Do not dispose the terminal scheduler, coordinators, lanes, or other collaborators unless a separate API explicitly transfers their ownership.
 - Preserve the distinction between caller-wait cancellation and producer cancellation when sharing work between callers.
+
+Return `next(context)` directly, await it before post-processing, or short-circuit
+without calling it. Concurrent execution attempts must all be joined. Invocation
+can throw synchronously, so use an async attempt helper to ensure a later throw
+cannot bypass the join of earlier attempts:
+
+```csharp
+async Task<T> Attempt() => await next(context).ConfigureAwait(true);
+var attempts = new[] { Attempt(), Attempt() };
+var results = await Task.WhenAll(attempts).ConfigureAwait(true);
+return results[0];
+```
+
+An enqueue policy that intentionally ends caller waiting before downstream work
+settles must use `context.InvokeWithCallerWait(next, owned =>
+WaitForCaller(owned(context)))`. Invoke `owned` at most once before the wait policy
+finishes, observe late producer failures, and keep producer resources in the owned
+continuation. `WithTimeout` uses this boundary. When boundaries are nested, the
+owned continuation's task can itself be a caller-facing task; its completion does
+not prove that the underlying delegate stopped. Operation ownership still retains
+admission capacity and middleware resources until the work settles.
+
+Third-party middleware that detached downstream work must migrate to this explicit
+enqueue boundary or join its continuations. Detached execution/completion callbacks
+are unsupported. See [Middleware lifetime](design/middleware-lifetime.md) for the
+ownership and disposal rules.
 
 ### Forward-scoped annotations
 

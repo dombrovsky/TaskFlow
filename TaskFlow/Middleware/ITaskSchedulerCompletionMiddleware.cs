@@ -25,11 +25,10 @@ public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
     /// <para>Middleware should normally invoke <paramref name="continuation"/> exactly once. If this method throws before invoking it, the thrown
     /// exception replaces the current outcome and later completion middleware still runs. If it throws after invoking it, later middleware is not
     /// repeated and the thrown exception becomes the final failure.</para>
-    /// <para>Each invocation of the continuation retains operation ownership until its completion processing finishes, even if this method
-    /// returns an independent outcome first. Owned middleware cleanup and outstanding admission release wait for that processing; the scheduled
-    /// task follows the outcome returned by this method. Continuations cannot start after the operation has quiesced.</para>
     /// <para>A context copied with <see cref="TaskSchedulerOperationContext.WithCancellationToken"/> replaces cancellation only for downstream
     /// completion processing. The context must belong to this operation.</para>
+    /// <para>Return or await every continuation started by this invocation before its value task settles, including failure paths.
+    /// Detached callbacks and invoking a saved continuation after completion are unsupported.</para>
     /// </remarks>
     ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
         TaskSchedulerOperationContext context,
