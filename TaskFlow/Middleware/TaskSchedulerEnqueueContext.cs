@@ -84,19 +84,21 @@ public sealed class TaskSchedulerEnqueueContext<TResult>
     public TaskSchedulerEnqueueContext<TResult> WithCancellationToken(CancellationToken cancellationToken)
         => new TaskSchedulerEnqueueContext<TResult>(_operation, _annotations, _registrationIndex, cancellationToken);
 
-    /// <summary>Separates caller waiting from an explicitly owned downstream producer.</summary>
+    /// <summary>Separates caller waiting from operation-owned downstream work.</summary>
     /// <param name="continuation">The downstream enqueue continuation to transfer to operation ownership.</param>
-    /// <param name="callerWait">Starts the producer through the supplied continuation and returns the caller's wait task.</param>
-    /// <returns>The caller's wait task, which may settle before the producer.</returns>
+    /// <param name="callerWait">Starts work through the supplied continuation and returns the caller's wait task.</param>
+    /// <returns>The caller's wait task, which may settle before the underlying work.</returns>
     /// <remarks>
-    /// <para>This is an explicit ownership boundary for policies such as timeout. Invoke the supplied continuation at most once,
-    /// before <paramref name="callerWait"/> completes. Its task represents actual producer termination. The operation retains
-    /// ownership until that task settles, including its execution and completion processing, even if the caller stops waiting.</para>
-    /// <para>Ordinary middleware must return or await every continuation it starts. Only work started through this boundary
-    /// transfers ownership; arbitrary detached work and continuations invoked after middleware completion remain unsupported.
-    /// Nested boundaries are supported. Caller completion does not release outstanding admission capacity or owned resources.</para>
-    /// <para>The boundary preserves synchronous forwarding exceptions. A policy returning an async wait task may instead report
-    /// them through that task. Observe the producer's result inside the wait policy when it determines the caller's outcome.</para>
+    /// <para>Invoke the supplied continuation at most once, before the caller-wait task settles. The operation retains its work
+    /// even if the caller stops waiting or the wait policy throws after forwarding. Ordinary middleware must return or
+    /// await the continuations it starts; use this boundary when a policy intentionally returns an independent caller wait.</para>
+    /// <para>The supplied continuation's task follows the immediate downstream result. If a downstream policy also separates
+    /// caller waiting, this task may settle before the user delegate or completion processing finishes. It is not a signal of
+    /// actual producer termination. Nested boundaries retain operation ownership until all underlying work settles, so caller
+    /// completion does not release outstanding admission capacity or permit owned middleware cleanup.</para>
+    /// <para>The boundary preserves synchronous forwarding exceptions; an async wait policy may report them through its task.
+    /// The wait policy must observe downstream failures even if all callers stop waiting, and keep its producer resources alive
+    /// for as long as the work using them requires. Arbitrary detached execution/completion callbacks remain unsupported.</para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Either argument is <c>null</c>.</exception>
     public Task<TResult> InvokeWithCallerWait(TaskSchedulerEnqueueDelegate<TResult> continuation,

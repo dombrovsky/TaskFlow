@@ -27,11 +27,8 @@ public interface ITaskSchedulerCompletionMiddleware : ITaskSchedulerMiddleware
     /// repeated and the thrown exception becomes the final failure.</para>
     /// <para>A context copied with <see cref="TaskSchedulerOperationContext.WithCancellationToken"/> replaces cancellation only for downstream
     /// completion processing. The context must belong to this operation.</para>
-    /// <para>Before the returned task or value task settles, every downstream continuation started by this invocation must have
-    /// settled. Returning the continuation directly, awaiting it before additional work, and short-circuiting are supported.
-    /// Execution retries or concurrent attempts must await every started attempt, including on failure and cancellation.
-    /// Detached execution/completion and invoking a continuation after this invocation finishes are unsupported usage.
-    /// This requirement is not exhaustively checked at runtime.</para>
+    /// <para>Return or await every continuation started by this invocation before its value task settles, including failure paths.
+    /// Detached callbacks and invoking a saved continuation after completion are unsupported.</para>
     /// </remarks>
     ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(
         TaskSchedulerOperationContext context,

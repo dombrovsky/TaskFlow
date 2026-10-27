@@ -72,13 +72,25 @@ shutdown, and completion processing after cancellation notification.
 ## Explicit caller-wait boundary and timeout compatibility
 
 `TaskSchedulerEnqueueContext<TResult>.InvokeWithCallerWait(next, callerWait)`
-transfers producer ownership to the operation. The wait policy receives an owned
-enqueue continuation; invoke it at most once before the policy finishes. Its task
-represents actual downstream termination. The policy may return an independent
-caller wait task, while the operation retains the producer until it actually settles.
-This is an explicit operation-ownership boundary, not a middleware type exception.
-It is available to custom policies, works after asynchronous admission, and nests.
-Only this boundary needs an extra producer observer/reference.
+retains downstream work in the operation. The wait policy receives an owned enqueue
+continuation; invoke it at most once before its caller-wait task settles. The policy may
+return an independent caller wait task or throw after forwarding. Only this explicit
+boundary adds an observer/reference; ordinary continuations remain structured.
+
+The owned continuation's task follows the immediate downstream result. With nested
+boundaries, an inner policy can finish its caller task while its producer still
+runs. The outer continuation then settles too, without signaling actual delegate
+termination or completion-pipeline quiescence. Each boundary and the execution
+envelope retain their own operation references. Outstanding capacity, keyed exclusion
+and owned middleware cleanup follow final operation release, not any caller task.
+
+Policies must observe producer faults after callers leave. Producer-scoped resources
+must live inside the operation-owned continuation, rather than in the shorter caller
+wait scope. A policy needing a termination signal must own the relevant execution
+scope or use coordinated operation ownership; it must not infer termination from a
+nested caller task. No new public termination-tracking API is needed for the current
+built-ins or the test prototypes. Awaiting owner disposal from its own callbacks
+remains unsupported.
 
 `WithTimeout`, including the TimeProvider/netstandard implementation, uses this
 boundary. Queue/admission waiting still consumes the timeout budget. Caller timeout
@@ -112,9 +124,11 @@ a shared result. A promoted follower retains its own context, delegate, state an
 token, invokes its own enqueue continuation at most once while its invocation is
 still pending, and awaits it. Canceling T1's caller does not settle T2/T3. If T1 is
 executing, its actual termination must precede T2's execution; a caller-wait boundary
-can separate that notification from producer termination. Normal faults are shared,
+can separate that notification from producer termination, but its downstream task
+alone is not a termination signal when another boundary is nested below it. A policy
+must retain its active key until the execution scope it owns has ended. Normal faults are shared,
 not implicit promotion. Closing the owner prevents promotion and settles waiters.
-This PR does not implement promotion, queue-position inheritance, or single-flight.
+Single-flight, promotion, and queue-position inheritance are separate policies.
 
 Operation ownership before forwarding also permits component-local scopes sharing
 an execution lane (#13) and future debounce timers/pending submissions (#21).

@@ -252,11 +252,38 @@ Custom middleware should preserve these composition rules:
 
 - Treat scheduler configuration and contexts as immutable; return a new scheduler snapshot or pass a copied context instead of mutating shared data.
 - Invoke an enqueue continuation zero or one time. A zero-call path must return an explicit result, cancellation, rejection, or shared task.
+- Return or await every downstream continuation started by an invocation before its task settles, including on failure and cancellation. Do not invoke saved continuations after completion.
 - Document execution middleware that invokes its continuation more than once. Every invocation may run all downstream execution middleware and the user operation again within the same terminal queue turn.
 - Pass one final outcome through completion middleware. Forward an existing outcome unchanged unless intentionally replacing its result or exception.
 - Keep registration-wide shared state concurrency-safe and operation-specific state in the registration-local context slot.
 - Do not dispose the terminal scheduler, coordinators, lanes, or other collaborators unless a separate API explicitly transfers their ownership.
 - Preserve the distinction between caller-wait cancellation and producer cancellation when sharing work between callers.
+
+Return `next(context)` directly, await it before post-processing, or short-circuit
+without calling it. Concurrent execution attempts must all be joined. Invocation
+can throw synchronously, so use an async attempt helper to ensure a later throw
+cannot bypass the join of earlier attempts:
+
+```csharp
+async Task<T> Attempt() => await next(context).ConfigureAwait(true);
+var attempts = new[] { Attempt(), Attempt() };
+var results = await Task.WhenAll(attempts).ConfigureAwait(true);
+return results[0];
+```
+
+An enqueue policy that intentionally ends caller waiting before downstream work
+settles must use `context.InvokeWithCallerWait(next, owned =>
+WaitForCaller(owned(context)))`. Invoke `owned` at most once before the wait policy
+finishes, observe late producer failures, and keep producer resources in the owned
+continuation. `WithTimeout` uses this boundary. When boundaries are nested, the
+owned continuation's task can itself be a caller-facing task; its completion does
+not prove that the underlying delegate stopped. Operation ownership still retains
+admission capacity and middleware resources until the work settles.
+
+Third-party middleware that detached downstream work must migrate to this explicit
+enqueue boundary or join its continuations. Detached execution/completion callbacks
+are unsupported. See [Middleware lifetime](design/middleware-lifetime.md) for the
+ownership and disposal rules.
 
 ### Forward-scoped annotations
 
@@ -295,45 +322,3 @@ Use middleware for reusable policy that needs to affect admission, wrap executio
 ## Testing custom implementations
 
 Exercise concurrent submissions, ordering, canceled-before-start work, disposal during startup and execution, delegate failures, callback failures, and operations that ignore cancellation. Run contract tests against every execution model whose guarantees the custom implementation claims.
-
-
-### Middleware completion and ownership
-
-Before middleware's returned `Task`/`ValueTask` settles, every downstream
-continuation it starts must settle. Direct forwarding, awaited post-processing,
-short-circuiting, sequential retries, and fully joined concurrent attempts are
-supported. Join attempts on failure and cancellation too:
-
-```csharp
-public async ValueTask<T> InvokeAsync<T>(TaskSchedulerOperationContext context,
-    TaskSchedulerExecutionDelegate<T> next)
-{
-    var first = Attempt();
-    var second = Attempt();
-    var results = await Task.WhenAll(first, second).ConfigureAwait(true);
-    return results[0];
-
-    // Convert synchronous throws into faulted tasks so every attempt reaches the join.
-    async Task<T> Attempt() => await next(context).ConfigureAwait(true);
-}
-```
-
-Use concurrent attempts only when the operation permits overlapping execution.
-Execution continuation invocation may throw synchronously now that the per-layer
-async observer is removed. Protect invocation and awaiting together; the attempt
-helper above ensures a synchronous throw cannot bypass the join of earlier attempts.
-Enqueue continuations remain at most once. Never invoke a saved continuation after
-middleware finishes or return while directly started downstream work is running.
-Detached execution and completion continuations are unsupported; violations are
-not exhaustively detected at runtime.
-
-An enqueue policy that separates caller waiting from producer completion must
-explicitly transfer ownership using `context.InvokeWithCallerWait(next, owned =>
-WaitForCaller(owned(context)))`. Invoke `owned` at most once before the wait policy
-finishes. For example, a wait policy may race its producer task against a deadline;
-it must observe failures and manage its cancellation resources. The operation
-retains producer ownership after caller completion. Built-in `WithTimeout` uses
-this boundary and retains its queue-and-execution timeout behavior. Existing custom
-early-return policies must migrate or await their producer. See
-[Middleware lifetime](design/middleware-lifetime.md) for disposal and future policy
-requirements.

@@ -21,11 +21,9 @@ public interface ITaskSchedulerExecutionMiddleware : ITaskSchedulerMiddleware
     /// execution. The continuation requires a context for the same operation; another operation's context is rejected.</para>
     /// <para>A thrown exception or a faulted value task becomes a failed <see cref="TaskSchedulerOperationOutcome{TResult}"/> and is passed to
     /// completion middleware. Use <c>ConfigureAwait(true)</c> when an asynchronous continuation must retain terminal affinity.</para>
-    /// <para>Before the returned task or value task settles, every downstream continuation started by this invocation must have
-    /// settled. Returning the continuation directly, awaiting it before additional work, and short-circuiting are supported.
-    /// Execution retries or concurrent attempts must await every started attempt, including on failure and cancellation.
-    /// Detached execution/completion and invoking a continuation after this invocation finishes are unsupported usage.
-    /// This requirement is not exhaustively checked at runtime.</para>
+    /// <para>Return or await every continuation started by this invocation before its value task settles, including on failure or
+    /// cancellation. Concurrent attempts must all be joined. Continuation invocation itself may throw synchronously, so protect
+    /// invocation and awaiting together. Detached attempts and invoking a saved continuation after completion are unsupported.</para>
     /// </remarks>
     ValueTask<TResult> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerExecutionDelegate<TResult> continuation);
 }

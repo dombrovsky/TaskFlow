@@ -44,6 +44,11 @@ If a completion callback throws before continuing, the pipeline passes its incom
 
 Enqueue-side rejection, timeout, or submission failure uses the producer snapshot, with the caller fallback described above. Completion runs once even if timed-out work later reaches the terminal. Early completion does not guarantee the terminal's thread or synchronization context. Cancellation does not skip completion callbacks.
 
+A caller-wait boundary can finish before its producer, including after caller
+cancellation. Nested downstream task completion is not a producer-termination
+signal: an inner caller wait may have finished while execution continues. Keep
+producer cancellation sources alive with the owned work and observe late faults.
+
 Disposal requests cancellation and waits for underlying work to finish. Cancellation remains cooperative. Copies and retries keep the same queue position, admission reservation, and lifetime ownership.
 
 ## Compatibility

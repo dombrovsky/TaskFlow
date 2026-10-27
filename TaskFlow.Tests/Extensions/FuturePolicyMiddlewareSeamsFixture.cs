@@ -6,8 +6,14 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks.Flow;
 
 [TestFixture]
+[CancelAfter(10000)]
+[SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "Factories transfer middleware ownership to the explicit lifetime.")]
 internal sealed class FuturePolicyMiddlewareSeamsFixture
 {
+    private static readonly string[] ProducerCleanupOrder = ["producer:terminated", "key:released", "cleanup"];
+
+    private static TaskCompletionSource<bool> Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     [SuppressMessage("Maintainability", "CA1515:Consider making public types internal", Justification = "NUnit requires the parameter type of this public parameterized test to be publicly accessible.")]
     public enum OwnershipCancellation
     {
@@ -70,6 +76,179 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
         Assert.That(execution.CallCount, Is.EqualTo(1));
         Assert.That(completion.CallCount, Is.EqualTo(1));
         Assert.That(middleware.ActiveCount, Is.Zero);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SingleFlight_SharesOneProducerAndAllowsIndependentWaitCancellation(bool producerFails)
+    {
+        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
+        var terminal = new CountingInlineTerminal();
+        var events = new ConcurrentQueue<string>();
+        var middleware = new OwnedSingleFlight(events, default, lifetime.StoppingToken);
+        var execution = new ExecutionCounterMiddleware();
+        var completion = new CompletionCounterMiddleware();
+        var scheduler = terminal.UseMiddleware(new OwnedFactory(middleware), lifetime)
+            .UseMiddleware(execution).UseMiddleware(completion);
+        using var leaderWait = new CancellationTokenSource();
+        using var followerWait = new CancellationTokenSource();
+        var entered = Signal();
+        var release = Signal();
+        var failure = new FormatException("shared producer");
+        var first = scheduler.Enqueue<int>(async (_, token) =>
+        {
+            entered.TrySetResult(true);
+            await release.Task;
+            token.ThrowIfCancellationRequested();
+            if (producerFails)
+                throw failure;
+            return 42;
+        }, "key", leaderWait.Token);
+        try
+        {
+            await entered.Task;
+            var canceledFollower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("Follower executed."), "key", followerWait.Token);
+            var survivor = scheduler.Enqueue<int>((_, _) => throw new AssertionException("Follower executed."), "key", default);
+            await leaderWait.CancelAsync();
+            await followerWait.CancelAsync();
+            await Assert.ThatAsync(async () => await first, Throws.InstanceOf<OperationCanceledException>());
+            await Assert.ThatAsync(async () => await canceledFollower, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(survivor.IsCompleted, Is.False);
+            Assert.That(middleware.ActiveCount, Is.EqualTo(1));
+            Assert.That(middleware.Released, Is.Zero);
+            Assert.That(middleware.Cleanups, Is.Zero);
+            var lateFollower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("Canceled caller retired the active key."), "key", default);
+            Assert.That(terminal.EnqueueCount, Is.EqualTo(1));
+            release.SetResult(true);
+            if (producerFails)
+            {
+                await Assert.ThatAsync(async () => await survivor, Throws.Exception.SameAs(failure));
+                await Assert.ThatAsync(async () => await lateFollower, Throws.Exception.SameAs(failure));
+            }
+            else
+            {
+                Assert.That(await survivor, Is.EqualTo(42));
+                Assert.That(await lateFollower, Is.EqualTo(42));
+            }
+            Assert.That(await middleware.ProducerObserved, producerFails ? Is.SameAs(failure) : Is.Null);
+            Assert.That(middleware.ActiveCount, Is.Zero);
+            Assert.That(middleware.Released, Is.EqualTo(1));
+            Assert.That(execution.CallCount, Is.EqualTo(1));
+            // Each canceled/faulted caller completes its own operation; followers never execute.
+            Assert.That(completion.CallCount, Is.EqualTo(producerFails ? 4 : 2));
+            Assert.That(await scheduler.Enqueue<int>((_, _) => new ValueTask<int>(7), "key", default), Is.EqualTo(7));
+            Assert.That(terminal.EnqueueCount, Is.EqualTo(2));
+            Assert.That(middleware.ActiveCount, Is.Zero);
+            await lifetime.DisposeAsync();
+            Assert.That(middleware.Released, Is.EqualTo(2));
+            Assert.That(middleware.Cleanups, Is.EqualTo(1));
+        }
+        finally { release.TrySetResult(true); await lifetime.DisposeAsync(); }
+    }
+
+    [TestCase(OwnershipCancellation.LocalScope)]
+    [TestCase(OwnershipCancellation.SharedLane)]
+    public async Task SharedProducer_DetachesCallerButPreservesOwnershipCancellation(OwnershipCancellation cancellation)
+    {
+        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
+        using var localOwner = new CancellationTokenSource();
+        using var sharedLane = new CancellationTokenSource();
+        using var caller = new CancellationTokenSource();
+        var events = new ConcurrentQueue<string>();
+        var ownership = new OwnedSingleFlight(events, localOwner.Token, sharedLane.Token);
+        var terminal = new CountingInlineTerminal();
+        var scheduler = terminal.UseMiddleware(new OwnedFactory(ownership), lifetime)
+            .UseMiddleware(new DropProducerTokenMiddleware());
+        var entered = Signal();
+        var canceled = Signal();
+        var release = Signal();
+        var first = scheduler.Enqueue<int>(async (_, token) =>
+        {
+            entered.TrySetResult(true);
+            try
+            { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            catch (OperationCanceledException)
+            {
+                canceled.TrySetResult(true);
+                await release.Task; // Delay actual termination after cancellation notification.
+                throw;
+            }
+            finally { events.Enqueue("producer:terminated"); }
+            return 42;
+        }, "key", caller.Token);
+        try
+        {
+            await entered.Task;
+            var follower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("Follower executed."), "key", default);
+            await caller.CancelAsync();
+            await Assert.ThatAsync(async () => await first, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(follower.IsCompleted, Is.False);
+            Assert.That(canceled.Task.IsCompleted, Is.False, "Caller cancellation reached the shared producer.");
+            if (cancellation == OwnershipCancellation.LocalScope)
+                await localOwner.CancelAsync();
+            else
+                await sharedLane.CancelAsync();
+            await canceled.Task;
+            await Assert.ThatAsync(async () => await follower, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(ownership.ActiveCount, Is.EqualTo(1));
+            Assert.That(ownership.Released, Is.Zero);
+            var joining = scheduler.Enqueue<int>((_, _) => throw new AssertionException("A successor overlapped the terminating producer."), "key", default);
+            await Assert.ThatAsync(async () => await joining, Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(terminal.EnqueueCount, Is.EqualTo(1));
+            var shutdown = lifetime.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            Assert.That(ownership.Cleanups, Is.Zero);
+            Assert.That(events, Is.Empty);
+            release.SetResult(true);
+            Assert.That(await ownership.ProducerObserved, Is.InstanceOf<OperationCanceledException>());
+            await shutdown;
+            await lifetime.DisposeAsync();
+            Assert.That(ownership.ActiveCount, Is.Zero);
+            Assert.That(ownership.Released, Is.EqualTo(1));
+            Assert.That(ownership.Cleanups, Is.EqualTo(1));
+            Assert.That(events.ToArray(), Is.EqualTo(ProducerCleanupOrder));
+        }
+        finally { release.TrySetResult(true); await localOwner.CancelAsync(); await lifetime.DisposeAsync(); }
+    }
+
+    [Test]
+    public async Task SingleFlight_AllWaitersCancel_LateProducerFaultIsObservedBeforeCleanup()
+    {
+        await using var lifetime = new TaskSchedulerMiddlewareLifetime();
+        using var callers = new CancellationTokenSource();
+        var events = new ConcurrentQueue<string>();
+        var middleware = new OwnedSingleFlight(events, default, default);
+        var scheduler = new CountingInlineTerminal().UseMiddleware(new OwnedFactory(middleware), lifetime);
+        var entered = Signal();
+        var release = Signal();
+        var failure = new FormatException("after caller cancellation");
+        var first = scheduler.Enqueue<int>(async (_, _) =>
+        {
+            entered.TrySetResult(true);
+            await release.Task;
+            events.Enqueue("producer:terminated");
+            throw failure;
+        }, "key", callers.Token);
+        try
+        {
+            await entered.Task;
+            var follower = scheduler.Enqueue<int>((_, _) => throw new AssertionException("Follower executed."), "key", callers.Token);
+            await callers.CancelAsync();
+            await Assert.ThatAsync(async () => await first, Throws.InstanceOf<OperationCanceledException>());
+            await Assert.ThatAsync(async () => await follower, Throws.InstanceOf<OperationCanceledException>());
+            var shutdown = lifetime.DisposeAsync().AsTask();
+            Assert.That(shutdown.IsCompleted, Is.False);
+            Assert.That(middleware.ActiveCount, Is.EqualTo(1));
+            Assert.That(middleware.Cleanups, Is.Zero);
+            release.SetResult(true);
+            Assert.That(await middleware.ProducerObserved, Is.SameAs(failure));
+            await shutdown;
+            Assert.That(middleware.ActiveCount, Is.Zero);
+            Assert.That(middleware.Released, Is.EqualTo(1));
+            Assert.That(middleware.Cleanups, Is.EqualTo(1));
+            Assert.That(events.ToArray(), Is.EqualTo(ProducerCleanupOrder));
+        }
+        finally { release.TrySetResult(true); await lifetime.DisposeAsync(); }
     }
 
     [Test]
@@ -278,6 +457,102 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
         }
     }
 
+    private sealed class OwnedFactory(ITaskSchedulerMiddleware middleware) : ITaskSchedulerMiddlewareFactory
+    {
+        public ITaskSchedulerMiddleware Create(TaskSchedulerMiddlewareLifetime lifetime) => middleware;
+    }
+
+    // A public-API seam, not a complete single-flight/promotion policy. The downstream path
+    // in these tests returns actual terminal completion; nested caller waits are tested separately.
+    private sealed class OwnedSingleFlight(ConcurrentQueue<string> events,
+        CancellationToken localOwner, CancellationToken sharedLane) : ITaskSchedulerEnqueueMiddleware, IDisposable
+    {
+        private readonly ConcurrentDictionary<string, Producer> _producers = new();
+        private readonly TaskCompletionSource<Exception?> _observed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private int _released;
+        private int _cleanups;
+
+        public int ActiveCount => _producers.Count;
+        public int Released => Volatile.Read(ref _released);
+        public int Cleanups => Volatile.Read(ref _cleanups);
+        public Task<Exception?> ProducerObserved => _observed.Task;
+
+        public Task<T> InvokeAsync<T>(TaskSchedulerEnqueueContext<T> context, TaskSchedulerEnqueueDelegate<T> next)
+        {
+            if (typeof(T) != typeof(int))
+                throw new NotSupportedException("This test prototype supports Int32 results only.");
+            var key = (string)context.State!;
+            var candidate = new Producer();
+            var producer = _producers.GetOrAdd(key, candidate);
+            if (!ReferenceEquals(candidate, producer))
+                return Wait<T>(producer.Task, context.CallerCancellationToken);
+
+            // Own the entire producer scope, including key retirement and cancellation-source
+            // disposal. Owning only next while cleaning up outside that task would be too short.
+            return context.InvokeWithCallerWait(
+                ownedContext => Produce(key, producer, ownedContext, next),
+                owned =>
+                {
+                    _ = Observe(owned(context));
+                    return Wait<T>(producer.Task, context.CallerCancellationToken);
+                });
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Transfer every producer failure to all followers and retain its original exception.")]
+        private async Task<T> Produce<T>(string key, Producer producer, TaskSchedulerEnqueueContext<T> context,
+            TaskSchedulerEnqueueDelegate<T> next)
+        {
+            using var ownership = CancellationTokenSource.CreateLinkedTokenSource(localOwner, sharedLane);
+            T result;
+            try
+            {
+                try
+                { result = await next(context.WithCancellationToken(ownership.Token)); }
+                finally
+                {
+                    _producers.TryRemove(new KeyValuePair<string, Producer>(key, producer));
+                    Interlocked.Increment(ref _released);
+                    events.Enqueue("key:released");
+                }
+            }
+            catch (Exception exception)
+            {
+                producer.Completion.TrySetException(exception);
+                _ = producer.Task.Exception; // All caller waits may already have been canceled.
+                throw;
+            }
+            producer.Completion.TrySetResult((int)(object)result!);
+            return result;
+        }
+
+        private async Task<T> Wait<T>(Task<int> producer, CancellationToken caller)
+        {
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(caller, localOwner, sharedLane);
+            return (T)(object)await producer.WaitAsync(wait.Token);
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Observe the owned producer even when every caller stops waiting.")]
+        private async Task Observe(Task producer)
+        {
+            try
+            { await producer; _observed.TrySetResult(null); }
+            catch (Exception exception) { _observed.TrySetResult(exception); }
+        }
+
+        public void Dispose()
+        {
+            Interlocked.Increment(ref _cleanups);
+            events.Enqueue("cleanup");
+        }
+
+        private sealed class Producer
+        {
+            public TaskCompletionSource<int> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public Task<int> Task => Completion.Task;
+        }
+    }
+
     private sealed class DuplicateSuppressionMiddleware : ITaskSchedulerEnqueueMiddleware
     {
         private readonly ConcurrentDictionary<string, object?> _active = new ConcurrentDictionary<string, object?>();
@@ -459,10 +734,12 @@ internal sealed class FuturePolicyMiddlewareSeamsFixture
 
     private sealed class CompletionCounterMiddleware : ITaskSchedulerCompletionMiddleware
     {
-        public int CallCount { get; private set; }
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
         public ValueTask<TaskSchedulerOperationOutcome<TResult>> InvokeAsync<TResult>(TaskSchedulerOperationContext context, TaskSchedulerOperationOutcome<TResult> outcome, TaskSchedulerCompletionDelegate<TResult> continuation)
         {
-            CallCount++;
+            Interlocked.Increment(ref _callCount);
             return continuation(context, outcome);
         }
     }
