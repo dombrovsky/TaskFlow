@@ -1,6 +1,5 @@
 namespace System.Threading.Tasks.Flow;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks.Flow.Annotations;
 
 /// <summary>
@@ -83,7 +82,10 @@ public sealed partial class TaskFlow : TaskFlowBase
     /// Each task will only start after the previous task has completed.
     /// </para>
     /// <para>
-    /// The task is scheduled using the <see cref="TaskScheduler"/> specified in the <see cref="TaskFlowOptions"/>.
+    /// The delegate initially executes on the <see cref="TaskScheduler"/> specified in <see cref="TaskFlowOptions"/>,
+    /// including when its predecessor was incomplete. This does not guarantee physical thread affinity.
+    /// User awaits follow normal .NET rules: a captured non-default <see cref="SynchronizationContext"/> takes
+    /// precedence over the current scheduler, and <c>ConfigureAwait(false)</c> can leave both.
     /// </para>
     /// <para>
     /// Cancellation can occur in two ways:
@@ -111,11 +113,19 @@ public sealed partial class TaskFlow : TaskFlowBase
             CheckDisposed();
 
             var previousTask = _task;
-            var task = Task.Factory.StartNew(
-                () => RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
-                CancellationToken.None,
-                TaskCreationOptions.PreferFairness,
-                Options.TaskScheduler).Unwrap();
+            // Schedule callback entry explicitly: capturing an await could prefer a
+            // scheduler-installed SynchronizationContext over the configured TaskScheduler.
+            var task = previousTask.IsCompleted
+                ? Task.Factory.StartNew(
+                    () => RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
+                    CancellationToken.None,
+                    TaskCreationOptions.PreferFairness,
+                    Options.TaskScheduler).Unwrap()
+                : previousTask.ContinueWith(
+                    _ => RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
+                    CancellationToken.None,
+                    TaskContinuationOptions.PreferFairness,
+                    Options.TaskScheduler).Unwrap();
             _task = task.ContinueWith(EmptyContinuationAction, CancellationToken.None, TaskContinuationOptions.None, Options.TaskScheduler);
             return task;
         }
@@ -155,31 +165,18 @@ public sealed partial class TaskFlow : TaskFlowBase
     }
 
     /// <summary>
-    /// Executes the task function after the previous task has completed.
+    /// Invokes the task function on the configured scheduler after the previous task has completed.
     /// </summary>
     /// <typeparam name="T">The type of result produced by the task.</typeparam>
     /// <param name="taskFunc">The function to execute that returns a <see cref="ValueTask{TResult}"/>.</param>
     /// <param name="state">An optional state object that is passed to the <paramref name="taskFunc"/>.</param>
-    /// <param name="previousTask">The previous task that must complete before this task can start.</param>
+    /// <param name="previousTask">The previous task, which has already completed.</param>
     /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
     /// <returns>A <see cref="Task{TResult}"/> representing the result of the task.</returns>
-    /// <remarks>
-    /// This method ensures sequential execution by awaiting the completion of the previous task
-    /// before executing the current task function. Exceptions from the previous task are caught
-    /// and suppressed to ensure the continuity of the task flow.
-    /// </remarks>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Previous task exception should be observed on a task returned from Enqueue method")]
     private async Task<T> RunAfterPrevious<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, Task previousTask, CancellationToken cancellationToken)
     {
-        try
-        {
-            await previousTask.ConfigureAwait(false);
-        }
-        catch
-        {
-            // suppressed
-        }
-
+        // Observe predecessor failure without preventing this operation from running.
+        _ = previousTask.Exception;
         using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
         return await taskFunc(state, linkedToken.Token).ConfigureAwait(false);
     }

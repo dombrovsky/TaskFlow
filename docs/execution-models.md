@@ -26,7 +26,11 @@ static Task ProcessAsync(string value, CancellationToken token) =>
     Task.CompletedTask;
 ```
 
-A custom `TaskScheduler` changes where TaskFlow schedules its chain; it does not remove the flow's one-operation-at-a-time guarantee.
+Each callback initially executes on the configured `TaskScheduler`, even after waiting for an incomplete predecessor. A custom scheduler does not remove the flow's one-operation-at-a-time guarantee or imply physical thread affinity.
+
+User awaits follow normal .NET context rules. A non-default `SynchronizationContext` installed by a scheduler takes precedence over `TaskScheduler.Current` for capturing awaits. Its `Post` implementation may return to the same thread without preserving scheduler identity. `ConfigureAwait(false)` can leave both contexts; TaskFlow does not marshal user continuations back. ExecutionContext flow remains per operation: normal submissions capture it, while `ExecutionContext.SuppressFlow()` disables that capture.
+
+Keep a custom scheduler alive until the flow finishes disposal. If it rejects dispatch after a pending predecessor completes, the queued operation's returned task faults with `TaskSchedulerException`; its callback does not run. Rejection of `StartNew` for an already-completed predecessor still throws from `Enqueue`. Previously, a pending callback could escape onto the thread pool even after the configured scheduler stopped accepting work.
 
 ## DedicatedThreadTaskFlow
 
