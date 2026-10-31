@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   # Settings > Actions > General must allow GitHub Actions to create pull requests.
   contents: write
   pull-requests: write
@@ -127,6 +128,19 @@ jobs:
               options+=(--prerelease)
             fi
             gh release create "$VERSION" "$ARTIFACT_DIRECTORY"/* "${options[@]}"
+          fi
+
+      # Dispatch only; benchmark measurement runs independently of publication.
+      - name: Dispatch benchmark history
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! gh workflow run benchmark-history.yml --ref "$DEFAULT_BRANCH" --field source="$VERSION"; then
+            echo "::warning::Benchmark history dispatch failed for $VERSION; no benchmark snapshot was scheduled."
           fi
 
       - name: Promote public API baselines
