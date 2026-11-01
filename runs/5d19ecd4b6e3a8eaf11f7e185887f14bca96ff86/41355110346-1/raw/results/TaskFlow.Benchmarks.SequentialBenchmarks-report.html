@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>TaskFlow.Benchmarks.SequentialBenchmarks-20261101-220436</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, Linux Ubuntu 24.04.5 LTS (Noble Numbat)
+AMD EPYC 7763 3.05GHz, 1 CPU, 4 logical and 2 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+  Job-YZJABG : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+</code></pre>
+<pre><code>IterationCount=8  LaunchCount=1  WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method   </th><th>Token        </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Op/s</th><th>Ratio</th><th>RatioSD</th><th>Gen0</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>SyncCompletion</td><td>None</td><td>1.020 &mu;s</td><td>0.0197 &mu;s</td><td>0.0087 &mu;s</td><td>980,014.4</td><td>1.00</td><td>0.01</td><td>0.0305</td><td>536 B</td><td>1.00</td>
+</tr><tr><td>AsyncCompletion</td><td>None</td><td>1.665 &mu;s</td><td>0.0306 &mu;s</td><td>0.0136 &mu;s</td><td>600,679.4</td><td>1.63</td><td>0.02</td><td>0.0381</td><td>718 B</td><td>1.34</td>
+</tr><tr><td>SyncCompletion</td><td>Live</td><td>1.120 &mu;s</td><td>0.0232 &mu;s</td><td>0.0103 &mu;s</td><td>893,020.2</td><td>1.00</td><td>0.01</td><td>0.0324</td><td>552 B</td><td>1.00</td>
+</tr><tr><td>AsyncCompletion</td><td>Live</td><td>1.734 &mu;s</td><td>0.0273 &mu;s</td><td>0.0121 &mu;s</td><td>576,618.1</td><td>1.55</td><td>0.02</td><td>0.0381</td><td>734 B</td><td>1.33</td>
+</tr><tr><td>SyncCompletion</td><td>CanceledCooperative</td><td>1.015 &mu;s</td><td>0.0083 &mu;s</td><td>0.0037 &mu;s</td><td>985,181.8</td><td>1.00</td><td>0.00</td><td>0.0305</td><td>558 B</td><td>1.00</td>
+</tr><tr><td>AsyncCompletion</td><td>CanceledCooperative</td><td>1.647 &mu;s</td><td>0.0181 &mu;s</td><td>0.0080 &mu;s</td><td>607,156.9</td><td>1.62</td><td>0.01</td><td>0.0381</td><td>741 B</td><td>1.33</td>
+</tr></tbody></table>
+</body>
+</html>
