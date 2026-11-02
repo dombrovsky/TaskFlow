@@ -144,6 +144,14 @@
       "label": "TaskFlow main",
       "sha": "0a540e6cdc09ffeb49a6b6fdb4c16d73f7fe78f8",
       "timestamp": "2026-11-02T22:07:38.353485+00:00"
+    },
+    {
+      "path": "runs/0a540e6cdc09ffeb49a6b6fdb4c16d73f7fe78f8/41534834876-1/record.json",
+      "sha256": "30b08e189b3ee8982f51c01aaf137514259f3dd6e6b0e2e076ea8f7e23d4a500",
+      "series": "b5d811a455bb869431e320f4ecf4241bb2180cebab603fd9b3d0d4f848884127",
+      "label": "TaskFlow release 1.1.0",
+      "sha": "0a540e6cdc09ffeb49a6b6fdb4c16d73f7fe78f8",
+      "timestamp": "2026-11-02T22:10:10.624531+00:00"
     }
   ]
 }
