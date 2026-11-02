@@ -13,11 +13,11 @@
 
   <PropertyGroup>
     <!-- Set the target release version here. For stable releases, remove VersionSuffix below. -->
-    <VersionPrefix>1.1.0</VersionPrefix>
+    <VersionPrefix>1.2.0</VersionPrefix>
     <!-- Prereleases: keep rc.N without leading zeros; Publish supplies N from its run number. -->
     <PrereleaseNumber Condition="'$(PrereleaseNumber)' == ''">1</PrereleaseNumber>
     <!-- Prereleases: Comment out VersionSuffix to make a non-prerelease release -->
-    <!-- <VersionSuffix>rc.$(PrereleaseNumber)</VersionSuffix> -->
+    <VersionSuffix>rc.$(PrereleaseNumber)</VersionSuffix>
     <Authors>Volodymyr Dombrovskyi</Authors>
     <Copyright>Copyright (c) 2023 Volodymyr Dombrovskyi</Copyright>
     <RepositoryUrl>https://github.com/dombrovsky/TaskFlow.git</RepositoryUrl>
