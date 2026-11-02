@@ -1,5 +1,6 @@
 namespace System.Threading.Tasks.Flow;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks.Flow.Annotations;
 
 /// <summary>
@@ -113,11 +114,13 @@ public sealed partial class TaskFlow : TaskFlowBase
             CheckDisposed();
 
             var previousTask = _task;
-            // Schedule callback entry explicitly: capturing an await could prefer a
-            // scheduler-installed SynchronizationContext over the configured TaskScheduler.
-            var task = previousTask.IsCompleted
+            // The original wait path is safe for Default. Custom schedulers need explicit
+            // dispatch because an await could prefer their SynchronizationContext.
+            var task = previousTask.IsCompleted || Options.TaskScheduler == TaskScheduler.Default
                 ? Task.Factory.StartNew(
-                    () => RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
+                    () => Options.TaskScheduler == TaskScheduler.Default
+                        ? RunAfterPreviousOnDefaultScheduler(taskFunc, state, previousTask, cancellationToken)
+                        : RunAfterPrevious(taskFunc, state, previousTask, cancellationToken),
                     CancellationToken.None,
                     TaskCreationOptions.PreferFairness,
                     Options.TaskScheduler).Unwrap()
@@ -177,6 +180,23 @@ public sealed partial class TaskFlow : TaskFlowBase
     {
         // Observe predecessor failure without preventing this operation from running.
         _ = previousTask.Exception;
+        using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
+        return await taskFunc(state, linkedToken.Token).ConfigureAwait(false);
+    }
+
+    // Keep the original Default runner separate to avoid an extra async wrapper task.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Predecessor failures must not prevent accepted work from running.")]
+    private async Task<T> RunAfterPreviousOnDefaultScheduler<T>(Func<object?, CancellationToken, ValueTask<T>> taskFunc, object? state, Task previousTask, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await previousTask.ConfigureAwait(false);
+        }
+        catch
+        {
+            // The predecessor's failure belongs to its own returned task.
+        }
+
         using var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, CompletionToken);
         return await taskFunc(state, linkedToken.Token).ConfigureAwait(false);
     }

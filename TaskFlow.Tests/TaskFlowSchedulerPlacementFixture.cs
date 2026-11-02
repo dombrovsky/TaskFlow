@@ -50,9 +50,9 @@ internal sealed class TaskFlowSchedulerPlacementFixture
 
     [Test]
     public async Task PredecessorOutcome_PreservesPlacementOrderAndOperationResult(
-        [Values] bool pending, [Values("success", "fault", "cancel")] string outcome)
+        [Values] bool pending, [Values("success", "fault", "cancel")] string outcome, [Values] bool installContext)
     {
-        await using var scheduler = new SingleThreadScheduler();
+        await using var scheduler = new SingleThreadScheduler(installContext);
         var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = scheduler });
         var release = Gate();
         var order = new List<int>();
@@ -173,11 +173,13 @@ internal sealed class TaskFlowSchedulerPlacementFixture
     }
 
     [Test]
-    public async Task PendingOperation_KeepsItsOwnExecutionContext([Values] bool suppress, [Values] bool installContext)
+    public async Task PendingOperation_KeepsItsOwnExecutionContext(
+        [Values] bool suppress, [Values("default", "custom", "context")] string schedulerKind)
     {
         var ambient = new AsyncLocal<string?> { Value = "caller-first" };
-        await using var scheduler = new SingleThreadScheduler(installContext);
-        var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = scheduler });
+        await using var scheduler = new SingleThreadScheduler(schedulerKind == "context");
+        var configuredScheduler = schedulerKind == "default" ? TaskScheduler.Default : scheduler;
+        var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = configuredScheduler });
         var release = Gate();
         var first = flow.Enqueue<int>(async (_, _) =>
         {
@@ -194,7 +196,7 @@ internal sealed class TaskFlowSchedulerPlacementFixture
             var state = new object();
             async ValueTask<int> Callback(object? suppliedState, CancellationToken token)
             {
-                Assert.That(TaskScheduler.Current, Is.SameAs(scheduler));
+                Assert.That(TaskScheduler.Current, Is.SameAs(configuredScheduler));
                 Assert.That(suppliedState, Is.SameAs(state));
                 Assert.That(ambient.Value, Is.EqualTo(suppress ? null : "caller-second"));
                 ambient.Value = "second-private";
@@ -370,6 +372,96 @@ internal sealed class TaskFlowSchedulerPlacementFixture
         finally { release.TrySetResult(true); await first.WaitAsync(TestTimeout); }
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CompletionTail_DoesNotRetainSuccessfulResult(bool installContext)
+    {
+        await using var scheduler = new SingleThreadScheduler(installContext);
+        await using var flow = new TaskFlow(new TaskFlowOptions { TaskScheduler = scheduler });
+        var release = Gate();
+        try
+        {
+            var collectible = CollectResult(flow.Enqueue<object>(async (_, _) =>
+            {
+                await release.Task.ConfigureAwait(false);
+                return new object();
+            }, null, default));
+            await scheduler.DrainAsync();
+            Assert.That(collectible.IsCompleted, Is.False);
+            release.SetResult(true);
+            var result = await collectible.WaitAsync(TestTimeout);
+            await scheduler.DrainAsync();
+            await scheduler.DrainAsync();
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, true);
+            Assert.That(result.IsAlive, Is.False, "The queue tail must not retain the last operation result");
+            GC.KeepAlive(flow);
+        }
+        finally { release.TrySetResult(true); }
+    }
+
+    private static async Task<WeakReference> CollectResult(Task<object> task)
+    {
+        var result = new WeakReference(await task);
+        // The caller may resume inline before this helper clears its state machine.
+        task = null!;
+        return result;
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SuppressedOperations_DoNotInheritInlineCompletionContext(bool customScheduler)
+    {
+        var ambient = new AsyncLocal<string?> { Value = "caller" };
+        await using var scheduler = new SingleThreadScheduler(true);
+        await using var flow = new TaskFlow(new TaskFlowOptions
+        {
+            TaskScheduler = customScheduler ? scheduler : TaskScheduler.Default
+        });
+        var release = Gate();
+        var entered = Gate();
+        var first = flow.Enqueue<int>(async (_, _) =>
+        {
+            ambient.Value = "first-private";
+            entered.SetResult(true);
+            await release.Task.ConfigureAwait(false);
+            return 1;
+        }, null, default);
+        try
+        {
+            await entered.Task.WaitAsync(TestTimeout);
+            Task<int> second;
+            Task<int> third;
+            using (ExecutionContext.SuppressFlow())
+            {
+                second = flow.Enqueue(() =>
+                {
+                    Assert.That(TaskScheduler.Current, Is.SameAs(customScheduler ? scheduler : TaskScheduler.Default));
+                    Assert.That(ambient.Value, Is.Null);
+                    ambient.Value = "second-private";
+                    return 2;
+                });
+                third = flow.Enqueue(() =>
+                {
+                    Assert.That(TaskScheduler.Current, Is.SameAs(customScheduler ? scheduler : TaskScheduler.Default));
+                    Assert.That(ambient.Value, Is.Null);
+                    return 3;
+                });
+            }
+            if (customScheduler)
+                await scheduler.DrainAsync();
+            Assert.That(second.IsCompleted, Is.False);
+            Assert.That(third.IsCompleted, Is.False);
+            release.SetResult(true);
+            Assert.That(await second.WaitAsync(TestTimeout), Is.EqualTo(2));
+            Assert.That(await third.WaitAsync(TestTimeout), Is.EqualTo(3));
+            Assert.That(await first.WaitAsync(TestTimeout), Is.EqualTo(1));
+            Assert.That(ambient.Value, Is.EqualTo("caller"));
+        }
+        finally
+        {
+            release.TrySetResult(true);
+        }
+    }
     private sealed class SingleThreadScheduler : TaskScheduler, IAsyncDisposable
     {
         private readonly BlockingCollection<Action> _queue = new();
